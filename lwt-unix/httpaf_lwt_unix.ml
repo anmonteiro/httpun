@@ -82,6 +82,70 @@ module Io
       Lwt.return_unit
 end
 
-module Server = Httpaf_lwt.Server (Io)
+module Config = Httpaf.Config
 
-module Client = Httpaf_lwt.Client (Io)
+module Server = struct
+  include Httpaf_lwt.Server (Io)
+
+  module TLS = struct
+    include Httpaf_lwt.Server (Tls_io.Io)
+
+    let create_connection_handler
+      ?server
+      ?certfile
+      ?keyfile
+      ?(config=Config.default)
+      ~request_handler
+      ~error_handler =
+      let make_tls_server = Tls_io.make_server ?server ?certfile ?keyfile in
+      fun client_addr socket ->
+        make_tls_server socket >>= fun tls_server ->
+        create_connection_handler
+          ~config
+          ~request_handler
+          ~error_handler
+          client_addr
+          (socket, tls_server)
+  end
+
+  module SSL = struct
+    include Httpaf_lwt.Server (Ssl_io.Io)
+
+    let create_connection_handler
+      ?server
+      ?certfile
+      ?keyfile
+      ?(config=Config.default)
+      ~request_handler
+      ~error_handler =
+      let make_ssl_server = Ssl_io.make_server ?server ?certfile ?keyfile in
+      fun client_addr socket ->
+        make_ssl_server socket >>= fun ssl_server ->
+        create_connection_handler
+          ~config
+          ~request_handler
+          ~error_handler
+          client_addr
+          ssl_server
+  end
+end
+
+module Client = struct
+  include Httpaf_lwt.Client (Io)
+
+  module TLS = struct
+    include Httpaf_lwt.Client (Tls_io.Io)
+
+    let request ?client ?(config=Config.default) socket request_headers ~error_handler ~response_handler =
+      Tls_io.make_client ?client socket >|= fun tls_client ->
+      request ~config (socket, tls_client) request_headers ~error_handler ~response_handler
+  end
+
+  module SSL = struct
+    include Httpaf_lwt.Client (Ssl_io.Io)
+
+    let request ?client ?(config=Config.default) socket request_headers ~error_handler ~response_handler =
+      Ssl_io.make_client ?client socket >|= fun ssl_client ->
+      request ~config ssl_client request_headers ~error_handler ~response_handler
+  end
+end
