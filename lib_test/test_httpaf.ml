@@ -782,30 +782,53 @@ module Client_connection = struct
     let response = Response.create `OK in
 
     (* Single GET *)
-    let body, t =
+    let t = create ?config:None ~error_handler:no_error_handler in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
-        ~error_handler:no_error_handler
+        (* ~error_handler:no_error_handler *)
     in
     Body.close_writer body;
-    write_request  t request';
-    writer_closed  t;
-    read_response  t response;
+    write_request t request';
+    read_response t response;
 
-    (* Single GET, reponse closes connection *)
+    (* Single GET, request closes the connection. *)
+    let request_close =
+      Request.create
+        ~headers:(Headers.of_list ["connection", "close"])
+        `GET "/"
+    in
+    let t = create ?config:None ~error_handler:no_error_handler in
+    let body =
+      request
+        t
+        request_close
+        ~response_handler:(default_response_handler response)
+        (* ~error_handler:no_error_handler *)
+    in
+    Body.close_writer body;
+    write_request t request_close;
+    writer_closed t;
+    read_response t response;
+
+    (* Single GET, response closes connection *)
     let response =
       Response.create `OK ~headers:(Headers.of_list [ "connection", "close" ])
     in
-    let body, t =
+    let t = create ?config:None ~error_handler:no_error_handler in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
-        ~error_handler:no_error_handler
+        (* ~error_handler:no_error_handler *)
     in
     Body.close_writer body;
-    write_request  t request';
-    read_response  t response;
+    write_request t request';
+    read_response t response;
+    writer_closed t;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
     connection_is_shutdown t;
@@ -814,16 +837,18 @@ module Client_connection = struct
     let response =
       Response.create `OK ~headers:(Headers.of_list [ "transfer-encoding", "chunked" ])
     in
-    let body, t =
+    let t = create ?config:None ~error_handler:no_error_handler in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
-        ~error_handler:no_error_handler
+        (* ~error_handler:no_error_handler *)
     in
     Body.close_writer body;
-    write_request  t request';
-    read_response  t response;
-    read_string    t "d\r\nHello, world!\r\n0\r\n\r\n";
+    write_request t request';
+    read_response t response;
+    read_string t "d\r\nHello, world!\r\n0\r\n\r\n";
   ;;
 
   let test_response_eof () =
@@ -831,17 +856,21 @@ module Client_connection = struct
     let response = Response.create `OK in (* not actually writen to the channel *)
 
     let error_message = ref None in
-    let body, t =
+    let t = create ?config:None ~error_handler:(function
+        | `Malformed_response msg -> error_message := Some msg
+        | _ -> assert false)
+    in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
-        ~error_handler:(function
+        (* ~error_handler:(function
           | `Malformed_response msg -> error_message := Some msg
-          | _ -> assert false)
+          | _ -> assert false) *)
     in
     Body.close_writer body;
-    write_request  t request';
-    writer_closed  t;
+    write_request t request';
     reader_ready t;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
@@ -851,9 +880,43 @@ module Client_connection = struct
       !error_message
   ;;
 
+  let test_persistent_connection_requests () =
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+    in
+    let t = create ?config:None ~error_handler:no_error_handler in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        (* ~error_handler:no_error_handler *)
+    in
+    Body.close_writer body;
+    let body' =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        (* ~error_handler:no_error_handler *)
+    in
+    Body.close_writer body';
+    write_request t request';
+    read_response t response;
+    (* TODO: check the RFC to see if we're allowed to write a request right
+     * after the first one (without having yet received a response. This is not
+     * currently possible.
+     *
+     * What is pipelining after all? *)
+    write_request t request';
+    read_response t response;
+  ;;
+
   let tests =
     [ "GET"         , `Quick, test_get
-    ; "Response EOF", `Quick, test_response_eof ]
+    ; "Response EOF", `Quick, test_response_eof
+    ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests ]
 end
 
 let () =
@@ -862,5 +925,10 @@ let () =
     ; "method"           , Method.tests
     ; "iovec"            , IOVec.tests
     ; "client connection" , Client_connection.tests
-    ; "server_connection", Server_connection.tests
+    ; "server connection", Server_connection.tests
     ]
+
+(*
+ * TODO: test multiple requests on a single (persistent) connection
+ *
+ *)

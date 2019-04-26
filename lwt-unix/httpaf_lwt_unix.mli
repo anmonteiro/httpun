@@ -77,33 +77,54 @@ end
 
 (* For an example, see [examples/lwt_get.ml]. *)
 module Client : sig
-  val request
-    :  ?config          : Config.t
+  type t
+
+  val create_connection
+    : ?config:Config.t
+    -> error_handler:Client_connection.error_handler
     -> Lwt_unix.file_descr
+    -> t Lwt.t
+
+  val request
+    :  t
     -> Request.t
-    -> error_handler    : Client_connection.error_handler
+    (* -> error_handler    : Client_connection.error_handler *)
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 
   module TLS : sig
-    val request
+    type t
+
+    val create_connection
       :  ?client          : Tls_io.client
       -> ?config          : Config.t
-      -> Lwt_unix.file_descr
-      -> Request.t
       -> error_handler    : Client_connection.error_handler
+      -> Lwt_unix.file_descr
+      -> t Lwt.t
+
+    val request
+      :  t
+      -> Request.t
+      (* -> error_handler    : Client_connection.error_handler *)
       -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t Lwt.t
+      -> [`write] Body.t
   end
 
   module SSL : sig
-    val request
+    type t
+
+    val create_connection
       :  ?client          : Ssl_io.client
       -> ?config          : Config.t
-      -> Lwt_unix.file_descr
-      -> Request.t
       -> error_handler    : Client_connection.error_handler
+      -> Lwt_unix.file_descr
+      -> t Lwt.t
+
+    val request
+      :  t
+      -> Request.t
+      (* -> error_handler    : Client_connection.error_handler *)
       -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t Lwt.t
+      -> [`write] Body.t
   end
 end

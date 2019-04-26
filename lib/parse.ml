@@ -242,11 +242,12 @@ module Reader = struct
     in
     create parser
 
-  let response ~request_method handler =
+  let response (* ~request_method *) handler =
     let parser =
       response <* commit >>= fun response ->
       let proxy = false in
-      match Response.body_length ~request_method response with
+      (* TODO: deal with `request_method later` *)
+      match Response.body_length ~request_method:`GET response with
       | `Error `Bad_gateway           -> assert (not proxy); assert false
       | `Error `Internal_server_error -> return (Error (`Invalid_response_body_length response))
       | `Fixed 0L ->

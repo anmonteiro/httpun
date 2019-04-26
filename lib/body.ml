@@ -60,6 +60,7 @@ let create buffer =
 
 let create_empty () =
   let t = create Bigstringaf.empty in
+  t.write_final_if_chunked <- false;
   Faraday.close t.faraday;
   t
 

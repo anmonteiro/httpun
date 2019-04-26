@@ -762,12 +762,14 @@ module Client_connection : sig
 
   type error_handler = error -> unit
 
+  val create : ?config:Config.t -> error_handler:(error -> unit) -> t
+
   val request
-    :  ?config:Config.t
+    :  t
     -> Request.t
-    -> error_handler:error_handler
+    (* -> error_handler:error_handler *)
     -> response_handler:response_handler
-    -> [`write] Body.t * t
+    -> [`write] Body.t
 
   val next_read_operation : t -> [ `Read | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
