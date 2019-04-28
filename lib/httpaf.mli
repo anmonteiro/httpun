@@ -822,9 +822,9 @@ module Client_connection : sig
 
   val is_closed : t -> bool
 
-  (**/**)
   val shutdown : t -> unit
-  (**/**)
+  (** [shutdown connection] closes the underlying input and output channels of
+      the connection, rendering it unusable for any further communication. *)
 end
 
 (**/**)

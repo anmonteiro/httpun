@@ -288,4 +288,6 @@ module Client (Io: IO) = struct
     Lwt.return connection
 
   let request = Client_connection.request
+
+  let shutdown = Client_connection.shutdown
 end

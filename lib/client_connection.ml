@@ -31,17 +31,6 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-module Queue = struct
-  include Queue
-
-  let peek_exn = peek
-
-  let peek t =
-    if is_empty t
-    then None
-    else Some (peek_exn t)
-end
-
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
 
@@ -75,7 +64,7 @@ module Oneshot = struct
     not (Queue.is_empty t.request_queue)
 
   let current_respd_exn t =
-    Queue.peek_exn t.request_queue
+    Queue.peek t.request_queue
 
   let on_wakeup_reader t k =
     if is_closed t
@@ -101,28 +90,18 @@ module Oneshot = struct
     List.iter (fun f -> f ()) fs
 
   let create ?(config=Config.default) ~error_handler =
-    let rec response_handler response response_body =
-      let t = Lazy.force t in
-      assert (not (Queue.is_empty t.request_queue));
-      (* let respd = Queue.take t.request_queue in *)
-      let respd = current_respd_exn t in
-      respd.response_handler response response_body
-    and t =
-      lazy
-        { config
-        ; error_handler
-        ; error_code = `Ok
-        ; reader = Reader.response response_handler
-        ; writer = Writer.create ()
-        ; request_queue = Queue.create ()
-        ; wakeup_writer = ref []
-        ; wakeup_reader = ref []
-        }
-    in
-    Lazy.force t
+    let request_queue = Queue.create () in
+    { config
+    ; error_handler
+    ; error_code = `Ok
+    ; reader = Reader.response request_queue
+    ; writer = Writer.create ()
+    ; request_queue
+    ; wakeup_writer = ref []
+    ; wakeup_reader = ref []
+    }
 
   let request t request (* ~error_handler *) ~response_handler =
-    (* let request_method = request.Request.meth in *)
     let request_body =
       Body.create (Bigstringaf.create t.config.request_body_buffer_size)
     in
@@ -131,7 +110,7 @@ module Oneshot = struct
     let handle_now = Queue.is_empty t.request_queue in
     Queue.push respd t.request_queue;
     if handle_now then begin
-      Writer.write_request t.writer request;
+      Respd.write_request respd;
       _wakeup_writer t.wakeup_writer
     end;
     request_body
@@ -190,21 +169,35 @@ module Oneshot = struct
   let advance_request_queue_if_necessary t =
     if is_active t then begin
       let respd = current_respd_exn t in
-      Format.eprintf "HAH %B %B %d@."
-        (Respd.persistent_connection respd)
-        (Respd.is_complete respd)
-        (Queue.length t.request_queue);
       if Respd.persistent_connection respd then begin
         if Respd.is_complete respd then begin
           ignore (Queue.take t.request_queue);
-          if not (Queue.is_empty t.request_queue)
-          (* write request to the wire *)
-          then begin
+          if not (Queue.is_empty t.request_queue) then begin
+            (* write request to the wire *)
             let respd = current_respd_exn t in
-            Writer.write_request t.writer (Respd.request respd);
+            Respd.write_request respd;
           end;
           (* TODO: wake up writer?! *)
           wakeup_reader t;
+        end else if not (Respd.requires_output respd) then begin
+          (* From RFC7230§6.3.2:
+           *   A client that supports persistent connections MAY "pipeline" its
+           *   requests (i.e., send multiple requests without waiting for each
+           *   response). *)
+          let exception Local in
+          match
+            (Queue.fold (fun first respd ->
+              if not first then begin
+                if respd.Respd.state = Uninitialized
+                then Respd.write_request respd
+                else raise Local
+              end;
+              false)
+            true
+            t.request_queue)
+          with
+          | _ -> ()
+          | exception Local -> ()
         end
       end else begin
         ignore (Queue.take t.request_queue);
@@ -226,7 +219,8 @@ module Oneshot = struct
     advance_request_queue_if_necessary t;
     if is_active t then begin
       let respd = current_respd_exn t in
-      match !(respd.state) with
+      match respd.state with
+      | Uninitialized -> assert false
       | Awaiting_response | Closed -> Reader.next t.reader
       | Received_response(_, response_body) ->
         if not (Body.is_closed response_body)
@@ -265,7 +259,8 @@ module Oneshot = struct
     let bytes_read = read_with_more t bs ~off ~len Complete in
     if is_active t then begin
       let respd = current_respd_exn t in
-      match !(respd.state) with
+      match respd.state with
+      | Uninitialized -> assert false
       | Received_response _ | Closed -> ()
       | Awaiting_response ->
         (* TODO: review this. It makes sense to tear down the connection if an
@@ -279,9 +274,6 @@ module Oneshot = struct
   let next_write_operation t =
     advance_request_queue_if_necessary t;
     flush_request_body t;
-    (* TODO: I think this is not supposed to be here for persistent connections *)
-    (* if Body.is_closed t.request_body
-    then Writer.close t.writer; *)
     Writer.next t.writer
   ;;
 

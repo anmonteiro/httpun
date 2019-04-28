@@ -161,8 +161,6 @@ end
 module Client = struct
   type t = Client_connection.t
 
-  let request = Client_connection.request
-
   let create_connection ?(config=Config.default) ~error_handler socket =
     let fd     = Socket.fd socket in
     let writev = Faraday_async.writev_of_fd fd in
@@ -221,4 +219,8 @@ module Client = struct
         if not (Fd.is_closed fd)
         then don't_wait_for (Fd.close fd));
     conn
+
+  let request = Client_connection.request
+
+  let shutdown = Client_connection.shutdown
 end

@@ -894,6 +894,8 @@ module Client_connection = struct
         (* ~error_handler:no_error_handler *)
     in
     Body.close_writer body;
+    write_request t request';
+    read_response t response;
     let body' =
       request
         t
@@ -904,19 +906,47 @@ module Client_connection = struct
     Body.close_writer body';
     write_request t request';
     read_response t response;
-    (* TODO: check the RFC to see if we're allowed to write a request right
-     * after the first one (without having yet received a response. This is not
-     * currently possible.
-     *
-     * What is pipelining after all? *)
+  ;;
+
+  let test_persistent_connection_requests_pipelining () =
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+    in
+    let t = create ?config:None ~error_handler:no_error_handler in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        (* ~error_handler:no_error_handler *)
+    in
+    Body.close_writer body;
+    write_request t request';
+    (* send the 2nd request without reading the response *)
+    let response' =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `Not_found
+    in
+    let body' =
+      request
+        t
+        request'
+        ~response_handler:(fun response body ->
+          Format.eprintf "def me getting called...@.";
+          (default_response_handler response' response body))
+        (* ~error_handler:no_error_handler *)
+    in
+    Body.close_writer body';
     write_request t request';
     read_response t response;
+    read_response t response';
   ;;
 
   let tests =
     [ "GET"         , `Quick, test_get
     ; "Response EOF", `Quick, test_response_eof
-    ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests ]
+    ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
+    ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining]
 end
 
 let () =
@@ -929,6 +959,7 @@ let () =
     ]
 
 (*
- * TODO: test multiple requests on a single (persistent) connection
+ * TODO: test pipelining with more pending requests that aren't closed yet
+ * (and shouldn't be sent)
  *
  *)

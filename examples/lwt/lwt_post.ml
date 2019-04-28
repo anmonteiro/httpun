@@ -26,11 +26,11 @@ let main port host =
     ; "host"             , host
     ]
   in
+  let connection = Client.create_connection ~error_handler socket in
   let request_body =
     Client.request
-      ~error_handler
+      connection
       ~response_handler
-      socket
       (Request.create ~headers `POST "/")
   in
   Body.write_string request_body body;
