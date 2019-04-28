@@ -71,4 +71,8 @@ module Client (Flow : Mirage_flow_lwt.S) : sig
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
+
+  val shutdown : t -> unit
+
+  val is_closed : t -> bool
 end

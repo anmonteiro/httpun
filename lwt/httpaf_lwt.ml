@@ -290,4 +290,6 @@ module Client (Io: IO) = struct
   let request = Client_connection.request
 
   let shutdown = Client_connection.shutdown
+
+  let is_closed = Client_connection.is_closed
 end

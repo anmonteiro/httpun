@@ -87,7 +87,6 @@ let requires_input t =
   | Awaiting_response -> true
   | Received_response (_, response_body) ->
     not (Body.is_closed response_body)
-    || Body.has_pending_output response_body
   | Closed -> false
 
 let requires_output { request_body; state; _ } =
@@ -112,5 +111,6 @@ let flush_response_body t =
   | Received_response(_, response_body) ->
     try Body.execute_read response_body
     (* TODO: report_exn *)
-    with _exn -> ()
+    with _exn ->
+      Format.eprintf "EXN@."
     (* report_exn t exn *)

@@ -93,6 +93,8 @@ module Client : sig
 
   val shutdown : t -> unit
 
+  val is_closed : t -> bool
+
   module TLS : sig
     type t
 
@@ -110,6 +112,8 @@ module Client : sig
       -> [`write] Body.t
 
     val shutdown : t -> unit
+
+    val is_closed : t -> bool
   end
 
   module SSL : sig
@@ -129,5 +133,7 @@ module Client : sig
       -> [`write] Body.t
 
     val shutdown : t -> unit
+
+    val is_closed : t -> bool
   end
 end

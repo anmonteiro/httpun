@@ -893,6 +893,8 @@ module Client_connection = struct
     Body.close_writer body;
     write_request t request';
     read_response t response;
+    writer_yielded t;
+    reader_ready t;
     let body' =
       request
         t
@@ -929,7 +931,6 @@ module Client_connection = struct
         t
         request'
         ~response_handler:(fun response body ->
-          Format.eprintf "def me getting called...@.";
           (default_response_handler response' response body))
         ~error_handler:no_error_handler
     in
@@ -939,11 +940,44 @@ module Client_connection = struct
     read_response t response';
   ;;
 
+  let test_persistent_connection_requests_body () =
+    let request' = Request.create `GET "/" in
+    let request'' = Request.create `GET "/second" in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body;
+    write_request t request';
+    let response' = Response.create `OK in
+    read_response t response;
+    read_string t "ten chars.";
+    let body' =
+      request
+        t
+        request''
+        ~response_handler:(default_response_handler response')
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    write_request t request'';
+    read_response t response';
+  ;;
+
   let tests =
     [ "GET"         , `Quick, test_get
     ; "Response EOF", `Quick, test_response_eof
     ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
-    ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining]
+    ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining
+    ; "Persistent connections, read response body", `Quick, test_persistent_connection_requests_body ]
+
 end
 
 let () =

@@ -106,10 +106,11 @@ module Oneshot = struct
       Respd.create error_handler request request_body t.writer response_handler in
     let handle_now = Queue.is_empty t.request_queue in
     Queue.push respd t.request_queue;
-    if handle_now then begin
+    if handle_now then
       Respd.write_request respd;
-      _wakeup_writer t.wakeup_writer
-    end;
+    (* Not handling the request now means it may be pipelined.
+     * `advance_request_queue_if_necessary` will take care of it. *)
+    _wakeup_writer t.wakeup_writer;
     request_body
   ;;
 
@@ -182,20 +183,15 @@ module Oneshot = struct
            *   A client that supports persistent connections MAY "pipeline" its
            *   requests (i.e., send multiple requests without waiting for each
            *   response). *)
-          let exception Local in
-          match
-            (Queue.fold (fun first respd ->
+          ignore @@ (Queue.fold (fun first respd ->
               if not first then begin
                 if respd.Respd.state = Uninitialized
                 then Respd.write_request respd
-                else raise Local
+                (* else raise Local *)
               end;
               false)
             true
             t.request_queue)
-          with
-          | _ -> ()
-          | exception Local -> ()
         end
       end else begin
         ignore (Queue.take t.request_queue);
@@ -213,26 +209,9 @@ module Oneshot = struct
     end else if Reader.is_closed t.reader
     then shutdown t
 
-  let _next_read_operation t =
-    advance_request_queue_if_necessary t;
-    if is_active t then begin
-      let respd = current_respd_exn t in
-      match respd.state with
-      | Uninitialized -> assert false
-      | Awaiting_response | Closed -> Reader.next t.reader
-      | Received_response(_, response_body) ->
-        if not (Body.is_closed response_body)
-        then Reader.next t.reader
-        else begin
-          Reader.force_close t.reader;
-          Reader.next        t.reader
-        end
-    end else
-      Reader.next t.reader
-  ;;
-
   let next_read_operation t =
-    match _next_read_operation t with
+    advance_request_queue_if_necessary t;
+    match Reader.next t.reader with
     | `Error (`Parse(marks, message)) ->
       let message = String.concat "" [ String.concat ">" marks; ": "; message] in
       set_error_and_handle t (`Malformed_response message);
