@@ -18,11 +18,12 @@ let main port host =
     Httpaf_examples.Client.print ~on_eof:(Lwt.wakeup_later notify_finished)
   in
   let headers = Headers.of_list [ "host", host ] in
-  let connection = Client.create_connection ~error_handler socket in
+  let connection = Client.create_connection socket in
   let request_body =
     Client.request
       connection
       ~response_handler
+      ~error_handler
       (Request.create ~headers `GET "/")
   in
   Body.close_writer request_body;

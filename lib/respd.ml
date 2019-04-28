@@ -1,5 +1,10 @@
 module Writer = Serialize.Writer
 
+type error =
+  [ `Malformed_response of string
+  | `Invalid_response_body_length of Response.t
+  | `Exn of exn ]
+
 type state =
   | Uninitialized
   | Awaiting_response
@@ -10,12 +15,14 @@ type t =
   { request          : Request.t
   ; request_body     : [ `write ] Body.t
   ; response_handler : (Response.t -> [`read] Body.t -> unit)
+  ; error_handler    : (error -> unit)
+  ; mutable error_code : [ `Ok | error ]
   ; writer : Writer.t
   ; mutable state    : state
   ; mutable persistent      : bool
   }
 
-let create request request_body response_handler writer =
+let create error_handler request request_body writer response_handler =
   let rec handler response body =
     let t = Lazy.force t in
     if t.persistent then
@@ -27,6 +34,8 @@ let create request request_body response_handler writer =
     { request
     ; request_body
     ; response_handler = handler
+    ; error_handler
+    ; error_code = `Ok
     ; writer
     ; state = Uninitialized
     ; persistent = Request.persistent_connection request
@@ -44,6 +53,22 @@ let write_request t =
 
 let on_more_output_available { request_body; _ } f =
   Body.when_ready_to_write request_body f
+
+let report_error t error =
+  (* t.persistent <- false; *)
+  (* TODO: drain queue? *)
+  match t.state, t.error_code with
+  | (Uninitialized | Awaiting_response | Received_response _), `Ok ->
+    t.state <- Closed;
+    t.error_code <- (error :> [`Ok | error]);
+    t.error_handler error
+  | Uninitialized, `Exn _ ->
+    (* TODO(anmonteiro): Not entirely sure this is possible in the client. *)
+    failwith "httpaf.Reqd.report_exn: NYI"
+  | (Uninitialized | Awaiting_response | Received_response _ | Closed), _ ->
+    (* XXX(seliopou): Once additional logging support is added, log the error
+     * in case it is not spurious. *)
+    ()
 
 let persistent_connection t =
   t.persistent

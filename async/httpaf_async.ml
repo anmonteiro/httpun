@@ -161,11 +161,10 @@ end
 module Client = struct
   type t = Client_connection.t
 
-  let create_connection ?(config=Config.default) ~error_handler socket =
+  let create_connection ?(config=Config.default) socket =
     let fd     = Socket.fd socket in
     let writev = Faraday_async.writev_of_fd fd in
-    let conn   =
-      Client_connection.create ~config ~error_handler in
+    let conn   = Client_connection.create ~config in
     let read_complete = Ivar.create () in
     let buffer = Buffer.create config.read_buffer_size in
     let rec reader_thread () =

@@ -19,11 +19,12 @@ let main port host () =
       ; "host"             , host
       ]
     in
-    let connection = Client.create_connection ~error_handler socket in
+    let connection = Client.create_connection socket in
     let request_body =
       Client.request
         connection
         ~response_handler
+        ~error_handler
         (Request.create ~headers `POST "/")
     in
     let stdin = Lazy.force Reader.stdin in

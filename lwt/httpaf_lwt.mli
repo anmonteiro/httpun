@@ -78,14 +78,13 @@ module Client (Io: IO) : sig
 
   val create_connection
     : ?config          : Config.t
-    -> error_handler    : Client_connection.error_handler
     -> Io.socket
     -> t Lwt.t
 
   val request
     :  t
     -> Request.t
-    (* -> error_handler    : Client_connection.error_handler *)
+    -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 

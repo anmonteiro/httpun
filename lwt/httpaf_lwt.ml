@@ -209,9 +209,9 @@ module Client (Io: IO) = struct
 
   type t = Client_connection.t
 
-  let create_connection ?(config=Config.default) ~error_handler socket =
+  let create_connection ?(config=Config.default) socket =
     let connection =
-      Client_connection.create ~config ~error_handler in
+      Client_connection.create ~config in
 
 
     let read_buffer = Buffer.create config.read_buffer_size in

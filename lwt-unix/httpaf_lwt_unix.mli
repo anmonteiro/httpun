@@ -81,14 +81,13 @@ module Client : sig
 
   val create_connection
     : ?config:Config.t
-    -> error_handler:Client_connection.error_handler
     -> Lwt_unix.file_descr
     -> t Lwt.t
 
   val request
     :  t
     -> Request.t
-    (* -> error_handler    : Client_connection.error_handler *)
+    -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 
@@ -100,14 +99,13 @@ module Client : sig
     val create_connection
       :  ?client          : Tls_io.client
       -> ?config          : Config.t
-      -> error_handler    : Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t
 
     val request
       :  t
       -> Request.t
-      (* -> error_handler    : Client_connection.error_handler *)
+      -> error_handler    : Client_connection.error_handler
       -> response_handler : Client_connection.response_handler
       -> [`write] Body.t
 
@@ -120,14 +118,13 @@ module Client : sig
     val create_connection
       :  ?client          : Ssl_io.client
       -> ?config          : Config.t
-      -> error_handler    : Client_connection.error_handler
       -> Lwt_unix.file_descr
       -> t Lwt.t
 
     val request
       :  t
       -> Request.t
-      (* -> error_handler    : Client_connection.error_handler *)
+      -> error_handler    : Client_connection.error_handler
       -> response_handler : Client_connection.response_handler
       -> [`write] Body.t
 

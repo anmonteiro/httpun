@@ -17,14 +17,13 @@ module Client : sig
 
   val create_connection
     : ?config:Config.t
-    -> error_handler:Client_connection.error_handler
     -> ([`Active], [< Socket.Address.t]) Socket.t
     -> t
 
   val request
     :  t
     -> Request.t
-    (* -> error_handler    : Client_connection.error_handler *)
+    -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 

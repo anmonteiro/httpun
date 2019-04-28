@@ -1,5 +1,6 @@
 (*----------------------------------------------------------------------------
     Copyright (c) 2017 Inhabited Type LLC.
+    Copyright (c) 2019 Antonio Nuno Monteiro.
 
     All rights reserved.
 
@@ -762,12 +763,12 @@ module Client_connection : sig
 
   type error_handler = error -> unit
 
-  val create : ?config:Config.t -> error_handler:(error -> unit) -> t
+  val create : ?config:Config.t -> t
 
   val request
     :  t
     -> Request.t
-    (* -> error_handler:error_handler *)
+    -> error_handler:error_handler
     -> response_handler:response_handler
     -> [`write] Body.t
 
@@ -821,6 +822,11 @@ module Client_connection : sig
       may call its error handler before terminating the connection. *)
 
   val is_closed : t -> bool
+  (** [is_closed t] is [true] if both the read and write processors have been
+      shutdown. When this is the case {!next_read_operation} will return
+      [`Close _] and {!next_write_operation} will return [`Write _] until all
+      buffered output has been flushed, at which point it will also return
+      `Close. *)
 
   val shutdown : t -> unit
   (** [shutdown connection] closes the underlying input and output channels of

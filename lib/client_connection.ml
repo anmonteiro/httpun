@@ -1,5 +1,6 @@
 (*----------------------------------------------------------------------------
     Copyright (c) 2017-2019 Inhabited Type LLC.
+    Copyright (c) 2019 Antonio Nuno Monteiro.
 
     All rights reserved.
 
@@ -43,10 +44,8 @@ module Oneshot = struct
 
   type t =
     { config : Config.t
-    ; error_handler    : (error -> unit)
     ; reader : Reader.response
     ; writer : Writer.t
-    ; mutable error_code : [ `Ok | error ]
     ; request_queue : Respd.t Queue.t
       (* invariant: If [request_queue] is not empty, then the head of the queue
          has already written the request headers to the wire. *)
@@ -89,11 +88,9 @@ module Oneshot = struct
     t.wakeup_reader := [];
     List.iter (fun f -> f ()) fs
 
-  let create ?(config=Config.default) ~error_handler =
+  let[@ocaml.warning "-16"] create ?(config=Config.default) =
     let request_queue = Queue.create () in
     { config
-    ; error_handler
-    ; error_code = `Ok
     ; reader = Reader.response request_queue
     ; writer = Writer.create ()
     ; request_queue
@@ -101,12 +98,12 @@ module Oneshot = struct
     ; wakeup_reader = ref []
     }
 
-  let request t request (* ~error_handler *) ~response_handler =
+  let request t request ~error_handler ~response_handler =
     let request_body =
       Body.create (Bigstringaf.create t.config.request_body_buffer_size)
     in
     let respd =
-      Respd.create request request_body response_handler t.writer in
+      Respd.create error_handler request request_body t.writer response_handler in
     let handle_now = Queue.is_empty t.request_queue in
     Queue.push respd t.request_queue;
     if handle_now then begin
@@ -124,10 +121,11 @@ module Oneshot = struct
   ;;
 
   let set_error_and_handle_without_shutdown t error =
-    (* TODO: drain queue? *)
-    (* t.state := Closed; *)
-    t.error_code <- (error :> [`Ok | error]);
-    t.error_handler error;
+    if is_active t then begin
+      let respd = current_respd_exn t in
+      Respd.report_error respd error
+    end
+    (* TODO: not active?! *)
   ;;
 
   let unexpected_eof t =
