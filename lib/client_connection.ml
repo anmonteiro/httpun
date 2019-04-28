@@ -50,7 +50,6 @@ module Oneshot = struct
       (* invariant: If [request_queue] is not empty, then the head of the queue
          has already written the request headers to the wire. *)
     ; wakeup_writer  : (unit -> unit) list ref
-    ; wakeup_reader  : (unit -> unit) list ref
     }
 
   let is_closed t =
@@ -65,11 +64,6 @@ module Oneshot = struct
   let current_respd_exn t =
     Queue.peek t.request_queue
 
-  let on_wakeup_reader t k =
-    if is_closed t
-    then failwith "on_wakeup_reader on closed conn"
-    else t.wakeup_reader := k::!(t.wakeup_reader)
-
   let on_wakeup_writer t k =
     if is_closed t
     then failwith "on_wakeup_writer on closed conn"
@@ -83,11 +77,6 @@ module Oneshot = struct
   let wakeup_writer t =
     _wakeup_writer t.wakeup_writer
 
-  let wakeup_reader t =
-    let fs = !(t.wakeup_reader) in
-    t.wakeup_reader := [];
-    List.iter (fun f -> f ()) fs
-
   let[@ocaml.warning "-16"] create ?(config=Config.default) =
     let request_queue = Queue.create () in
     { config
@@ -95,7 +84,6 @@ module Oneshot = struct
     ; writer = Writer.create ()
     ; request_queue
     ; wakeup_writer = ref []
-    ; wakeup_reader = ref []
     }
 
   let request t request ~error_handler ~response_handler =
@@ -137,7 +125,6 @@ module Oneshot = struct
     Reader.force_close t.reader;
     if is_active t
     then Respd.close_response_body (current_respd_exn t)
-    else wakeup_reader t
 
   let shutdown_writer t =
     flush_request_body t;
@@ -176,8 +163,7 @@ module Oneshot = struct
             let respd = current_respd_exn t in
             Respd.write_request respd;
           end;
-          (* TODO: wake up writer?! *)
-          wakeup_reader t;
+          wakeup_writer t;
         end else if not (Respd.requires_output respd) then begin
           (* From RFC7230§6.3.2:
            *   A client that supports persistent connections MAY "pipeline" its
