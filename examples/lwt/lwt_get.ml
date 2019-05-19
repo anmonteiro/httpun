@@ -27,7 +27,22 @@ let main port host =
       (Request.create ~headers `GET "/")
   in
   Body.close_writer request_body;
-  finished
+  finished >>= fun () ->
+  let finished, notify_finished = Lwt.wait () in
+  let response_handler =
+    Httpaf_examples.Client.print ~on_eof:(Lwt.wakeup_later notify_finished)
+  in
+  let headers = Headers.of_list [ "host", host ] in
+  let request_body =
+    Client.request
+      connection
+      ~response_handler
+      ~error_handler
+      (Request.create ~headers `GET "/")
+  in
+  Body.close_writer request_body;
+  finished >|= fun () ->
+    Client.shutdown connection
 ;;
 
 let () =
