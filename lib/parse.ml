@@ -264,6 +264,11 @@ module Reader = struct
   let is_closed t =
     t.closed
 
+  let is_failed t =
+    match t.parse_state with
+    | Fail _ -> true
+    | _ -> false
+
   let transition t state =
     match state with
     | AU.Done(consumed, Ok ())
@@ -309,11 +314,6 @@ module Reader = struct
   let force_close t =
     ignore (read_with_more t Bigstringaf.empty ~off:0 ~len:0 Complete : int);
   ;;
-
-  let is_parse_failure t =
-    match t.parse_state with
-    | Fail _ -> true
-    | _ -> false
 
   let next t =
     match t.parse_state with
