@@ -47,7 +47,7 @@ module Reader = Parse.Reader
 module Writer = Serialize.Writer
 
 
-type request_handler = Reqd.t -> unit
+type 'fd request_handler = 'fd Reqd.t -> unit
 
 type error =
   [ `Bad_gateway | `Bad_request | `Internal_server_error | `Exn of exn]
@@ -55,13 +55,13 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
-type t =
+type 'fd t =
   { reader                 : Reader.request
   ; writer                 : Writer.t
   ; response_body_buffer   : Bigstringaf.t
-  ; request_handler        : request_handler
+  ; request_handler        : 'fd request_handler
   ; error_handler          : error_handler
-  ; request_queue          : Reqd.t Queue.t
+  ; request_queue          : 'fd Reqd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already had [request_handler] called on it. *)
   ; wakeup_writer  : (unit -> unit) list ref
@@ -270,16 +270,21 @@ let yield_reader t k =
   on_wakeup_reader t k
 ;;
 
-let flush_response_body t =
-  if is_active t then
-    let reqd = current_reqd_exn t in
-    Reqd.flush_response_body reqd
-;;
-
 let next_write_operation t =
   advance_request_queue_if_necessary t;
-  flush_response_body t;
-  Writer.next t.writer
+  if is_active t then begin
+    let reqd = current_reqd_exn t in
+    Reqd.flush_response_body reqd;
+    match Writer.next t.writer with
+    | `Write iovecs as write_op ->
+      begin match Reqd.upgrade_handler reqd with
+      | Some upgrade ->
+        `Upgrade (iovecs, upgrade)
+      | None -> write_op
+      end
+    | operation -> operation
+  end else
+    Writer.next t.writer
 
 let report_write_result t result =
   Writer.report_result t.writer result

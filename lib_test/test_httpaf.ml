@@ -143,7 +143,11 @@ module Read_operation = struct
 end
 
 module Write_operation = struct
-  type t = [ `Write of Bigstringaf.t IOVec.t list | `Yield | `Close of int ]
+  type 'fd t = [
+    | `Write of Bigstringaf.t IOVec.t list
+    | `Upgrade of Bigstringaf.t IOVec.t list * ('fd -> unit)
+    | `Yield
+    | `Close of int ]
 
   let iovecs_to_string iovecs =
     let len = IOVec.lengthv iovecs in
@@ -159,13 +163,14 @@ module Write_operation = struct
   let pp_hum fmt t =
     match t with
     | `Write iovecs -> Format.fprintf fmt "Write %S" (iovecs_to_string iovecs)
+    | `Upgrade (iovecs, _) -> Format.fprintf fmt "Upgrade %S" (iovecs_to_string iovecs)
     | `Yield -> Format.pp_print_string fmt "Yield"
     | `Close len -> Format.fprintf fmt "Close %i" len
   ;;
 
   let to_write_as_string t =
     match t with
-    | `Write iovecs -> Some (iovecs_to_string iovecs)
+    | `Write iovecs | `Upgrade (iovecs, _) -> Some (iovecs_to_string iovecs)
     | `Close _ | `Yield -> None
   ;;
 end
@@ -727,12 +732,12 @@ module Client_connection = struct
 
   let writer_yielded t =
     Alcotest.check write_operation "Writer is in a yield state"
-      `Yield (next_write_operation t);
+      `Yield (next_write_operation t :> unit Write_operation.t);
   ;;
 
   let writer_closed t =
     Alcotest.check write_operation "Writer is closed"
-      (`Close 0) (next_write_operation t);
+      (`Close 0) (next_write_operation t :> unit Write_operation.t);
   ;;
 
   let connection_is_shutdown t =

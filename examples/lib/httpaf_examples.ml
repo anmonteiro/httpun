@@ -50,17 +50,14 @@ module Server = struct
       Reqd.respond_with_string reqd (Response.create ~headers `Method_not_allowed) ""
   ;;
 
-  let benchmark =
+  let benchmark reqd =
     let headers = Headers.of_list ["content-length", Int.to_string (Bigstringaf.length text)] in
-    let handler reqd =
       let { Request.target; _ } = Reqd.request reqd in
       let request_body          = Reqd.request_body reqd in
       Body.close_reader request_body;
       match target with
       | "/" -> Reqd.respond_with_bigstring reqd (Response.create ~headers `OK) text;
       | _   -> Reqd.respond_with_string    reqd (Response.create `Not_found) "Route not found"
-    in
-    handler
   ;;
 
   let error_handler ?request:_ error start_response =

@@ -459,8 +459,8 @@ module Body : sig
       consume, or when the input channel has been closed and no further bytes
       will be received by the application.
 
-      Once either of these callbacks have been called, they become inactive. 
-      The application is responsible for scheduling subsequent reads, either 
+      Once either of these callbacks have been called, they become inactive.
+      The application is responsible for scheduling subsequent reads, either
       within the [on_read] callback or by some other mechanism. *)
 
   val write_char : [`write] t -> char -> unit
@@ -481,7 +481,7 @@ module Body : sig
   val schedule_bigstring : [`write] t -> ?off:int -> ?len:int -> Bigstringaf.t -> unit
   (** [schedule_bigstring w ?off ?len bs] schedules [bs] to be transmitted at
       the next opportunity without performing a copy. [bs] should not be
-      modified until a subsequent call to {!flush} has successfully 
+      modified until a subsequent call to {!flush} has successfully
       completed. *)
 
   val flush : [`write] t -> (unit -> unit) -> unit
@@ -615,13 +615,13 @@ end
 
 (** {2 Request Descriptor} *)
 module Reqd : sig
-  type t
+  type 'handle t
 
-  val request : t -> Request.t
-  val request_body : t -> [`read] Body.t
+  val request : _ t -> Request.t
+  val request_body : _ t -> [`read] Body.t
 
-  val response : t -> Response.t option
-  val response_exn : t -> Response.t
+  val response : _ t -> Response.t option
+  val response_exn : _ t -> Response.t
 
   (** Responding
 
@@ -633,14 +633,15 @@ module Reqd : sig
       See {{:https://tools.ietf.org/html/rfc7230#section-6.3} RFC7230§6.3} for
       more details. *)
 
-  val respond_with_string    : t -> Response.t -> string -> unit
-  val respond_with_bigstring : t -> Response.t -> Bigstringaf.t -> unit
-  val respond_with_streaming : ?flush_headers_immediately:bool -> t -> Response.t -> [`write] Body.t
+  val respond_with_string    : _ t -> Response.t -> string -> unit
+  val respond_with_bigstring : _ t -> Response.t -> Bigstringaf.t -> unit
+  val respond_with_streaming : ?flush_headers_immediately:bool -> _ t -> Response.t -> [`write] Body.t
+  val respond_with_upgrade : 'fd t -> Response.t -> ('fd -> unit) -> unit
 
   (** {3 Exception Handling} *)
 
-  val report_exn : t -> exn -> unit
-  val try_with : t -> (unit -> unit) -> (unit, exn) result
+  val report_exn : _ t -> exn -> unit
+  val try_with : _ t -> (unit -> unit) -> (unit, exn) result
 end
 
 (** {2 Buffer Size Configuration} *)
@@ -660,12 +661,12 @@ end
 (** {2 Server Connection} *)
 
 module Server_connection : sig
-  type t
+  type 'fd t
 
   type error =
     [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-  type request_handler = Reqd.t -> unit
+  type 'fd request_handler = 'fd Reqd.t -> unit
 
   type error_handler =
     ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
@@ -673,43 +674,44 @@ module Server_connection : sig
   val create
     :  ?config:Config.t
     -> ?error_handler:error_handler
-    -> request_handler
-    -> t
+    -> 'fd request_handler
+    -> 'fd t
   (** [create ?config ?error_handler ~request_handler] creates a connection
       handler that will service individual requests with [request_handler]. *)
 
-  val next_read_operation : t -> [ `Read | `Yield | `Close ]
+  val next_read_operation : _ t -> [ `Read | `Yield | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
 
-  val read : t -> Bigstringaf.t -> off:int -> len:int -> int
+  val read : _ t -> Bigstringaf.t -> off:int -> len:int -> int
   (** [read t bigstring ~off ~len] reads bytes of input from the provided range
       of [bigstring] and returns the number of bytes consumed by the
       connection.  {!read} should be called after {!next_read_operation}
       returns a [`Read] value and additional input is available for the
       connection to consume. *)
 
-  val read_eof : t -> Bigstringaf.t -> off:int -> len:int -> int
-  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided 
+  val read_eof : _ t -> Bigstringaf.t -> off:int -> len:int -> int
+  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided
       range of [bigstring] and returns the number of bytes consumed by the
       connection.  {!read_eof} should be called after {!next_read_operation}
       returns a [`Read] and an EOF has been received from the communication
       channel. The connection will attempt to consume any buffered input and
       then shutdown the HTTP parser for the connection. *)
 
-  val yield_reader : t -> (unit -> unit) -> unit
+  val yield_reader : _ t -> (unit -> unit) -> unit
   (** [yield_reader t continue] registers with the connection to call
       [continue] when reading should resume. {!yield_reader} should be called
       after {next_read_operation} returns a [`Yield] value. *)
 
-  val next_write_operation : t -> [
+  val next_write_operation : 'fd t -> [
     | `Write of Bigstringaf.t IOVec.t list
+    | `Upgrade of Bigstringaf.t IOVec.t list * ('fd -> unit)
     | `Yield
     | `Close of int ]
   (** [next_write_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
 
-  val report_write_result : t -> [`Ok of int | `Closed] -> unit
+  val report_write_result : _ t -> [`Ok of int | `Closed] -> unit
   (** [report_write_result t result] reports the result of the latest write
       attempt to the connection. {report_write_result} should be called after a
       call to {next_write_operation} that returns a [`Write buffer] value.
@@ -721,29 +723,29 @@ module Server_connection : sig
         {- [`Closed] indicates that the output destination will no longer
         accept bytes from the write processor. }} *)
 
-  val yield_writer : t -> (unit -> unit) -> unit
+  val yield_writer : _ t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call
       [continue] when writing should resume. {!yield_writer} should be called
       after {next_write_operation} returns a [`Yield] value. *)
 
-  val report_exn : t -> exn -> unit
+  val report_exn : _ t -> exn -> unit
   (** [report_exn t exn] reports that an error [exn] has been caught and
       that it has been attributed to [t]. Calling this function will switch [t]
       into an error state. Depending on the state [t] is transitioning from, it
       may call its error handler before terminating the connection. *)
 
-  val is_closed : t -> bool
+  val is_closed : _ t -> bool
   (** [is_closed t] is [true] if both the read and write processors have been
       shutdown. When this is the case {!next_read_operation} will return
       [`Close _] and {!next_write_operation} will return [`Write _] until all
       buffered output has been flushed. *)
 
-  val error_code : t -> error option
+  val error_code : _ t -> error option
   (** [error_code t] returns the [error_code] that caused the connection to
       close, if one exists. *)
 
   (**/**)
-  val shutdown : t -> unit
+  val shutdown : _ t -> unit
   (**/**)
 end
 
@@ -779,7 +781,7 @@ module Client_connection : sig
       connection to consume. *)
 
   val read_eof : t -> Bigstringaf.t -> off:int -> len:int -> int
-  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided 
+  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided
       range of [bigstring] and returns the number of bytes consumed by the
       connection.  {!read_eof} should be called after {!next_read_operation}
       returns a [`Read] and an EOF has been received from the communication
