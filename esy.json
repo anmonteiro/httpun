@@ -12,15 +12,53 @@
     "@opam/faraday": "*",
     "@opam/faraday-async": "*",
     "@opam/faraday-lwt-unix": "*",
-    "@opam/async": "*"
+    "@opam/async": "*",
+    "@opam/mirage-conduit": "*"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
     "@opam/merlin": "*",
     "@opam/odoc": "*"
   },
-  "resolutionsy": {
+  "resolutions": {
+    "@opam/conf-autoconf": "esy-packages/esy-autoconf#71a8836",
+    "@opam/mirage-conduit": {
+      "source": "mirage/ocaml-conduit:mirage-conduit.opam#0ce7ce3",
+      "override": {
+        "dependencies": {
+          "@opam/tls-mirage": "*"
+        }
+      }
+    },
     "@opam/ppx_deriving": "ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384",
-    "@opam/ppx_tools": "ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4"
+    "@opam/ppx_tools": "ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4",
+    "@opam/nocrypto": {
+      "source": "TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d",
+      "override": {
+        "dependencies": {
+          "@opam/bigarray-compat": "*",
+          "@opam/ppx_sexp_conv": "*"
+        }
+      }
+    },
+    "@opam/mirage-xen-posix": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/mirage-xen-ocaml": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/mirage-xen": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/mirage-net-xen": {
+      "source": "no-source:",
+      "override": {}
+    },
+    "@opam/tls": "dune-universe/ocaml-tls:tls.opam#9761033",
+    "@opam/tls-lwt": "dune-universe/ocaml-tls:tls-lwt.opam#9761033",
+    "@opam/tls-mirage": "dune-universe/ocaml-tls:tls-mirage.opam#9761033"
   }
 }
