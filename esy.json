@@ -13,7 +13,10 @@
     "@opam/faraday-async": "*",
     "@opam/faraday-lwt-unix": "*",
     "@opam/async": "*",
-    "@opam/mirage-conduit": "*"
+    "@opam/mirage-conduit": "*",
+    "@opam/tls-lwt": "*",
+    "@opam/lwt_ssl": "*",
+    "@opam/ssl": " >= 0.5.8"
   },
   "devDependencies": {
     "@opam/alcotest": "*",
@@ -21,7 +24,7 @@
     "@opam/odoc": "*"
   },
   "resolutions": {
-    "@opam/conf-autoconf": "esy-packages/esy-autoconf#71a8836",
+    "@opam/conf-openssl": "esy-packages/esy-openssl#dafe9ad",
     "@opam/mirage-conduit": {
       "source": "mirage/ocaml-conduit:mirage-conduit.opam#0ce7ce3",
       "override": {
