@@ -1,3 +1,3 @@
-(lang dune 1.5)
+(lang dune 1.0)
 
 (name httpaf)

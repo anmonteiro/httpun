@@ -1,6 +1,5 @@
 (*----------------------------------------------------------------------------
     Copyright (c) 2018 Inhabited Type LLC.
-    Copyright (c) 2018 Anton Bachin
     Copyright (c) 2019 António Nuno Monteiro
 
     All rights reserved.
@@ -33,29 +32,35 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-open Httpaf
+module type Server_intf = sig
+  type flow
 
-
-(* The function that results from [create_connection_handler] should be passed
-   to [Lwt_io.establish_server_with_client_socket]. For an example, see
-   [examples/lwt_echo_server.ml]. *)
-module Server : sig
   val create_connection_handler
-    :  ?config         : Config.t
-    -> request_handler : (Unix.sockaddr -> Server_connection.request_handler)
-    -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
-    -> Unix.sockaddr
-    -> Lwt_unix.file_descr
-    -> unit Lwt.t
+    :  ?config : Httpaf.Config.t
+    -> request_handler : Httpaf.Server_connection.request_handler
+    -> error_handler : Httpaf.Server_connection.error_handler
+    -> (flow -> unit Lwt.t)
 end
 
-(* For an example, see [examples/lwt_get.ml]. *)
-module Client : sig
+module Server (Flow : Mirage_flow_lwt.S) :
+  Server_intf with type flow = Flow.flow
+
+module Server_with_conduit : sig
+  include Server_intf with type flow = Conduit_mirage.Flow.flow
+
+  type t = Conduit_mirage.Flow.flow -> unit Lwt.t
+
+  val connect:
+    Conduit_mirage.t ->
+    (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
+end
+
+module Client (Flow : Mirage_flow_lwt.S) : sig
   val request
-    :  ?config          : Httpaf.Config.t
-    -> Lwt_unix.file_descr
-    -> Request.t
-    -> error_handler    : Client_connection.error_handler
-    -> response_handler : Client_connection.response_handler
-    -> [`write] Httpaf.Body.t
+    :  ?config : Httpaf.Config.t
+    -> Flow.flow
+    -> Httpaf.Request.t
+    -> error_handler : Httpaf.Client_connection.error_handler
+    -> response_handler : Httpaf.Client_connection.response_handler
+      -> [`write] Httpaf.Body.t
 end
