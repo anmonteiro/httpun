@@ -18,13 +18,12 @@ let main port host =
     Httpaf_examples.Client.print ~on_eof:(Lwt.wakeup_later notify_finished)
   in
   let headers = Headers.of_list [ "host", host ] in
-  let request_body =
-      Client.TLS.request
-      ~error_handler
-      ~response_handler
-      socket
-      (Request.create ~headers `GET "/")
-  in
+  Client.TLS.request
+    ~error_handler
+    ~response_handler
+    socket
+    (Request.create ~headers `GET "/")
+  >>= fun request_body ->
   Body.close_writer request_body;
   finished
 ;;
