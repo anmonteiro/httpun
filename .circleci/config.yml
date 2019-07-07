@@ -1,7 +1,7 @@
 version: 2
 
 common_cache_key: &common_cache_key
-  key: dependency-cache-{{ checksum "../ocaml-version" }}-{{ checksum ".circleci/config.yml" }}-{{ checksum "httpaf.opam" }}-{{ checksum "httpaf-async.opam" }}-{{ checksum "httpaf-lwt-unix.opam" }}
+  key: dependency-cache-{{ checksum "../ocaml-version" }}-{{ checksum ".circleci/config.yml" }}-{{ checksum "httpaf.opam" }}-{{ checksum "httpaf-async.opam" }}-{{ checksum "httpaf-lwt.opam" }}-{{ checksum "httpaf-lwt-unix.opam" }}-{{ checksum "httpaf-mirage.opam" }}
 
 esy_cache_key: &esy_cache_key
   key: esy-cache-{{ checksum "esy.json" }}-{{ checksum "../esy-checksum" }}-{{ checksum ".circleci/config.yml" }}
