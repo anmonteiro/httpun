@@ -20,4 +20,5 @@ depends: [
   "httpaf-lwt"
   "lwt"
 ]
+depopts: ["tls" "lwt_ssl"]
 synopsis: "Lwt + Unix support for http/af"
