@@ -1,0 +1,26 @@
+{
+  "name": "httpaf",
+  "version": "0.1.0",
+  "license": "BSD-3-clause",
+  "repository": "git+https://github.com/anmonteiro/httpaf",
+  "dependencies": {
+    "ocaml": "4.8.0",
+    "@opam/dune": "*",
+    "@opam/lwt": "*",
+    "@opam/bigstringaf": "*",
+    "@opam/angstrom": "*",
+    "@opam/faraday": "*",
+    "@opam/faraday-async": "*",
+    "@opam/faraday-lwt-unix": "*",
+    "@opam/async": "*"
+  },
+  "devDependencies": {
+    "@opam/alcotest": "*",
+    "@opam/merlin": "*",
+    "@opam/odoc": "*"
+  },
+  "resolutionsy": {
+    "@opam/ppx_deriving": "ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384",
+    "@opam/ppx_tools": "ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4"
+  }
+}
