@@ -1,6 +1,7 @@
 (*----------------------------------------------------------------------------
     Copyright (c) 2018 Inhabited Type LLC.
     Copyright (c) 2018 Anton Bachin
+    Copyright (c) 2019 António Nuno Monteiro
 
     All rights reserved.
 
