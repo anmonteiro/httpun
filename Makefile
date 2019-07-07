@@ -6,7 +6,7 @@ build:
 all: build
 
 test:
-	dune runtest
+	dune runtest --no-buffer
 
 examples:
 	dune build @examples
