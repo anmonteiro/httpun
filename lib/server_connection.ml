@@ -66,6 +66,10 @@ type t =
        has already had [request_handler] called on it. *)
   ; mutable wakeup_writer  : Optional_thunk.t
   ; mutable wakeup_reader  : Optional_thunk.t
+    (* Represents an unrecoverable error that will cause the connection to
+     * shutdown. Holds on to the response body created by the error handler
+     * that might be streaming to the client. *)
+  ; mutable error_code : [`Ok | `Error of [`write] Body.t ]
   }
 
 let is_closed t =
@@ -151,6 +155,7 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   ; request_queue
   ; wakeup_writer   = Optional_thunk.none
   ; wakeup_reader   = Optional_thunk.none
+  ; error_code = `Ok
   }
 
 let shutdown_reader t =
@@ -189,9 +194,20 @@ let set_error_and_handle ?request t error =
     in
     shutdown_reader t;
     let writer = t.writer in
-    t.error_handler ?request error (fun headers ->
-      Writer.write_response writer (Response.create ~headers status);
-      Body.of_faraday (Writer.faraday writer));
+    match t.error_code with
+    | `Ok ->
+      let body = Body.of_faraday (Writer.faraday writer) in
+      t.error_code <- `Error body;
+      t.error_handler ?request error (fun headers ->
+          Writer.write_response writer (Response.create ~headers status);
+          wakeup_writer t;
+          body)
+    | `Error _ ->
+      (* This should not happen. Even if we try to read more, the parser does
+       * not ingest it, and even if someone attempts to feed more bytes to the
+       * server when we already told them to [`Close], it's not really our
+       * problem. *)
+      assert false
   end
 
 let report_exn t exn =
@@ -220,7 +236,12 @@ let advance_request_queue_if_necessary t =
         | Ready -> ()
         | Complete -> shutdown_reader t
     end
-  end else if Reader.is_closed t.reader
+  end else if Reader.is_failed t.reader then
+    (* Don't tear down the whole connection if we saw an unrecoverable parsing
+     * error, as we might be in the process of streaming back the error
+     * response body to the client. *)
+    shutdown_reader t
+  else if Reader.is_closed t.reader
   then shutdown t
 
 let _next_read_operation t =
@@ -287,6 +308,7 @@ let yield_writer t k =
     else if Reqd.persistent_connection reqd
     then on_wakeup_writer t k
     else begin shutdown t; k () end
-  end else if Writer.is_closed t.writer then k () else begin
-    on_wakeup_writer t k
-  end
+  end else if Writer.is_closed t.writer then k () else
+  match t.error_code with
+    | `Ok -> on_wakeup_writer t k
+    | `Error body -> Body.when_ready_to_write body k
