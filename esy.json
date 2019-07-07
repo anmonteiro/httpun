@@ -33,8 +33,7 @@
         }
       }
     },
-    "@opam/ppx_deriving": "ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384",
-    "@opam/ppx_tools": "ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4",
+    "@opam/ppx_deriving": "ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c",
     "@opam/nocrypto": {
       "source": "TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d",
       "override": {

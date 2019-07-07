@@ -1,5 +1,5 @@
 {
-  "checksum": "2286a1d0333bbcf7c85298e4210aa0ce",
+  "checksum": "e118ae1df06a9ff496ecbddced5a065d",
   "root": "httpaf@link-dev:./esy.json",
   "node": {
     "yarn-pkg-config@github:esy-ocaml/yarn-pkg-config#cca65f99674ed2d954d28788edeb8c57fada5ed0@d41d8cd9": {
@@ -251,7 +251,7 @@
         "@opam/xenstore@opam:2.1.0@02d15b14",
         "@opam/sexplib@opam:v0.12.0@c65643bb",
         "@opam/result@opam:1.4@7add0d71",
-        "@opam/ppx_tools@github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4@d41d8cd9",
+        "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/mirage-flow-lwt@opam:1.6.0@4764001e",
@@ -267,7 +267,7 @@
         "@opam/xenstore@opam:2.1.0@02d15b14",
         "@opam/sexplib@opam:v0.12.0@c65643bb",
         "@opam/result@opam:1.4@7add0d71",
-        "@opam/ppx_tools@github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4@d41d8cd9",
+        "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/mirage-flow-lwt@opam:1.6.0@4764001e",
@@ -571,7 +571,7 @@
         "@opam/sexplib@opam:v0.12.0@c65643bb",
         "@opam/ptime@opam:0.8.5@0051d642",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
-        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384@d41d8cd9",
+        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c@d41d8cd9",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@opam/ocamlbuild@opam:0.14.0@427a2331",
@@ -589,7 +589,7 @@
         "@opam/sexplib@opam:v0.12.0@c65643bb",
         "@opam/ptime@opam:0.8.5@0051d642",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
-        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384@d41d8cd9",
+        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c@d41d8cd9",
         "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
         "@opam/nocrypto@github:TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d@d86b9d71",
         "@opam/mirage-kv-lwt@opam:2.0.0@585db097",
@@ -1146,23 +1146,28 @@
         "@opam/ocaml-migrate-parsetree@opam:1.4.0@107a1ff4"
       ]
     },
-    "@opam/ppx_tools@github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4@d41d8cd9": {
-      "id":
-        "@opam/ppx_tools@github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4@d41d8cd9",
+    "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb": {
+      "id": "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb",
       "name": "@opam/ppx_tools",
-      "version": "github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4",
+      "version": "opam:5.2+4.08.0",
       "source": {
         "type": "install",
-        "source": [ "github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4" ]
+        "source": [
+          "archive:https://opam.ocaml.org/cache/md5/3f/3f911ebddad5eb4dd279b303a34d9493#md5:3f911ebddad5eb4dd279b303a34d9493",
+          "archive:https://github.com/ocaml-ppx/ppx_tools/archive/5.2+4.08.0.tar.gz#md5:3f911ebddad5eb4dd279b303a34d9493"
+        ],
+        "opam": {
+          "name": "ppx_tools",
+          "version": "5.2+4.08.0",
+          "path": "esy.lock/opam/ppx_tools.5.2+4.08.0"
+        }
       },
       "overrides": [],
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
-      "devDependencies": [
-        "ocaml@4.8.0@d41d8cd9", "@opam/ocamlfind@opam:1.8.0@f744a0c5"
-      ]
+      "devDependencies": [ "ocaml@4.8.0@d41d8cd9" ]
     },
     "@opam/ppx_stable@opam:v0.12.0@17aca219": {
       "id": "@opam/ppx_stable@opam:v0.12.0@17aca219",
@@ -1751,22 +1756,22 @@
         "@opam/base@opam:v0.12.2@e209c8f2"
       ]
     },
-    "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384@d41d8cd9": {
+    "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c@d41d8cd9": {
       "id":
-        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384@d41d8cd9",
+        "@opam/ppx_deriving@github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c@d41d8cd9",
       "name": "@opam/ppx_deriving",
-      "version": "github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384",
+      "version": "github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c",
       "source": {
         "type": "install",
         "source": [
-          "github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#403d384"
+          "github:ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c"
         ]
       },
       "overrides": [],
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/result@opam:1.4@7add0d71",
         "@opam/ppxfind@opam:1.3@a7b3cc46",
-        "@opam/ppx_tools@github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4@d41d8cd9",
+        "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb",
         "@opam/ppx_derivers@opam:1.2.1@0b458500",
         "@opam/ocaml-migrate-parsetree@opam:1.4.0@107a1ff4",
         "@opam/dune@opam:1.10.0@b15ce221", "@opam/cppo@opam:1.6.6@25eb99ce",
@@ -1774,7 +1779,7 @@
       ],
       "devDependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/result@opam:1.4@7add0d71",
-        "@opam/ppx_tools@github:ocaml-ppx/ppx_tools:ppx_tools.opam#331fbc4@d41d8cd9",
+        "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb",
         "@opam/ppx_derivers@opam:1.2.1@0b458500",
         "@opam/ocaml-migrate-parsetree@opam:1.4.0@107a1ff4",
         "@opam/dune@opam:1.10.0@b15ce221"
