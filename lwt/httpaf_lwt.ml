@@ -171,6 +171,12 @@ module Server (Io: IO) = struct
             Server_connection.report_write_result connection result;
             write_loop_step ()
 
+          | `Upgrade (io_vectors, upgrade_handler) ->
+            writev io_vectors >>= fun result ->
+            Server_connection.report_write_result connection result;
+            upgrade_handler socket;
+            write_loop_step ()
+
           | `Yield ->
             Server_connection.yield_writer connection write_loop;
             Lwt.return_unit

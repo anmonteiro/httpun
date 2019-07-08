@@ -143,7 +143,11 @@ module Read_operation = struct
 end
 
 module Write_operation = struct
-  type t = [ `Write of Bigstringaf.t IOVec.t list | `Yield | `Close of int ]
+  type 'fd t = [
+    | `Write of Bigstringaf.t IOVec.t list
+    | `Upgrade of Bigstringaf.t IOVec.t list * ('fd -> unit)
+    | `Yield
+    | `Close of int ]
 
   let iovecs_to_string iovecs =
     let len = IOVec.lengthv iovecs in
@@ -159,13 +163,14 @@ module Write_operation = struct
   let pp_hum fmt t =
     match t with
     | `Write iovecs -> Format.fprintf fmt "Write %S" (iovecs_to_string iovecs)
+    | `Upgrade (iovecs, _) -> Format.fprintf fmt "Upgrade %S" (iovecs_to_string iovecs)
     | `Yield -> Format.pp_print_string fmt "Yield"
     | `Close len -> Format.fprintf fmt "Close %i" len
   ;;
 
   let to_write_as_string t =
     match t with
-    | `Write iovecs -> Some (iovecs_to_string iovecs)
+    | `Write iovecs | `Upgrade (iovecs, _) -> Some (iovecs_to_string iovecs)
     | `Close _ | `Yield -> None
   ;;
 end
@@ -664,6 +669,27 @@ module Server_connection = struct
     Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
   ;;
 
+  let test_respond_with_upgrade () =
+    let upgraded = ref false in
+    let upgrade_handler reqd =
+      Reqd.respond_with_upgrade reqd Headers.empty (fun () ->
+       upgraded := true)
+    in
+    let t = create ~error_handler upgrade_handler in
+    read_request t (Request.create `GET "/");
+    match next_write_operation t with
+    | `Upgrade (iovecs, fn) ->
+      let response_str = response_to_string (Response.create `Switching_protocols) in
+      Alcotest.(check string) "Switching protocols response"
+        (Write_operation.iovecs_to_string iovecs)
+        response_str;
+      fn ();
+      let len = String.length response_str in
+      report_write_result t (`Ok len);
+      Alcotest.(check bool) "Callback was called" true !upgraded
+    | _ -> Alcotest.fail "Expected Upgrade operation"
+  ;;
+
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -682,6 +708,7 @@ module Server_connection = struct
     ; "multiple malformed requests?", `Quick, test_malformed_request_async_multiple_errors
     ; "malformed request (EOF)", `Quick, test_malformed_request_eof
     ; "malformed request, streaming response", `Quick, test_malformed_request_streaming_error_response
+    ; "respond with upgrade", `Quick, test_respond_with_upgrade
     ]
 end
 
@@ -727,12 +754,12 @@ module Client_connection = struct
 
   let writer_yielded t =
     Alcotest.check write_operation "Writer is in a yield state"
-      `Yield (next_write_operation t);
+      `Yield (next_write_operation t :> unit Write_operation.t);
   ;;
 
   let writer_closed t =
     Alcotest.check write_operation "Writer is closed"
-      (`Close 0) (next_write_operation t);
+      (`Close 0) (next_write_operation t :> unit Write_operation.t);
   ;;
 
   let connection_is_shutdown t =
@@ -835,5 +862,5 @@ let () =
     ; "method"           , Method.tests
     ; "iovec"            , IOVec.tests
     ; "client connection" , Client_connection.tests
-    ; "server connection", Server_connection.tests
+    ; "server_connection", Server_connection.tests
     ]

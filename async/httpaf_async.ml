@@ -133,6 +133,11 @@ module Server = struct
           writev iovecs >>> fun result ->
             Server_connection.report_write_result conn result;
             writer_thread ()
+        | `Upgrade (iovecs, upgrade_handler) ->
+          writev iovecs >>> fun result ->
+            Server_connection.report_write_result conn result;
+            upgrade_handler socket;
+            writer_thread ()
         | `Yield ->
           (* Log.Global.printf "write_yield(%d)%!" (Fd.to_int_exn fd); *)
           Server_connection.yield_writer conn writer_thread;

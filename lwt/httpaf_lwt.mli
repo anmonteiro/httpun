@@ -65,7 +65,7 @@ end
 module Server (Io: IO) : sig
   val create_connection_handler
     :  ?config         : Config.t
-    -> request_handler : (Io.addr -> Server_connection.request_handler)
+    -> request_handler : (Io.addr -> Io.socket Server_connection.request_handler)
     -> error_handler   : (Io.addr -> Server_connection.error_handler)
     -> Io.addr
     -> Io.socket

@@ -34,10 +34,14 @@
 type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-type response_state =
+type 'handle response_state =
   | Waiting   of (unit -> unit) ref
   | Complete  of Response.t
   | Streaming of Response.t * [`write] Body.t
+  | Upgrade of
+    { response: Response.t
+    ; upgrade_handler : 'handle -> unit
+    ; upgraded : bool ref }
 
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
@@ -67,14 +71,14 @@ module Writer = Serialize.Writer
  *  ]}
  *
  * *)
-type t =
+type 'handle t =
   { request                 : Request.t
   ; request_body            : [`read] Body.t
   ; writer                  : Writer.t
   ; response_body_buffer    : Bigstringaf.t
   ; error_handler           : error_handler
   ; mutable persistent      : bool
-  ; mutable response_state  : response_state
+  ; mutable response_state  : 'handle response_state
   ; mutable error_code      : [`Ok | error ]
   ; mutable wait_for_first_flush : bool
   }
@@ -105,13 +109,15 @@ let response { response_state; _ } =
   match response_state with
   | Waiting _ -> None
   | Streaming(response, _)
-  | Complete (response) -> Some response
+  | Complete (response)
+  | Upgrade { response; _ } -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
   | Waiting _            -> failwith "httpaf.Reqd.response_exn: response has not started"
   | Streaming(response, _)
-  | Complete (response) -> response
+  | Complete (response)
+  | Upgrade { response; _ } -> response
 
 let respond_with_string t response str =
   if t.error_code <> `Ok then
@@ -125,7 +131,7 @@ let respond_with_string t response str =
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Complete response;
     done_waiting when_done_waiting
-  | Streaming _ ->
+  | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_string: response already started"
   | Complete _ ->
     failwith "httpaf.Reqd.respond_with_string: response already complete"
@@ -142,7 +148,7 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Complete response;
     done_waiting when_done_waiting
-  | Streaming _ ->
+  | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_bigstring: response already started"
   | Complete _ ->
     failwith "httpaf.Reqd.respond_with_bigstring: response already complete"
@@ -159,7 +165,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
     t.response_state <- Streaming(response, response_body);
     done_waiting when_done_waiting;
     response_body
-  | Streaming _ ->
+  | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already started"
   | Complete _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already complete"
@@ -168,6 +174,36 @@ let respond_with_streaming ?(flush_headers_immediately=false) t response =
   if t.error_code <> `Ok then
     failwith "httpaf.Reqd.respond_with_streaming: invalid state, currently handling error";
   unsafe_respond_with_streaming ~flush_headers_immediately t response
+
+let upgrade_handler t =
+  match t.response_state with
+  | Upgrade { upgrade_handler; upgraded; _ } when not !upgraded ->
+    Some upgrade_handler
+  | _ -> None
+
+let unsafe_respond_with_upgrade t headers upgrade_handler =
+  match t.response_state with
+  | Waiting when_done_waiting ->
+    let response = Response.create ~headers `Switching_protocols in
+    Writer.write_response t.writer response;
+    if t.persistent then
+      t.persistent <- Response.persistent_connection response;
+    let upgraded = ref false in
+    let upgrade_handler socket =
+      upgraded := true;
+      upgrade_handler socket
+    in
+    t.response_state <- Upgrade { response; upgrade_handler; upgraded };
+    done_waiting when_done_waiting
+  | Streaming _ | Upgrade _ ->
+    failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"
+  | Complete _ ->
+    failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already complete"
+
+let respond_with_upgrade t response upgrade_handler =
+  if t.error_code <> `Ok then
+    failwith "httpaf.Reqd.respond_with_streaming: invalid state, currently handling error";
+  unsafe_respond_with_upgrade t response upgrade_handler
 
 let report_error t error =
   t.persistent <- false;
@@ -192,7 +228,7 @@ let report_error t error =
   | Streaming(_response, response_body), `Exn _ ->
     Body.close_writer response_body;
     Writer.close_and_drain t.writer
-  | (Complete _ | Streaming _ | Waiting _) , _ ->
+  | (Complete _ | Streaming _ | Upgrade _ | Waiting _) , _ ->
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
     ()
@@ -223,6 +259,12 @@ let on_more_output_available t f =
     Body.when_ready_to_write response_body f
   | Complete _ ->
     failwith "httpaf.Reqd.on_more_output_available: response already complete"
+  | Upgrade _ ->
+    (* XXX(anmonteiro): Connections that have been upgraded "require output"
+     * forever, but outside the HTTP layer, meaning they're permanently
+     * "yielding". We don't register the wakeup callback because it's not going
+     * to get called. *)
+    ()
 
 let persistent_connection t =
   t.persistent
@@ -236,7 +278,7 @@ let requires_output { response_state; _ } =
   | Streaming (_, response_body) ->
     not (Body.is_closed response_body)
     || Body.has_pending_output response_body
-  | Waiting _ -> true
+  | Waiting _ | Upgrade _ -> true
 
 let is_complete t =
   not (requires_input t || requires_output t)
