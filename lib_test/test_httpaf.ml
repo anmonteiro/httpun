@@ -669,6 +669,27 @@ module Server_connection = struct
     Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
   ;;
 
+  let test_respond_with_upgrade () =
+    let upgraded = ref false in
+    let upgrade_handler reqd =
+     let response = Response.create `Switching_protocols in
+      Reqd.respond_with_upgrade reqd response (fun () ->
+       upgraded := true)
+    in
+    let t = create ~error_handler upgrade_handler in
+    read_request t (Request.create `GET "/");
+    match next_write_operation t with
+    | `Upgrade (iovecs, fn) ->
+      let response_str = response_to_string (Response.create `Switching_protocols) in
+      Alcotest.(check string) "Switching protocols response"
+        (Write_operation.iovecs_to_string iovecs)
+        response_str;
+      fn ();
+      let len = String.length response_str in
+      report_write_result t (`Ok len);
+    | _ -> Alcotest.fail "Expected Upgrade operation"
+  ;;
+
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -687,6 +708,7 @@ module Server_connection = struct
     ; "multiple malformed requests?", `Quick, test_malformed_request_async_multiple_errors
     ; "malformed request (EOF)", `Quick, test_malformed_request_eof
     ; "malformed request, streaming response", `Quick, test_malformed_request_streaming_error_response
+    ; "respond with upgrade", `Quick, test_respond_with_upgrade
     ]
 end
 
@@ -840,5 +862,5 @@ let () =
     ; "method"           , Method.tests
     ; "iovec"            , IOVec.tests
     ; "client connection" , Client_connection.tests
-    ; "server connection", Server_connection.tests
+    ; "server_connection", Server_connection.tests
     ]
