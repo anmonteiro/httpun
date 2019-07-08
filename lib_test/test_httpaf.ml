@@ -687,6 +687,7 @@ module Server_connection = struct
       fn ();
       let len = String.length response_str in
       report_write_result t (`Ok len);
+      Alcotest.(check bool) "Callback was called" true !upgraded
     | _ -> Alcotest.fail "Expected Upgrade operation"
   ;;
 
