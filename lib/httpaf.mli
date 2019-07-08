@@ -636,7 +636,7 @@ module Reqd : sig
   val respond_with_string    : _ t -> Response.t -> string -> unit
   val respond_with_bigstring : _ t -> Response.t -> Bigstringaf.t -> unit
   val respond_with_streaming : ?flush_headers_immediately:bool -> _ t -> Response.t -> [`write] Body.t
-  val respond_with_upgrade : 'fd t -> Response.t -> ('fd -> unit) -> unit
+  val respond_with_upgrade : 'fd t -> Headers.t -> ('fd -> unit) -> unit
 
   (** {3 Exception Handling} *)
 

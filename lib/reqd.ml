@@ -181,12 +181,10 @@ let upgrade_handler t =
     Some upgrade_handler
   | _ -> None
 
-(* TODO(anmonteiro): this function could actually just take `headers` and
- * create the response. Would help make sure the status is always
- * `101 Switching Protocols` *)
-let unsafe_respond_with_upgrade t response upgrade_handler =
+let unsafe_respond_with_upgrade t headers upgrade_handler =
   match t.response_state with
   | Waiting when_done_waiting ->
+    let response = Response.create ~headers `Switching_protocols in
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;

@@ -672,8 +672,7 @@ module Server_connection = struct
   let test_respond_with_upgrade () =
     let upgraded = ref false in
     let upgrade_handler reqd =
-     let response = Response.create `Switching_protocols in
-      Reqd.respond_with_upgrade reqd response (fun () ->
+      Reqd.respond_with_upgrade reqd Headers.empty (fun () ->
        upgraded := true)
     in
     let t = create ~error_handler upgrade_handler in
