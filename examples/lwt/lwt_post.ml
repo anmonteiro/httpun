@@ -26,7 +26,7 @@ let main port host =
     ; "host"             , host
     ]
   in
-  let connection = Client.create_connection socket in
+  Client.create_connection socket >>= fun connection ->
   let request_body =
     Client.request
       connection
