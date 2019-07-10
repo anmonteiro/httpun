@@ -90,7 +90,9 @@ let requires_input t =
   | Closed -> false
 
 let requires_output { request_body; state; _ } =
-  state = Uninitialized || not (Body.is_closed request_body)
+  state = Uninitialized ||
+  not (Body.is_closed request_body) ||
+  Body.has_pending_output request_body
 
 let is_complete t =
   not (requires_input t || requires_output t)

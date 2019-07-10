@@ -97,7 +97,8 @@ module Oneshot = struct
     if handle_now then
       Respd.write_request respd;
     (* Not handling the request now means it may be pipelined.
-     * `advance_request_queue_if_necessary` will take care of it. *)
+     * `advance_request_queue_if_necessary` will take care of it, but we still
+     * wanna wake up the writer so that the function gets called. *)
     _wakeup_writer t.wakeup_writer;
     request_body
   ;;
@@ -107,7 +108,6 @@ module Oneshot = struct
       let respd = current_respd_exn t in
       Respd.flush_request_body respd
     end
-  ;;
 
   let set_error_and_handle_without_shutdown t error =
     if is_active t then begin
@@ -169,15 +169,25 @@ module Oneshot = struct
            *   A client that supports persistent connections MAY "pipeline" its
            *   requests (i.e., send multiple requests without waiting for each
            *   response). *)
-          ignore @@ (Queue.fold (fun first respd ->
-              if not first then begin
-                if respd.Respd.state = Uninitialized
-                then Respd.write_request respd
-                (* else raise Local *)
-              end;
-              false)
-            true
-            t.request_queue)
+          (* TODO: only execute this when the queue has more than 1 req? *)
+          let exception Local in
+          match Queue.fold (fun prev respd ->
+            begin match prev with
+            | None -> ()
+            | Some prev ->
+              if respd.Respd.state = Uninitialized && not (Respd.requires_output prev)
+              then Respd.write_request respd
+              else
+                (* bail early. If we can't pipeline this request, we can't write
+                 * next ones either. *)
+                raise Local
+            end;
+            Some respd)
+          None
+            t.request_queue
+          with
+          | _ -> ()
+          | exception Local -> ()
         end
       end else begin
         ignore (Queue.take t.request_queue);

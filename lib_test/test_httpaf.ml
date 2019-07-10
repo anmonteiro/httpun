@@ -940,6 +940,44 @@ module Client_connection = struct
     read_response t response';
   ;;
 
+  let test_persistent_connection_requests_pipelining_send_body () =
+    let request' =
+      Request.create ~headers:(Headers.of_list [ "content-length", "8" ]) `GET "/"
+    in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    (* send the 2nd request without reading the response *)
+    let request'' = Request.create `GET "/" in
+    let response' =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `Not_found
+    in
+    let body' =
+      request
+        t
+        request''
+        ~response_handler:(fun response body ->
+          (default_response_handler response' response body))
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    Body.write_string body "a string";
+    Body.close_writer body;
+    write_string ~msg:"writes the body for the first request" t "a string";
+    write_request t request'';
+    read_response t response;
+    read_response t response';
+  ;;
+
   let test_persistent_connection_requests_body () =
     let request' = Request.create `GET "/" in
     let request'' = Request.create `GET "/second" in
@@ -976,6 +1014,7 @@ module Client_connection = struct
     ; "Response EOF", `Quick, test_response_eof
     ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
     ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining
+    ; "Persistent connection, first request includes body", `Quick, test_persistent_connection_requests_pipelining_send_body
     ; "Persistent connections, read response body", `Quick, test_persistent_connection_requests_body ]
 
 end
