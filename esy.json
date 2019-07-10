@@ -33,16 +33,7 @@
         }
       }
     },
-    "@opam/ppx_deriving": "ocaml-ppx/ppx_deriving:ppx_deriving.opam#745a45c",
-    "@opam/nocrypto": {
-      "source": "TheLortex/ocaml-nocrypto:nocrypto.opam#df2348d",
-      "override": {
-        "dependencies": {
-          "@opam/bigarray-compat": "*",
-          "@opam/ppx_sexp_conv": "*"
-        }
-      }
-    },
+    "@opam/nocrypto": "TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8",
     "@opam/mirage-xen-posix": {
       "source": "no-source:",
       "override": {}
