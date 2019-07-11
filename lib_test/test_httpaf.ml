@@ -1069,8 +1069,6 @@ let () =
 
 (*
  * TODO:
- * - test pipelining with more pending requests that aren't closed yet
- * (and shouldn't be sent)
- * - test error handling
+ * - test client connection error handling
  *
  *)
