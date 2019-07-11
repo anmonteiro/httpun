@@ -151,6 +151,31 @@ module Oneshot = struct
     set_error_and_handle t (`Exn exn)
   ;;
 
+  exception Local
+
+  let maybe_pipeline_queued_requests t =
+    (* Don't bother trying to pipeline if there aren't multiple requests in the
+     * queue. *)
+    if Queue.length t.request_queue > 1 then begin
+      match Queue.fold (fun prev respd ->
+        begin match prev with
+        | None -> ()
+        | Some prev ->
+          if respd.Respd.state = Uninitialized && not (Respd.requires_output prev)
+          then Respd.write_request respd
+          else
+            (* bail early. If we can't pipeline this request, we can't write
+             * next ones either. *)
+            raise Local
+        end;
+        Some respd)
+        None
+        t.request_queue
+      with
+      | _ -> ()
+      | exception Local -> ()
+    end
+
   (* TODO: review this function *)
   let advance_request_queue_if_necessary t =
     if is_active t then begin
@@ -164,31 +189,12 @@ module Oneshot = struct
             Respd.write_request respd;
           end;
           wakeup_writer t;
-        end else if not (Respd.requires_output respd) then begin
+        end else if not (Respd.requires_output respd) then
           (* From RFC7230§6.3.2:
            *   A client that supports persistent connections MAY "pipeline" its
            *   requests (i.e., send multiple requests without waiting for each
            *   response). *)
-          (* TODO: only execute this when the queue has more than 1 req? *)
-          let exception Local in
-          match Queue.fold (fun prev respd ->
-            begin match prev with
-            | None -> ()
-            | Some prev ->
-              if respd.Respd.state = Uninitialized && not (Respd.requires_output prev)
-              then Respd.write_request respd
-              else
-                (* bail early. If we can't pipeline this request, we can't write
-                 * next ones either. *)
-                raise Local
-            end;
-            Some respd)
-          None
-            t.request_queue
-          with
-          | _ -> ()
-          | exception Local -> ()
-        end
+          maybe_pipeline_queued_requests t
       end else begin
         ignore (Queue.take t.request_queue);
         Queue.iter Respd.close_response_body t.request_queue;
