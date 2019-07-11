@@ -851,6 +851,44 @@ module Client_connection = struct
     read_string t "d\r\nHello, world!\r\n0\r\n\r\n";
   ;;
 
+  let test_get_last_close () =
+    (* Multiple GET requests, the last one closes the connection *)
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list ["content-length", "0"]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body;
+    write_request t request';
+    read_response t response;
+
+    let request'' =
+      Request.create ~headers:(Headers.of_list ["connection", "close"]) `GET "/"
+    in
+    let body' =
+      request
+        t
+        request''
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    write_request t request'';
+    read_response t response;
+
+    writer_closed t;
+    let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+    Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+    connection_is_shutdown t;
+  ;;
+
   let test_response_eof () =
     let request' = Request.create `GET "/" in
     let response = Response.create `OK in (* not actually writen to the channel *)
@@ -1011,6 +1049,7 @@ module Client_connection = struct
 
   let tests =
     [ "GET"         , `Quick, test_get
+    ; "multiple GET, last request closes connection", `Quick, test_get_last_close
     ; "Response EOF", `Quick, test_response_eof
     ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
     ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining

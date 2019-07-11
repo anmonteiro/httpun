@@ -113,7 +113,7 @@ let set_error_and_handle_without_shutdown t error =
     let respd = current_respd_exn t in
     Respd.report_error respd error
   end
-  (* TODO: not active?! *)
+  (* TODO: not active?! can be because of a closed FD for example. *)
 ;;
 
 let unexpected_eof t =
@@ -175,7 +175,6 @@ let maybe_pipeline_queued_requests t =
     | exception Local -> ()
   end
 
-(* TODO: review this function *)
 let advance_request_queue_if_necessary t =
   if is_active t then begin
     let respd = current_respd_exn t in
@@ -204,8 +203,6 @@ let advance_request_queue_if_necessary t =
       then shutdown t
       else if not (Respd.requires_output respd)
       then shutdown_writer t
-      (* else if not (Respd.requires_input respd)
-      then shutdown_reader t *)
     end
   end else if Reader.is_closed t.reader
   then shutdown t
@@ -237,6 +234,7 @@ let read_eof t bs ~off ~len =
   let bytes_read = read_with_more t bs ~off ~len Complete in
   if is_active t then begin
     let respd = current_respd_exn t in
+    (* TODO: could just check for `Respd.requires_input`? *)
     match respd.state with
     | Uninitialized -> assert false
     | Received_response _ | Closed -> ()
@@ -272,5 +270,3 @@ let yield_writer t k =
 
 let report_write_result t result =
   Writer.report_result t.writer result
-
-let is_closed t = Reader.is_closed t.reader && Writer.is_closed t.writer
