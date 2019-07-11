@@ -136,16 +136,22 @@ module Client = struct
   module TLS = struct
     include Httpaf_lwt.Client (Tls_io.Io)
 
-    let request ?client ?(config=Config.default) socket request_headers ~error_handler ~response_handler =
-      Tls_io.make_client ?client socket >|= fun tls_client ->
-      request ~config (socket, tls_client) request_headers ~error_handler ~response_handler
+    let create_connection ?client ?(config = Config.default) =
+      let make_tls_client = Tls_io.make_client ?client in
+      fun socket ->
+        make_tls_client socket >>= fun tls_client ->
+        create_connection
+          ~config
+          (socket, tls_client)
   end
 
   module SSL = struct
     include Httpaf_lwt.Client (Ssl_io.Io)
 
-    let request ?client ?(config=Config.default) socket request_headers ~error_handler ~response_handler =
-      Ssl_io.make_client ?client socket >|= fun ssl_client ->
-      request ~config ssl_client request_headers ~error_handler ~response_handler
+    let create_connection ?client ?(config = Config.default) =
+      let make_ssl_client = Ssl_io.make_client ?client in
+      fun socket ->
+        make_ssl_client socket >>= fun ssl_client ->
+        create_connection ~config ssl_client
   end
 end

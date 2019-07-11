@@ -1,6 +1,7 @@
 (executables
  (libraries httpaf httpaf-lwt-unix httpaf_examples base stdio lwt lwt.unix)
- (names lwt_get lwt_post lwt_echo_post lwt_https_get lwt_https_server))
+ (names lwt_get lwt_get_pipelined lwt_post lwt_echo_post lwt_https_get
+   lwt_https_server))
 
 (alias
  (name examples)

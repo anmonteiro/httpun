@@ -199,10 +199,13 @@ end
 
 
 module Client (Io: IO) = struct
-  let request ?(config=Config.default) socket request ~error_handler ~response_handler =
-    let module Client_connection = Httpaf.Client_connection in
-    let request_body, connection =
-      Client_connection.request ~config request ~error_handler ~response_handler in
+  module Client_connection = Httpaf.Client_connection
+
+  type t = Client_connection.t
+
+  let create_connection ?(config=Config.default) socket =
+    let connection =
+      Client_connection.create ~config in
 
 
     let read_buffer = Buffer.create config.read_buffer_size in
@@ -276,5 +279,11 @@ module Client (Io: IO) = struct
       Lwt.join [read_loop_exited; write_loop_exited] >>= fun () ->
       Io.close socket);
 
-    request_body
+    Lwt.return connection
+
+  let request = Client_connection.request
+
+  let shutdown = Client_connection.shutdown
+
+  let is_closed = Client_connection.is_closed
 end

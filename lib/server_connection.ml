@@ -32,17 +32,6 @@
   ----------------------------------------------------------------------------*)
 
 
-module Queue = struct
-  include Queue
-
-  let peek_exn = peek
-
-  let peek t =
-    if is_empty t
-    then None
-    else Some (peek_exn t)
-end
-
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
 
@@ -82,7 +71,7 @@ let is_active t =
   not (Queue.is_empty t.request_queue)
 
 let current_reqd_exn t =
-  Queue.peek_exn t.request_queue
+  Queue.peek t.request_queue
 
 let yield_reader t k =
   if is_closed t

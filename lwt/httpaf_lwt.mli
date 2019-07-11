@@ -74,11 +74,21 @@ end
 
 (* For an example, see [examples/lwt_get.ml]. *)
 module Client (Io: IO) : sig
-  val request
-    :  ?config          : Httpaf.Config.t
+  type t
+
+  val create_connection
+    : ?config          : Config.t
     -> Io.socket
+    -> t Lwt.t
+
+  val request
+    :  t
     -> Request.t
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
-    -> [`write] Httpaf.Body.t
+    -> [`write] Body.t
+
+  val shutdown: t -> unit
+
+  val is_closed : t -> bool
 end
