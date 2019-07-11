@@ -1,4 +1,4 @@
-open Core
+open! Core
 open Async
 
 open Httpaf
@@ -12,12 +12,8 @@ let main port host () =
   >>= fun socket ->
     let finished = Ivar.create () in
     let response_handler = Httpaf_examples.Client.print ~on_eof:(Ivar.fill finished) in
-    let headers =
-      Headers.of_list
-      [ "transfer-encoding", "chunked"
-      ; "connection"       , "close"
-      ; "host"             , host
-      ]
+    let request_headers =
+      Request.create ~headers:(Headers.of_list [ "host", host ]) `GET "/"
     in
     let connection = Client.create_connection socket in
     let request_body =
@@ -25,19 +21,23 @@ let main port host () =
         connection
         ~response_handler
         ~error_handler
-        (Request.create ~headers `POST "/")
+        request_headers
     in
-    let stdin = Lazy.force Reader.stdin in
-    don't_wait_for (
-      Reader.read_one_chunk_at_a_time stdin ~handle_chunk:(fun bs ~pos:off ~len ->
-        Body.write_bigstring request_body bs ~off ~len;
-        Body.flush request_body (fun () -> ());
-        return (`Consumed(len, `Need_unknown)))
-      >>| function
-        | `Eof_with_unconsumed_data s -> Body.write_string request_body s; Body.close_writer request_body
-        | `Eof                        -> Body.close_writer request_body
-        | `Stopped ()                 -> assert false);
-    Ivar.read finished
+    let finished' = Ivar.create () in
+    let response_handler' =
+      Httpaf_examples.Client.print ~on_eof:(Ivar.fill finished')
+    in
+    let request_body' =
+      Client.request
+        connection
+        ~response_handler:response_handler'
+        ~error_handler
+        request_headers
+    in
+    Body.close_writer request_body';
+    Body.close_writer request_body;
+    Async.Deferred.all_unit [Ivar.read finished; Ivar.read finished'] >>| fun () ->
+      Client.shutdown connection
 ;;
 
 let () =

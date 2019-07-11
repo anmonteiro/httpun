@@ -13,11 +13,21 @@ module Server : sig
 end
 
 module Client : sig
-  val request
-    :  ?config          : Config.t
+  type t
+
+  val create_connection
+    : ?config:Config.t
     -> ([`Active], [< Socket.Address.t]) Socket.t
+    -> t
+
+  val request
+    :  t
     -> Request.t
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
+
+  val shutdown : t -> unit
+
+  val is_closed : t -> bool
 end

@@ -1,7 +1,8 @@
 (executables
  (libraries httpaf httpaf-async httpaf_examples async core)
- (names     async_echo_post async_get async_post))
+ (names async_echo_post async_get async_get_pipelined async_post))
 
 (alias
  (name examples)
- (deps (glob_files *.exe)))
+ (deps
+  (glob_files *.exe)))

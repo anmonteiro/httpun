@@ -32,13 +32,15 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
+open Httpaf
+
 module type Server_intf = sig
   type flow
 
   val create_connection_handler
-    :  ?config : Httpaf.Config.t
-    -> request_handler : flow Httpaf.Server_connection.request_handler
-    -> error_handler : Httpaf.Server_connection.error_handler
+    :  ?config : Config.t
+    -> request_handler : flow Server_connection.request_handler
+    -> error_handler : Server_connection.error_handler
     -> (flow -> unit Lwt.t)
 end
 
@@ -56,11 +58,21 @@ module Server_with_conduit : sig
 end
 
 module Client (Flow : Mirage_flow_lwt.S) : sig
-  val request
-    :  ?config : Httpaf.Config.t
+  type t
+
+  val create_connection
+    : ?config          : Config.t
     -> Flow.flow
-    -> Httpaf.Request.t
-    -> error_handler : Httpaf.Client_connection.error_handler
-    -> response_handler : Httpaf.Client_connection.response_handler
-      -> [`write] Httpaf.Body.t
+    -> t Lwt.t
+
+  val request
+    :  t
+    -> Request.t
+    -> error_handler    : Client_connection.error_handler
+    -> response_handler : Client_connection.response_handler
+    -> [`write] Body.t
+
+  val shutdown : t -> unit
+
+  val is_closed : t -> bool
 end

@@ -782,30 +782,53 @@ module Client_connection = struct
     let response = Response.create `OK in
 
     (* Single GET *)
-    let body, t =
+    let t = create ?config:None in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
         ~error_handler:no_error_handler
     in
     Body.close_writer body;
-    write_request  t request';
-    writer_closed  t;
-    read_response  t response;
+    write_request t request';
+    read_response t response;
 
-    (* Single GET, reponse closes connection *)
+    (* Single GET, request closes the connection. *)
+    let request_close =
+      Request.create
+        ~headers:(Headers.of_list ["connection", "close"])
+        `GET "/"
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request_close
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body;
+    write_request t request_close;
+    writer_closed t;
+    read_response t response;
+
+    (* Single GET, response closes connection *)
     let response =
       Response.create `OK ~headers:(Headers.of_list [ "connection", "close" ])
     in
-    let body, t =
+    let t = create ?config:None in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
         ~error_handler:no_error_handler
     in
     Body.close_writer body;
-    write_request  t request';
-    read_response  t response;
+    write_request t request';
+    read_response t response;
+    writer_closed t;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
     connection_is_shutdown t;
@@ -814,16 +837,56 @@ module Client_connection = struct
     let response =
       Response.create `OK ~headers:(Headers.of_list [ "transfer-encoding", "chunked" ])
     in
-    let body, t =
+    let t = create ?config:None in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
         ~error_handler:no_error_handler
     in
     Body.close_writer body;
-    write_request  t request';
-    read_response  t response;
-    read_string    t "d\r\nHello, world!\r\n0\r\n\r\n";
+    write_request t request';
+    read_response t response;
+    read_string t "d\r\nHello, world!\r\n0\r\n\r\n";
+  ;;
+
+  let test_get_last_close () =
+    (* Multiple GET requests, the last one closes the connection *)
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list ["content-length", "0"]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body;
+    write_request t request';
+    read_response t response;
+
+    let request'' =
+      Request.create ~headers:(Headers.of_list ["connection", "close"]) `GET "/"
+    in
+    let body' =
+      request
+        t
+        request''
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    write_request t request'';
+    read_response t response;
+
+    writer_closed t;
+    let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+    Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+    connection_is_shutdown t;
   ;;
 
   let test_response_eof () =
@@ -831,8 +894,10 @@ module Client_connection = struct
     let response = Response.create `OK in (* not actually writen to the channel *)
 
     let error_message = ref None in
-    let body, t =
+    let t = create ?config:None in
+    let body =
       request
+        t
         request'
         ~response_handler:(default_response_handler response)
         ~error_handler:(function
@@ -840,8 +905,7 @@ module Client_connection = struct
           | _ -> assert false)
     in
     Body.close_writer body;
-    write_request  t request';
-    writer_closed  t;
+    write_request t request';
     reader_ready t;
     let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
@@ -851,9 +915,147 @@ module Client_connection = struct
       !error_message
   ;;
 
+  let test_persistent_connection_requests () =
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body;
+    write_request t request';
+    read_response t response;
+    writer_yielded t;
+    reader_ready t;
+    let body' =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    write_request t request';
+    read_response t response;
+  ;;
+
+  let test_persistent_connection_requests_pipelining () =
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body;
+    write_request t request';
+    (* send the 2nd request without reading the response *)
+    let response' =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `Not_found
+    in
+    let body' =
+      request
+        t
+        request'
+        ~response_handler:(fun response body ->
+          (default_response_handler response' response body))
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    write_request t request';
+    read_response t response;
+    read_response t response';
+  ;;
+
+  let test_persistent_connection_requests_pipelining_send_body () =
+    let request' =
+      Request.create ~headers:(Headers.of_list [ "content-length", "8" ]) `GET "/"
+    in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    (* send the 2nd request without reading the response *)
+    let request'' = Request.create `GET "/" in
+    let response' =
+      Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `Not_found
+    in
+    let body' =
+      request
+        t
+        request''
+        ~response_handler:(fun response body ->
+          (default_response_handler response' response body))
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    Body.write_string body "a string";
+    Body.close_writer body;
+    write_string ~msg:"writes the body for the first request" t "a string";
+    write_request t request'';
+    read_response t response;
+    read_response t response';
+  ;;
+
+  let test_persistent_connection_requests_body () =
+    let request' = Request.create `GET "/" in
+    let request'' = Request.create `GET "/second" in
+    let response =
+      Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body;
+    write_request t request';
+    let response' = Response.create `OK in
+    read_response t response;
+    read_string t "ten chars.";
+    let body' =
+      request
+        t
+        request''
+        ~response_handler:(default_response_handler response')
+        ~error_handler:no_error_handler
+    in
+    Body.close_writer body';
+    write_request t request'';
+    read_response t response';
+  ;;
+
   let tests =
     [ "GET"         , `Quick, test_get
-    ; "Response EOF", `Quick, test_response_eof ]
+    ; "multiple GET, last request closes connection", `Quick, test_get_last_close
+    ; "Response EOF", `Quick, test_response_eof
+    ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
+    ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining
+    ; "Persistent connection, first request includes body", `Quick, test_persistent_connection_requests_pipelining_send_body
+    ; "Persistent connections, read response body", `Quick, test_persistent_connection_requests_body ]
+
 end
 
 let () =
@@ -862,5 +1064,11 @@ let () =
     ; "method"           , Method.tests
     ; "iovec"            , IOVec.tests
     ; "client connection" , Client_connection.tests
-    ; "server_connection", Server_connection.tests
+    ; "server connection", Server_connection.tests
     ]
+
+(*
+ * TODO:
+ * - test client connection error handling
+ *
+ *)

@@ -159,11 +159,12 @@ module Server = struct
 end
 
 module Client = struct
-  let request ?(config=Config.default) socket request ~error_handler ~response_handler =
+  type t = Client_connection.t
+
+  let create_connection ?(config=Config.default) socket =
     let fd     = Socket.fd socket in
     let writev = Faraday_async.writev_of_fd fd in
-    let request_body, conn   =
-      Client_connection.request request ~error_handler ~response_handler in
+    let conn   = Client_connection.create ~config in
     let read_complete = Ivar.create () in
     let buffer = Buffer.create config.read_buffer_size in
     let rec reader_thread () =
@@ -216,5 +217,11 @@ module Client = struct
       >>| fun () ->
         if not (Fd.is_closed fd)
         then don't_wait_for (Fd.close fd));
-    request_body
+    conn
+
+  let request = Client_connection.request
+
+  let shutdown = Client_connection.shutdown
+
+  let is_closed = Client_connection.is_closed
 end

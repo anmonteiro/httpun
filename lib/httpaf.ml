@@ -10,7 +10,7 @@ module Body = Body
 module Config = Config
 
 module Server_connection = Server_connection
-module Client_connection = Client_connection.Oneshot
+module Client_connection = Client_connection
 
 module Httpaf_private = struct
   module Serialize = Serialize

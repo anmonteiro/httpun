@@ -242,19 +242,30 @@ module Reader = struct
     in
     create parser
 
-  let response ~request_method handler =
+  let response request_queue =
     let parser =
       response <* commit >>= fun response ->
+      assert (not (Queue.is_empty request_queue));
+      let exception Local of Respd.t in
+      let respd = match
+        (Queue.iter (fun respd ->
+          if respd.Respd.state = Awaiting_response then
+            raise (Local respd)) request_queue)
+        with
+        | exception Local respd -> respd
+        | _ -> assert false
+      in
+      let request = Respd.request respd in
       let proxy = false in
-      match Response.body_length ~request_method response with
+      match Response.body_length ~request_method:request.meth response with
       | `Error `Bad_gateway           -> assert (not proxy); assert false
       | `Error `Internal_server_error -> return (Error (`Invalid_response_body_length response))
       | `Fixed 0L ->
-        handler response Body.empty;
+        respd.response_handler response Body.empty;
         ok
       | `Fixed _ | `Chunked | `Close_delimited as encoding ->
         let response_body = Body.create Bigstringaf.empty in
-        handler response response_body;
+        respd.response_handler response response_body;
         body ~encoding response_body *> ok
     in
     create parser
