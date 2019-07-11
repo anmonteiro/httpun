@@ -178,13 +178,13 @@
       },
       "overrides": [],
       "dependencies": [
-        "ocaml@4.8.0@d41d8cd9", "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "ocaml@4.8.0@d41d8cd9", "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/dune@opam:1.10.0@b15ce221",
         "@opam/cstruct@opam:4.0.0@27f747cf",
         "@esy-ocaml/substs@0.0.1@d41d8cd9"
       ],
       "devDependencies": [
-        "ocaml@4.8.0@d41d8cd9", "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "ocaml@4.8.0@d41d8cd9", "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/cstruct@opam:4.0.0@27f747cf"
       ]
     },
@@ -253,7 +253,7 @@
         "@opam/result@opam:1.4@7add0d71",
         "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
-        "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/mirage-flow-lwt@opam:1.6.0@4764001e",
         "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.3.0@278f3131",
         "@opam/dune@opam:1.10.0@b15ce221",
@@ -269,7 +269,7 @@
         "@opam/result@opam:1.4@7add0d71",
         "@opam/ppx_tools@opam:5.2+4.08.0@964f70cb",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
-        "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/mirage-flow-lwt@opam:1.6.0@4764001e",
         "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/io-page@opam:2.3.0@278f3131",
         "@opam/cstruct@opam:4.0.0@27f747cf",
@@ -572,7 +572,7 @@
         "@opam/ptime@opam:0.8.5@0051d642",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
         "@opam/ppx_deriving@opam:4.4@35f44479",
-        "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/ocamlfind@opam:1.8.0@f744a0c5",
         "@opam/ocamlbuild@opam:0.14.0@427a2331",
         "@opam/nocrypto@github:TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8@d41d8cd9",
@@ -590,7 +590,7 @@
         "@opam/ptime@opam:0.8.5@0051d642",
         "@opam/ppx_sexp_conv@opam:v0.12.0@6aa153b5",
         "@opam/ppx_deriving@opam:4.4@35f44479",
-        "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/nocrypto@github:TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8@d41d8cd9",
         "@opam/mirage-kv-lwt@opam:2.0.0@585db097",
         "@opam/mirage-flow-lwt@opam:1.6.0@4764001e",
@@ -1119,20 +1119,20 @@
         "@opam/base@opam:v0.12.2@e209c8f2"
       ]
     },
-    "@opam/ppx_tools_versioned@opam:5.2.2@34409c89": {
-      "id": "@opam/ppx_tools_versioned@opam:5.2.2@34409c89",
+    "@opam/ppx_tools_versioned@opam:5.2.3@139dfedf": {
+      "id": "@opam/ppx_tools_versioned@opam:5.2.3@139dfedf",
       "name": "@opam/ppx_tools_versioned",
-      "version": "opam:5.2.2",
+      "version": "opam:5.2.3",
       "source": {
         "type": "install",
         "source": [
-          "archive:https://opam.ocaml.org/cache/md5/f7/f78a3c2b4cc3b92702e1f7096a6125fa#md5:f78a3c2b4cc3b92702e1f7096a6125fa",
-          "archive:https://github.com/ocaml-ppx/ppx_tools_versioned/archive/5.2.2.tar.gz#md5:f78a3c2b4cc3b92702e1f7096a6125fa"
+          "archive:https://opam.ocaml.org/cache/md5/b1/b1455e5a4a1bcd9ddbfcf712ccbd4262#md5:b1455e5a4a1bcd9ddbfcf712ccbd4262",
+          "archive:https://github.com/ocaml-ppx/ppx_tools_versioned/archive/5.2.3.tar.gz#md5:b1455e5a4a1bcd9ddbfcf712ccbd4262"
         ],
         "opam": {
           "name": "ppx_tools_versioned",
-          "version": "5.2.2",
-          "path": "esy.lock/opam/ppx_tools_versioned.5.2.2"
+          "version": "5.2.3",
+          "path": "esy.lock/opam/ppx_tools_versioned.5.2.3"
         }
       },
       "overrides": [],
@@ -1843,8 +1843,8 @@
         "@opam/base@opam:v0.12.2@e209c8f2"
       ]
     },
-    "@opam/ppx_cstruct@opam:5.0.0@cea738b4": {
-      "id": "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+    "@opam/ppx_cstruct@opam:5.0.0@f6407cfe": {
+      "id": "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
       "name": "@opam/ppx_cstruct",
       "version": "opam:5.0.0",
       "source": {
@@ -1862,7 +1862,7 @@
       "overrides": [],
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/sexplib@opam:v0.12.0@c65643bb",
-        "@opam/ppx_tools_versioned@opam:5.2.2@34409c89",
+        "@opam/ppx_tools_versioned@opam:5.2.3@139dfedf",
         "@opam/ocaml-migrate-parsetree@opam:1.4.0@107a1ff4",
         "@opam/dune@opam:1.10.0@b15ce221",
         "@opam/cstruct@opam:4.0.0@27f747cf",
@@ -1870,7 +1870,7 @@
       ],
       "devDependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/sexplib@opam:v0.12.0@c65643bb",
-        "@opam/ppx_tools_versioned@opam:5.2.2@34409c89",
+        "@opam/ppx_tools_versioned@opam:5.2.3@139dfedf",
         "@opam/ocaml-migrate-parsetree@opam:1.4.0@107a1ff4",
         "@opam/cstruct@opam:4.0.0@27f747cf"
       ]
@@ -2571,7 +2571,7 @@
       },
       "overrides": [],
       "dependencies": [
-        "ocaml@4.8.0@d41d8cd9", "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "ocaml@4.8.0@d41d8cd9", "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/ocplib-endian@opam:1.0@aa720242",
         "@opam/lwt@opam:4.2.1@c1888ec9", "@opam/dune@opam:1.10.0@b15ce221",
         "@opam/cstruct@opam:4.0.0@27f747cf",
@@ -3620,7 +3620,7 @@
       "dependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/uri@opam:2.2.1@6bd26f86",
         "@opam/result@opam:1.4@7add0d71", "@opam/re@opam:1.9.0@7f4a36a5",
-        "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/ipaddr@opam:3.1.0@e0ecc70f",
         "@opam/hashcons@opam:1.0.1@30492c11",
         "@opam/dune@opam:1.10.0@b15ce221",
@@ -3631,7 +3631,7 @@
       "devDependencies": [
         "ocaml@4.8.0@d41d8cd9", "@opam/uri@opam:2.2.1@6bd26f86",
         "@opam/result@opam:1.4@7add0d71", "@opam/re@opam:1.9.0@7f4a36a5",
-        "@opam/ppx_cstruct@opam:5.0.0@cea738b4",
+        "@opam/ppx_cstruct@opam:5.0.0@f6407cfe",
         "@opam/ipaddr@opam:3.1.0@e0ecc70f",
         "@opam/hashcons@opam:1.0.1@30492c11",
         "@opam/cstruct@opam:4.0.0@27f747cf",
