@@ -18,4 +18,7 @@ depends: [
   "dune" {build}
   "lwt"
 ]
+pin-depends: [
+  [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
+]
 synopsis: "Lwt support for http/af"
