@@ -22,4 +22,8 @@ depends: [
   "lwt"
 ]
 depopts: ["tls" "lwt_ssl"]
+pin-depends: [
+  [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
+  [ "httpaf-lwt.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
+]
 synopsis: "Lwt + Unix support for http/af"
