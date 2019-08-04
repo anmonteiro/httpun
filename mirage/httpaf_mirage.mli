@@ -34,7 +34,9 @@
 
 open Httpaf
 
-module type Server_intf = sig
+(* TODO(anmonteiro): this can be in H2_mirage_intf and deduplicated across
+ * `.ml` and `.mli` files. *)
+module type Server = sig
   type flow
 
   val create_connection_handler
@@ -45,10 +47,10 @@ module type Server_intf = sig
 end
 
 module Server (Flow : Mirage_flow_lwt.S) :
-  Server_intf with type flow = Flow.flow
+  Server with type flow := Flow.flow
 
 module Server_with_conduit : sig
-  include Server_intf with type flow = Conduit_mirage.Flow.flow
+  include Server with type flow := Conduit_mirage.Flow.flow
 
   type t = Conduit_mirage.Flow.flow -> unit Lwt.t
 
@@ -57,22 +59,5 @@ module Server_with_conduit : sig
     (Conduit_mirage.server -> t -> unit Lwt.t) Lwt.t
 end
 
-module Client (Flow : Mirage_flow_lwt.S) : sig
-  type t
-
-  val create_connection
-    : ?config          : Config.t
-    -> Flow.flow
-    -> t Lwt.t
-
-  val request
-    :  t
-    -> Request.t
-    -> error_handler    : Client_connection.error_handler
-    -> response_handler : Client_connection.response_handler
-    -> [`write] Body.t
-
-  val shutdown : t -> unit
-
-  val is_closed : t -> bool
-end
+module Client (Flow : Mirage_flow_lwt.S) :
+ Httpaf_lwt.Client with type socket := Flow.flow
