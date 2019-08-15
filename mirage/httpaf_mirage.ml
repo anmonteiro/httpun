@@ -92,8 +92,6 @@ end
 module Server (Flow : Mirage_flow_lwt.S) = struct
   include Httpaf_lwt.Server (Make_IO (Flow))
 
-  type flow = Flow.flow
-
   let create_connection_handler ?config ~request_handler ~error_handler =
     fun flow ->
       let request_handler = fun () -> request_handler in
@@ -101,7 +99,9 @@ module Server (Flow : Mirage_flow_lwt.S) = struct
       create_connection_handler ?config ~request_handler ~error_handler () flow
 end
 
-module type Server_intf = sig
+(* Almost like the `Httpaf_lwt.Server` module type but we don't need the client
+ * address argument in Mirage. It's somewhere else. *)
+module type Server = sig
   type flow
 
   val create_connection_handler

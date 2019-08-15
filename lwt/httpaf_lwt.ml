@@ -85,30 +85,8 @@ end = struct
         ret
 end
 
-module type IO = sig
-  type socket
-  type addr
-
-  val read
-    :  socket
-    -> Bigstringaf.t
-    -> off:int
-    -> len:int
-    -> [ `Eof | `Ok of int ] Lwt.t
-
-  val writev
-     : socket
-    -> Faraday.bigstring Faraday.iovec list
-    -> [ `Closed | `Ok of int ] Lwt.t
-
-  val shutdown_send : socket -> unit
-
-  val shutdown_receive : socket -> unit
-
-  val close : socket -> unit Lwt.t
-end
-
 module Config = Httpaf.Config
+include Httpaf_lwt_intf
 
 module Server (Io: IO) = struct
   let create_connection_handler ?(config=Config.default) ~request_handler ~error_handler =

@@ -40,13 +40,9 @@ open Httpaf
    to [Lwt_io.establish_server_with_client_socket]. For an example, see
    [examples/lwt_echo_server.ml]. *)
 module Server : sig
-  val create_connection_handler
-    :  ?config         : Config.t
-    -> request_handler : (Unix.sockaddr -> Server_connection.request_handler)
-    -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
-    -> Unix.sockaddr
-    -> Lwt_unix.file_descr
-    -> unit Lwt.t
+  include Httpaf_lwt.Server
+    with type socket := Lwt_unix.file_descr
+     and type addr := Unix.sockaddr
 
   module TLS : sig
     val create_connection_handler
@@ -77,63 +73,25 @@ end
 
 (* For an example, see [examples/lwt_get.ml]. *)
 module Client : sig
-  type t
-
-  val create_connection
-    : ?config:Config.t
-    -> Lwt_unix.file_descr
-    -> t Lwt.t
-
-  val request
-    :  t
-    -> Request.t
-    -> error_handler    : Client_connection.error_handler
-    -> response_handler : Client_connection.response_handler
-    -> [`write] Body.t
-
-  val shutdown : t -> unit
-
-  val is_closed : t -> bool
+  include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
 
   module TLS : sig
-    type t
+    include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
       :  ?client          : Tls_io.client
       -> ?config          : Config.t
       -> Lwt_unix.file_descr
       -> t Lwt.t
-
-    val request
-      :  t
-      -> Request.t
-      -> error_handler    : Client_connection.error_handler
-      -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t
-
-    val shutdown : t -> unit
-
-    val is_closed : t -> bool
   end
 
   module SSL : sig
-    type t
+    include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
       :  ?client          : Ssl_io.client
       -> ?config          : Config.t
       -> Lwt_unix.file_descr
       -> t Lwt.t
-
-    val request
-      :  t
-      -> Request.t
-      -> error_handler    : Client_connection.error_handler
-      -> response_handler : Client_connection.response_handler
-      -> [`write] Body.t
-
-    val shutdown : t -> unit
-
-    val is_closed : t -> bool
   end
 end

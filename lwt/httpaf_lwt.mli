@@ -33,62 +33,16 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-open Httpaf
+module type IO = Httpaf_lwt_intf.IO
 
-module type IO = sig
-  type socket
-  type addr
+module type Server = Httpaf_lwt_intf.Server
 
-  (** The region [[off, off + len)] is where read bytes can be written to *)
-  val read
-    :  socket
-    -> Bigstringaf.t
-    -> off:int
-    -> len:int
-    -> [ `Eof | `Ok of int ] Lwt.t
-
-  val writev
-    : socket
-    -> Faraday.bigstring Faraday.iovec list
-    -> [ `Closed | `Ok of int ] Lwt.t
-
-  val shutdown_send : socket -> unit
-
-  val shutdown_receive : socket -> unit
-
-  val close : socket -> unit Lwt.t
-end
+module type Client = Httpaf_lwt_intf.Client
 
 (* The function that results from [create_connection_handler] should be passed
    to [Lwt_io.establish_server_with_client_socket]. For an example, see
    [examples/lwt_echo_server.ml]. *)
-module Server (Io: IO) : sig
-  val create_connection_handler
-    :  ?config         : Config.t
-    -> request_handler : (Io.addr -> Server_connection.request_handler)
-    -> error_handler   : (Io.addr -> Server_connection.error_handler)
-    -> Io.addr
-    -> Io.socket
-    -> unit Lwt.t
-end
+module Server (Io: IO) : Server with type socket := Io.socket and type addr := Io.addr
 
 (* For an example, see [examples/lwt_get.ml]. *)
-module Client (Io: IO) : sig
-  type t
-
-  val create_connection
-    : ?config          : Config.t
-    -> Io.socket
-    -> t Lwt.t
-
-  val request
-    :  t
-    -> Request.t
-    -> error_handler    : Client_connection.error_handler
-    -> response_handler : Client_connection.response_handler
-    -> [`write] Body.t
-
-  val shutdown: t -> unit
-
-  val is_closed : t -> bool
-end
+module Client (Io: IO) : Client with type socket := Io.socket
