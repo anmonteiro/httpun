@@ -33,6 +33,8 @@ opam-steps: &opam-steps
           sudo apt-get install -y pkg-config libgmp-dev autotools-dev autoconf lsof libssl-dev
           opam update
           opam install -y dune
+          # For OCaml 4.08
+          opam pin add vchan --dev-repo
           opam install -t --deps-only .
     - run:
         name: 'Clean'
