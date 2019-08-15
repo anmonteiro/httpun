@@ -4,7 +4,7 @@
   "license": "BSD-3-clause",
   "repository": "git+https://github.com/anmonteiro/httpaf",
   "dependencies": {
-    "ocaml": "4.8.0",
+    "ocaml": "~4.8.1000",
     "@opam/dune": "*",
     "@opam/lwt": "*",
     "@opam/bigstringaf": "*",
@@ -14,7 +14,6 @@
     "@opam/faraday-lwt-unix": "*",
     "@opam/async": "*",
     "@opam/mirage-conduit": "*",
-    "@opam/tls-lwt": "*",
     "@opam/lwt_ssl": "*",
     "@opam/ssl": ">= 0.5.8"
   },
@@ -24,18 +23,6 @@
     "@opam/odoc": "*"
   },
   "resolutions": {
-    "@opam/conf-openssl": "esy-packages/esy-openssl#dafe9ad",
-    "@opam/nocrypto": "TheLortex/ocaml-nocrypto:nocrypto.opam#8e389a8",
-    "@opam/mirage-conduit": {
-      "source": "mirage/ocaml-conduit:mirage-conduit.opam#05ddf13",
-      "override": {
-        "dependencies": {
-          "@opam/tls-mirage": "*"
-        }
-      }
-    },
-    "@opam/tls": "hannesm/ocaml-tls:tls.opam#ccd88dc",
-    "@opam/tls-mirage": "hannesm/ocaml-tls:tls-mirage.opam#ccd88dc",
-    "@opam/tls-lwt": "hannesm/ocaml-tls:tls-lwt.opam#ccd88dc"
+    "@opam/conf-openssl": "esy-packages/esy-openssl#dafe9ad"
   }
 }
