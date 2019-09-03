@@ -23,6 +23,6 @@
     "@opam/odoc": "*"
   },
   "resolutions": {
-    "@opam/conf-openssl": "esy-packages/esy-openssl#dafe9ad"
+    "@opam/conf-openssl": "esy-packages/esy-openssl#306bb87"
   }
 }
