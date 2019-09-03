@@ -1,3 +1,8 @@
+_This work builds on top of httpaf by providing more features than the original
+work, as well as fixing some bugs in the original implementation. For a full
+list of changes and additions to httpaf, please refer to
+[CHANGES.md](./CHANGES.md)._
+
 # http/af
 
 http/af is a high-performance, memory-efficient, and scalable web server for
