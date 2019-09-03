@@ -82,6 +82,7 @@ jobs:
     environment:
       - TERM: dumb
       - OCAML_VERSION: "4.05.0"
+      - OPAMSOLVERTIMEOUT: "600"
     <<: *opam-steps
   OCaml-406:
     docker:
