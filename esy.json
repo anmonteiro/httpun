@@ -13,7 +13,7 @@
     "@opam/faraday-async": "*",
     "@opam/faraday-lwt-unix": "*",
     "@opam/async": "*",
-    "@opam/mirage-conduit": "*",
+    "@opam/conduit-mirage": "*",
     "@opam/lwt_ssl": "*",
     "@opam/ssl": ">= 0.5.8"
   },
@@ -23,6 +23,6 @@
     "@opam/odoc": "*"
   },
   "resolutions": {
-    "@opam/conf-openssl": "esy-packages/esy-openssl#dafe9ad"
+    "@opam/conf-openssl": "esy-packages/esy-openssl#306bb87"
   }
 }
