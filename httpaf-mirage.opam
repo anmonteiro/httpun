@@ -17,7 +17,7 @@ depends: [
   "httpaf-lwt"
   "mirage-conduit"
   "cstruct"
-  "dune" {build}
+  "dune"
   "lwt"
 ]
 pin-depends: [
