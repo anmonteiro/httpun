@@ -1,6 +1,9 @@
 Unreleased
 --------------
 
+- httpaf-lwt-unix: replace the `dune` file (previously written in OCaml) with a
+  `(select)` form to avoid depending on `ocamlfind`
+  ([#18](https://github.com/anmonteiro/httpaf/pull/18))
 - httpaf-mirage: depend on `mirage-conduit` instead of `conduit-mirage`,
   effectively placing a lower bound of OCaml 4.07 on httpaf-mirage
   ([#16](https://github.com/anmonteiro/httpaf/pull/16))

@@ -15,7 +15,7 @@ build: [
 depends: [
   "ocaml" {>= "4.03.0"}
   "httpaf"
-  "dune" {build}
+  "dune"
   "lwt"
 ]
 pin-depends: [
