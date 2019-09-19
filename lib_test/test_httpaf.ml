@@ -542,6 +542,30 @@ module Server_connection = struct
       `Read (next_read_operation t);
   ;;
 
+  let test_blocked_write_on_chunked_encoding () =
+    let request_handler reqd =
+      let response =
+        Response.create `OK
+          ~headers:(Headers.of_list [ "Transfer-encoding", "chunked" ])
+      in
+      let resp_body = Reqd.respond_with_streaming reqd response in
+      Body.write_string resp_body "gets partially written";
+      (* Response body never gets closed but for the purposes of the test, that's
+       * OK. *)
+    in
+    let t = create ~error_handler request_handler in
+    writer_yielded t;
+    read_request t (Request.create `GET "/");
+    let first_write = "HTTP/1.1 200 OK\r\nTransfer-encoding: chunked\r\n\r\n16\r\ngets partially written\r\n" in
+    Alcotest.(check (option string)) "first write"
+      (Some first_write)
+      (next_write_operation t |> Write_operation.to_write_as_string);
+    report_write_result t (`Ok 16);
+    Alcotest.(check (option string)) "second write"
+      (Some (String.sub first_write 16 (String.length first_write - 16)))
+      (next_write_operation t |> Write_operation.to_write_as_string);
+  ;;
+
   let malformed_request_string =
     "GET / HTTP/1.1\r\nconnection: close\r\nX-Other-Header : shouldnt_have_space_before_colon\r\n\r\n"
 
@@ -688,8 +712,6 @@ module Server_connection = struct
       report_write_result t (`Ok len);
       Alcotest.(check bool) "Callback was called" true !upgraded
     | _ -> Alcotest.fail "Expected Upgrade operation"
-  ;;
-
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -703,11 +725,11 @@ module Server_connection = struct
     ; "asynchronous error, synchronous handling", `Quick, test_asynchronous_error
     ; "asynchronous error, asynchronous handling", `Quick, test_asynchronous_error_asynchronous_handling
     ; "chunked encoding", `Quick, test_chunked_encoding
+    ; "blocked write on chunked encoding", `Quick, test_blocked_write_on_chunked_encoding
     ; "malformed request", `Quick, test_malformed_request
     ; "malformed request (async)", `Quick, test_malformed_request_async
     ; "multiple malformed requests?", `Quick, test_malformed_request_async_multiple_errors
     ; "malformed request (EOF)", `Quick, test_malformed_request_eof
-    ; "malformed request, streaming response", `Quick, test_malformed_request_streaming_error_response
     ; "respond with upgrade", `Quick, test_respond_with_upgrade
     ]
 end
@@ -915,6 +937,32 @@ module Client_connection = struct
       !error_message
   ;;
 
+  let test_report_exn () =
+    let request' = Request.create `GET "/" in
+    let response = Response.create `OK in (* not actually written to the channel *)
+
+    let error_message = ref None in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:(function
+          | `Exn (Failure msg) -> error_message := Some msg
+          | _ -> assert false)
+    in
+    Body.close_writer body;
+    write_request  t request';
+    (* writer_closed  t; *)
+    reader_ready t;
+    report_exn t (Failure "something went wrong");
+    connection_is_shutdown t;
+    Alcotest.(check (option string)) "something went wrong"
+      (Some "something went wrong")
+      !error_message
+  ;;
+
   let test_persistent_connection_requests () =
     let request' = Request.create `GET "/" in
     let response =
@@ -1049,6 +1097,8 @@ module Client_connection = struct
 
   let tests =
     [ "GET"         , `Quick, test_get
+    ; "Response EOF", `Quick, test_response_eof
+    ; "report_exn"  , `Quick, test_report_exn
     ; "multiple GET, last request closes connection", `Quick, test_get_last_close
     ; "Response EOF", `Quick, test_response_eof
     ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
@@ -1063,7 +1113,7 @@ let () =
     [ "version"          , Version.tests
     ; "method"           , Method.tests
     ; "iovec"            , IOVec.tests
-    ; "client connection" , Client_connection.tests
+    ; "client connection", Client_connection.tests
     ; "server connection", Server_connection.tests
     ]
 
