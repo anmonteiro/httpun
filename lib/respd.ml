@@ -54,6 +54,8 @@ let write_request t =
 let on_more_output_available { request_body; _ } f =
   Body.when_ready_to_write request_body f
 
+(* TODO: wondering if any of the `Received_response` changes here
+ * apply to us: https://github.com/inhabitedtype/httpaf/pull/148 *)
 let report_error t error =
   (* t.persistent <- false; *)
   (* TODO: drain queue? *)
