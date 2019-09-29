@@ -4,7 +4,7 @@
   "license": "BSD-3-clause",
   "repository": "git+https://github.com/anmonteiro/httpaf",
   "dependencies": {
-    "ocaml": "~4.8.1000",
+    "ocaml": "~4.9.0",
     "@opam/dune": "*",
     "@opam/lwt": "*",
     "@opam/bigstringaf": "*",
@@ -23,6 +23,14 @@
     "@opam/odoc": "*"
   },
   "resolutions": {
-    "@opam/conf-openssl": "esy-packages/esy-openssl#306bb87"
+    "@opam/conf-openssl": "esy-packages/esy-openssl#860ad7f",
+    "@opam/merlin": {
+      "source": "ocaml/merlin:merlin.opam#cfc28bd",
+      "override": {
+        "dependencies": {
+          "ocaml": "~4.9.0"
+        }
+      }
+    }
   }
 }

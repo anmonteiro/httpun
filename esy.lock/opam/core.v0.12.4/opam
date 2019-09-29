@@ -26,7 +26,6 @@ largest industrial user of OCaml.
 "
 depexts: ["linux-headers"] {os-distribution = "alpine"}
 url {
-  src:
-    "https://github.com/janestreet/core/archive/v0.12.3.tar.gz"
-  checksum: "md5=7bd476a69141c1b921dee8c1b4dd6353"
+  src: "https://github.com/janestreet/core/archive/v0.12.4.tar.gz"
+  checksum: "md5=85f006b0666f4fe05c566be8fda64cb2"
 }
