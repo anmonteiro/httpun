@@ -16,7 +16,7 @@ depends: [
   "dune"
   "faraday-async"
   "async"
-  "httpaf" {>= "0.5.0"}
+  "httpaf" {>= "0.6.0"}
 ]
 pin-depends: [
   [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
