@@ -52,9 +52,12 @@ let writer_closed t =
     (`Close 0) (next_write_operation t);
 ;;
 
-let connection_is_shutdown t =
+let reader_closed t =
   Alcotest.check read_operation "Reader is closed"
-    `Close (next_read_operation t :> [`Close | `Read | `Yield]);
+    `Close (next_read_operation t :> [`Close | `Read | `Yield])
+
+let connection_is_shutdown t =
+  reader_closed t;
   writer_closed t;
 ;;
 
@@ -420,6 +423,37 @@ let test_input_shrunk () =
     !error_message
 ;;
 
+let test_partial_input () =
+  let request' = Request.create `GET "/" in
+  let response_handler response response_body =
+    Alcotest.(check (list (pair string string)))
+      "got expected headers"
+      [ "Connection", "close" ]
+      (Headers.to_rev_list response.Response.headers);
+    Body.close_reader response_body
+  in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:response_handler
+      ~error_handler:no_error_handler
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.close_writer body;
+  reader_ready t;
+  let len = feed_string t "HTTP/1.1 200 OK\r\nC" in
+  Alcotest.(check int) "partial read" 17 len;
+  read_string t "Connection: close\r\n\r\n";
+  let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+  Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+  shutdown t;
+  reader_closed t;
+  writer_closed t;
+;;
+
 let tests =
   [ "GET"         , `Quick, test_get
   ; "Response EOF", `Quick, test_response_eof
@@ -431,6 +465,7 @@ let tests =
   ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining
   ; "Persistent connection, first request includes body", `Quick, test_persistent_connection_requests_pipelining_send_body
   ; "Persistent connections, read response body", `Quick, test_persistent_connection_requests_body
+  ; "Partial input", `Quick, test_partial_input
   ]
 
 (*

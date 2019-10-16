@@ -68,13 +68,10 @@ let on_wakeup_writer t k =
   then failwith "on_wakeup_writer on closed conn"
   else t.wakeup_writer := k::!(t.wakeup_writer)
 
-let _wakeup_writer callbacks =
-  let fs = !callbacks in
-  callbacks := [];
-  List.iter (fun f -> f ()) fs
-
 let wakeup_writer t =
-  _wakeup_writer t.wakeup_writer
+  let fs = !(t.wakeup_writer) in
+  t.wakeup_writer := [];
+  List.iter (fun f -> f ()) fs
 
 let[@ocaml.warning "-16"] create ?(config=Config.default) =
   let request_queue = Queue.create () in
@@ -98,7 +95,7 @@ let request t request ~error_handler ~response_handler =
   (* Not handling the request now means it may be pipelined.
    * `advance_request_queue_if_necessary` will take care of it, but we still
    * wanna wake up the writer so that the function gets called. *)
-  _wakeup_writer t.wakeup_writer;
+  wakeup_writer t;
   request_body
 ;;
 
@@ -137,6 +134,7 @@ let shutdown_writer t =
 let shutdown t =
   shutdown_reader t;
   shutdown_writer t;
+  wakeup_writer t;
 ;;
 
 (* TODO: Need to check in the RFC if reporting an error, e.g. in a malformed
