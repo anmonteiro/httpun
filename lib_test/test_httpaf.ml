@@ -1257,6 +1257,71 @@ module Client_connection = struct
     writer_closed t;
 	;;
 
+  let test_empty_fixed_body () =
+    let request' = Request.create
+      ~headers:(Headers.of_list ["Connection", "close"])
+      `GET "/"
+    in
+    let response_handler response response_body =
+      Alcotest.(check (list (pair string string)))
+        "got expected headers"
+        [ "Connection", "close" ]
+        (Headers.to_rev_list response.Response.headers);
+      Body.close_reader response_body
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:response_handler
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    writer_yielded t;
+    Body.close_writer body;
+    reader_ready t;
+    read_response t (Response.create ~headers:(Headers.of_list ["Connection", "close"]) `OK);
+    let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+    Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+    reader_closed t;
+    writer_closed t;
+	;;
+
+  let test_fixed_body () =
+    let request' = Request.create
+      ~headers:(Headers.of_list ["Connection", "close"; "Content-Length", "3"])
+      `GET "/"
+    in
+    let response_handler response response_body =
+      Alcotest.(check (list (pair string string)))
+        "got expected headers"
+        [ "Connection", "close" ]
+        (Headers.to_rev_list response.Response.headers);
+      Body.close_reader response_body
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:response_handler
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    writer_yielded t;
+    Body.write_string body "foo";
+    write_string t "foo";
+    writer_yielded t;
+    Body.close_writer body;
+    reader_ready t;
+    read_response t (Response.create ~headers:(Headers.of_list ["Connection", "close"]) `OK);
+    let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+    Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+    reader_closed t;
+    writer_closed t;
+	;;
+
   let tests =
     [ "GET"         , `Quick, test_get
     ; "Response EOF", `Quick, test_response_eof
@@ -1267,7 +1332,8 @@ module Client_connection = struct
     ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining
     ; "Persistent connection, first request includes body", `Quick, test_persistent_connection_requests_pipelining_send_body
     ; "Persistent connections, read response body", `Quick, test_persistent_connection_requests_body
-    ; "Partial input", `Quick, test_partial_input ]
+    ; "Empty fixed body shuts down writer", `Quick, test_empty_fixed_body
+    ; "Fixed body shuts down writer", `Quick, test_fixed_body ]
 
 end
 

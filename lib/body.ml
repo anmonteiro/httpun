@@ -45,18 +45,18 @@ let default_on_eof         = Sys.opaque_identity (fun () -> ())
 let default_on_read        = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 let default_ready_to_write = Sys.opaque_identity (fun () -> ())
 
-let of_faraday faraday =
+let of_faraday ?(chunk_encoded=true) faraday =
   { faraday
   ; read_scheduled         = false
-  ; write_final_if_chunked = true
+  ; write_final_if_chunked = chunk_encoded
   ; on_eof                 = default_on_eof
   ; on_read                = default_on_read
   ; when_ready_to_write    = default_ready_to_write
   ; buffered_bytes         = ref 0
   }
 
-let create buffer =
-  of_faraday (Faraday.of_bigstring buffer)
+let create ?(chunk_encoded=true) buffer =
+  of_faraday ~chunk_encoded (Faraday.of_bigstring buffer)
 
 let create_empty () =
   let t = create Bigstringaf.empty in

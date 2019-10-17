@@ -83,8 +83,17 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   }
 
 let request t request ~error_handler ~response_handler =
+  let chunk_encoded =
+    match Request.body_length request with
+    | `Chunked -> true
+    | `Fixed _ | `Close_delimited -> false
+    | `Error _ ->
+      (* FIXME(anmonteiro): we should handle this case, but for now callers
+       * have more to worry about. *)
+      assert false
+  in
   let request_body =
-    Body.create (Bigstringaf.create t.config.request_body_buffer_size)
+    Body.create ~chunk_encoded (Bigstringaf.create t.config.request_body_buffer_size)
   in
   let respd =
     Respd.create error_handler request request_body t.writer response_handler in
