@@ -1322,6 +1322,35 @@ module Client_connection = struct
     writer_closed t;
 	;;
 
+  let test_fixed_body_persistent_connection () =
+    let request' = Request.create
+      ~headers:(Headers.of_list ["Content-Length", "0"])
+      `GET "/"
+    in
+    let response_handler response response_body =
+      Alcotest.(check (list (pair string string)))
+        "got expected headers"
+        []
+        (Headers.to_rev_list response.Response.headers);
+      Body.close_reader response_body
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:response_handler
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    writer_yielded t;
+    Body.close_writer body;
+    reader_ready t;
+    read_response t (Response.create ~headers:(Headers.of_list []) `OK);
+    reader_ready t;
+    writer_yielded t;
+	;;
+
   let tests =
     [ "GET"         , `Quick, test_get
     ; "Response EOF", `Quick, test_response_eof
@@ -1333,7 +1362,8 @@ module Client_connection = struct
     ; "Persistent connection, first request includes body", `Quick, test_persistent_connection_requests_pipelining_send_body
     ; "Persistent connections, read response body", `Quick, test_persistent_connection_requests_body
     ; "Empty fixed body shuts down writer", `Quick, test_empty_fixed_body
-    ; "Fixed body shuts down writer", `Quick, test_fixed_body ]
+    ; "Fixed body shuts down writer if connection is not persistent", `Quick, test_fixed_body
+    ; "Fixed body doesn't shut down the writer if connection is persistent",`Quick, test_fixed_body_persistent_connection]
 
 end
 
