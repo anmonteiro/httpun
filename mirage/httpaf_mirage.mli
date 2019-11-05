@@ -34,8 +34,6 @@
 
 open Httpaf
 
-(* TODO(anmonteiro): this can be in H2_mirage_intf and deduplicated across
- * `.ml` and `.mli` files. *)
 module type Server = sig
   type flow
 
@@ -47,10 +45,10 @@ module type Server = sig
 end
 
 module Server (Flow : Mirage_flow.S) :
-  Server with type flow := Flow.flow
+  Server with type flow = Flow.flow
 
 module Server_with_conduit : sig
-  include Server with type flow := Conduit_mirage.Flow.flow
+  include Server with type flow = Conduit_mirage.Flow.flow
 
   type t = Conduit_mirage.Flow.flow -> unit Lwt.t
 
@@ -60,4 +58,4 @@ module Server_with_conduit : sig
 end
 
 module Client (Flow : Mirage_flow.S) :
- Httpaf_lwt.Client with type socket := Flow.flow
+ Httpaf_lwt.Client with type socket = Flow.flow
