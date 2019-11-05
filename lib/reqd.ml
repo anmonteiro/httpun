@@ -34,13 +34,13 @@
 type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-type 'handle response_state =
+type ('handle, 'io) response_state =
   | Waiting   of (unit -> unit) ref
   | Complete  of Response.t
   | Streaming of Response.t * [`write] Body.t
   | Upgrade of
     { response: Response.t
-    ; upgrade_handler : 'handle -> unit
+    ; upgrade_handler : 'handle -> 'io
     ; upgraded : bool ref }
 
 type error_handler =
@@ -71,14 +71,14 @@ module Writer = Serialize.Writer
  *  ]}
  *
  * *)
-type 'handle t =
+type ('handle, 'io) t =
   { request                 : Request.t
   ; request_body            : [`read] Body.t
   ; writer                  : Writer.t
   ; response_body_buffer    : Bigstringaf.t
   ; error_handler           : error_handler
   ; mutable persistent      : bool
-  ; mutable response_state  : 'handle response_state
+  ; mutable response_state  : ('handle, 'io) response_state
   ; mutable error_code      : [`Ok | error ]
   }
 
@@ -191,6 +191,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
       upgrade_handler socket
     in
     t.response_state <- Upgrade { response; upgrade_handler; upgraded };
+    Body.close_reader t.request_body;
     done_waiting when_done_waiting
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"

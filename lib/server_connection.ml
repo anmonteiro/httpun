@@ -36,7 +36,7 @@ module Reader = Parse.Reader
 module Writer = Serialize.Writer
 
 
-type 'fd request_handler = 'fd Reqd.t -> unit
+type ('fd, 'io) request_handler = ('fd, 'io) Reqd.t -> unit
 
 type error =
   [ `Bad_gateway | `Bad_request | `Internal_server_error | `Exn of exn]
@@ -44,13 +44,13 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
-type 'fd t =
+type ('fd, 'io) t =
   { reader                 : Reader.request
   ; writer                 : Writer.t
   ; response_body_buffer   : Bigstringaf.t
-  ; request_handler        : 'fd request_handler
+  ; request_handler        : ('fd, 'io) request_handler
   ; error_handler          : error_handler
-  ; request_queue          : 'fd Reqd.t Queue.t
+  ; request_queue          : ('fd, 'io) Reqd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already had [request_handler] called on it. *)
   ; wakeup_writer  : (unit -> unit) list ref

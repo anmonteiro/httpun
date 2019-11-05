@@ -31,7 +31,7 @@ module type Server = sig
 
   val create_connection_handler
     :  ?config         : Config.t
-    -> request_handler : (addr -> socket Server_connection.request_handler)
+    -> request_handler : (addr -> (socket, unit Lwt.t) Server_connection.request_handler)
     -> error_handler   : (addr -> Server_connection.error_handler)
     -> addr
     -> socket

@@ -49,7 +49,7 @@ module Server : sig
       -> ?certfile       : string
       -> ?keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Tls_io.descriptor Server_connection.request_handler)
+      -> request_handler : (Unix.sockaddr -> (Tls_io.descriptor, unit Lwt.t) Server_connection.request_handler)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
@@ -62,7 +62,7 @@ module Server : sig
       -> ?certfile       : string
       -> ?keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Ssl_io.descriptor Server_connection.request_handler)
+      -> request_handler : (Unix.sockaddr -> (Ssl_io.descriptor, unit Lwt.t) Server_connection.request_handler)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
