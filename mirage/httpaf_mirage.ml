@@ -90,6 +90,8 @@ module Make_IO (Flow: Mirage_flow.S) :
 end
 
 module Server (Flow : Mirage_flow.S) = struct
+  type flow = Flow.flow
+
   include Httpaf_lwt.Server (Make_IO (Flow))
 
   let create_connection_handler ?config ~request_handler ~error_handler =
@@ -127,4 +129,14 @@ module Server_with_conduit = struct
     Lwt.return listen
 end
 
-module Client (Flow : Mirage_flow.S) = Httpaf_lwt.Client (Make_IO (Flow))
+module type Client = sig
+  type flow
+
+  include Httpaf_lwt.Client with type socket := flow
+end
+
+module Client (Flow : Mirage_flow.S) = struct
+    type flow = Flow.flow
+
+    include Httpaf_lwt.Client (Make_IO (Flow))
+end
