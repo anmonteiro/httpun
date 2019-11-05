@@ -15,7 +15,7 @@ depends: [
   "faraday-lwt"
   "httpaf"
   "httpaf-lwt"
-  "conduit-mirage"
+  "conduit-mirage" {>= "2.0.2"}
   "mirage-flow" {>= "2.0.0"}
   "cstruct"
   "dune"
