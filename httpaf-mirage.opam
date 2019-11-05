@@ -16,6 +16,7 @@ depends: [
   "httpaf"
   "httpaf-lwt"
   "conduit-mirage"
+  "mirage-flow" {>= "2.0.0"}
   "cstruct"
   "dune"
   "lwt"
