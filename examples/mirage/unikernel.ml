@@ -1,9 +1,9 @@
 open Lwt.Infix
 open Httpaf
 
-module type HTTP = Httpaf_mirage.Server_intf
+module type HTTP = Httpaf_mirage.Server
 
-module Dispatch (C: Mirage_types_lwt.CONSOLE) (Http: HTTP) = struct
+module Dispatch (C: Mirage_console.S) (Http: HTTP) = struct
 
   let log c fmt = Printf.ksprintf (C.log c) fmt
 
@@ -41,7 +41,7 @@ module Dispatch (C: Mirage_types_lwt.CONSOLE) (Http: HTTP) = struct
 end
 
 (** Server boilerplate *)
-module Make (C : Mirage_types_lwt.CONSOLE) (Clock : Mirage_types_lwt.PCLOCK) (Http: HTTP) = struct
+module Make (C : Mirage_console.S) (Clock : Mirage_clock.PCLOCK) (Http: HTTP) = struct
 
   module D  = Dispatch (C) (Http)
 

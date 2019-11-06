@@ -14,6 +14,7 @@
     "@opam/faraday-lwt-unix": "*",
     "@opam/async": "*",
     "@opam/conduit-mirage": "*",
+    "@opam/mirage-flow": "*",
     "@opam/lwt_ssl": "*",
     "@opam/ssl": ">= 0.5.8"
   },
