@@ -24,6 +24,9 @@ Unreleased
 - Add an `esy.json` file ([#6](https://github.com/anmonteiro/httpaf/pull/6))
 - httpaf: Catch parsing errors and hand them to `error_handler` in
   `Server_connection` ([#4](https://github.com/anmonteiro/httpaf/pull/4))
+- httpaf-mirage: Adapt to Mirage 3.7 interfaces. `httpaf_mirage` now requires
+  `conduit-mirage` >= 2.0.2 and `mirage-flow` >= 2.0.0
+  ([#24](https://github.com/anmonteiro/httpaf/pull/24))
 
 httpaf (upstream) 0.6.0
 --------------
