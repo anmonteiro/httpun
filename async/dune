@@ -1,7 +1,8 @@
 (library
- (name        httpaf_async)
+ (name httpaf_async)
  (public_name httpaf-async)
  (wrapped false)
- (libraries
-   async core faraday-async httpaf)
- (flags (:standard -safe-string)))
+ (libraries async_unix async_kernel bigstringaf bigarray-compat async base
+   core core_kernel faraday faraday-async httpaf)
+ (flags
+  (:standard -safe-string)))

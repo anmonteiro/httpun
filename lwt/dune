@@ -1,6 +1,6 @@
 (library
  (name httpaf_lwt)
  (public_name httpaf-lwt)
- (libraries httpaf lwt)
+ (libraries httpaf lwt bigstringaf faraday bigarray-compat)
  (flags
   (:standard -safe-string)))

@@ -1,5 +1,6 @@
 (executables
- (libraries httpaf httpaf-async httpaf_examples async core)
+ (libraries httpaf httpaf-async httpaf_examples async async_kernel async_unix
+   async_extra base bigstringaf bigarray-compat core core_kernel stdio)
  (names async_echo_post async_get async_get_pipelined async_post))
 
 (alias

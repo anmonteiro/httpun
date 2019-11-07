@@ -1,3 +1,5 @@
-(lang dune 1.0)
+(lang dune 1.7)
 
 (name httpaf)
+
+(implicit_transitive_deps false)

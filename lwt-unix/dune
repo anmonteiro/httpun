@@ -2,19 +2,23 @@
  (name httpaf_lwt_unix)
  (public_name httpaf-lwt-unix)
  (libraries
+  bigarray-compat
+  bigstringaf
+  faraday
   faraday-lwt-unix
   httpaf
   httpaf-lwt
+  lwt
   lwt.unix
   (select
    ssl_io.ml
    from
-   (lwt_ssl -> ssl_io_real.ml)
+   (ssl lwt_ssl -> ssl_io_real.ml)
    (-> ssl_io_dummy.ml))
   (select
    tls_io.ml
    from
-   (tls.lwt -> tls_io_real.ml)
+   (cstruct nocrypto.lwt tls.lwt -> tls_io_real.ml)
    (-> tls_io_dummy.ml)))
  (modules httpaf_lwt_unix tls_io ssl_io)
  (flags

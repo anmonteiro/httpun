@@ -1,10 +1,11 @@
 (executables
- (libraries bigstringaf httpaf alcotest)
+ (libraries bigstringaf faraday httpaf alcotest fmt)
  (modules test_httpaf)
- (names   test_httpaf))
+ (names test_httpaf))
 
 (alias
  (name runtest)
  (package httpaf)
  (deps test_httpaf.exe)
- (action (run %{deps})))
+ (action
+  (run %{deps})))
