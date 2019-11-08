@@ -108,7 +108,7 @@ module type Server = sig
 
   val create_connection_handler
     :  ?config : Httpaf.Config.t
-    -> request_handler : flow Httpaf.Server_connection.request_handler
+    -> request_handler : (flow, unit Lwt.t) Httpaf.Server_connection.request_handler
     -> error_handler : Httpaf.Server_connection.error_handler
     -> (flow -> unit Lwt.t)
 end

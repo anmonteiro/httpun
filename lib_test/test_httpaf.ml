@@ -178,6 +178,7 @@ module Read_operation = struct
       | `Read -> "Read"
       | `Yield -> "Yield"
       | `Close -> "Close"
+      | `Upgrade -> "Upgrade"
     in
     Format.pp_print_string fmt str
   ;;
@@ -787,6 +788,7 @@ module Server_connection = struct
       Alcotest.(check string) "Switching protocols response"
         (Write_operation.iovecs_to_string iovecs)
         response_str;
+      Alcotest.check read_operation "Reader upgraded" `Upgrade (next_read_operation t);
       fn ();
       let len = String.length response_str in
       report_write_result t (`Ok len);
@@ -887,7 +889,7 @@ module Client_connection = struct
 
   let reader_ready t =
     Alcotest.check read_operation "Reader is ready"
-      `Read (next_read_operation t :> [`Close | `Read | `Yield]);
+      `Read (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade]);
   ;;
 
   let write_string ?(msg="output written") t str =
@@ -915,7 +917,7 @@ module Client_connection = struct
 
   let reader_closed t =
     Alcotest.check read_operation "Reader is closed"
-      `Close (next_read_operation t :> [`Close | `Read | `Yield])
+      `Close (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade])
 
   let connection_is_shutdown t =
     reader_closed t;

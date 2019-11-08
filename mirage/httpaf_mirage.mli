@@ -39,7 +39,7 @@ module type Server = sig
 
   val create_connection_handler
     :  ?config : Config.t
-    -> request_handler : flow Server_connection.request_handler
+    -> request_handler : (flow, unit Lwt.t) Server_connection.request_handler
     -> error_handler : Server_connection.error_handler
     -> (flow -> unit Lwt.t)
 end

@@ -244,7 +244,14 @@ let next_read_operation t =
   match _next_read_operation t with
   | `Error (`Parse _)             -> set_error_and_handle          t `Bad_request; `Close
   | `Error (`Bad_request request) -> set_error_and_handle ~request t `Bad_request; `Close
-  | (`Read | `Yield | `Close) as operation -> operation
+  | (`Read | `Yield | `Close) as operation ->
+    if is_active t then begin
+      let reqd = current_reqd_exn t in
+      match Reqd.upgrade_handler reqd with
+      | Some _ -> `Upgrade
+      | None -> operation
+    end else
+      operation
 
 let read_with_more t bs ~off ~len more =
   let call_handler = Queue.is_empty t.request_queue in

@@ -40,8 +40,7 @@ type ('handle, 'io) response_state =
   | Streaming of Response.t * [`write] Body.t
   | Upgrade of
     { response: Response.t
-    ; upgrade_handler : 'handle -> 'io
-    ; upgraded : bool ref }
+    ; upgrade_handler : 'handle -> 'io }
 
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
@@ -174,7 +173,7 @@ let respond_with_streaming ?(flush_headers_immediately=false) t response =
 
 let upgrade_handler t =
   match t.response_state with
-  | Upgrade { upgrade_handler; upgraded; _ } when not !upgraded ->
+  | Upgrade { upgrade_handler; _ } ->
     Some upgrade_handler
   | _ -> None
 
@@ -185,12 +184,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    let upgraded = ref false in
-    let upgrade_handler socket =
-      upgraded := true;
-      upgrade_handler socket
-    in
-    t.response_state <- Upgrade { response; upgrade_handler; upgraded };
+    t.response_state <- Upgrade { response; upgrade_handler };
     Body.close_reader t.request_body;
     done_waiting when_done_waiting
   | Streaming _ | Upgrade _ ->

@@ -710,7 +710,10 @@ module Server_connection : sig
     | `Yield
     | `Close of int ]
   (** [next_write_operation t] returns a value describing the next operation
-      that the caller should conduct on behalf of the connection. *)
+      that the caller should conduct on behalf of the connection.
+      In the case of [`Upgrade], it is the responsibility of the caller to
+      guarantee that the upgrade callback is called only once; the function
+      will keep returning [`Upgrade] if called again. *)
 
   val report_write_result : _ t -> [`Ok of int | `Closed] -> unit
   (** [report_write_result t result] reports the result of the latest write
