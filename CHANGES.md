@@ -27,6 +27,8 @@ Unreleased
 - httpaf-mirage: Adapt to Mirage 3.7 interfaces. `httpaf_mirage` now requires
   `conduit-mirage` >= 2.0.2 and `mirage-flow` >= 2.0.0
   ([#24](https://github.com/anmonteiro/httpaf/pull/24))
+- httpaf: Shutdown the writer after closing a non chunk-encoded request body on
+  the client ([#23](https://github.com/anmonteiro/httpaf/pull/23))
 
 httpaf (upstream) 0.6.0
 --------------
