@@ -38,9 +38,7 @@ type ('handle, 'io) response_state =
   | Waiting   of (unit -> unit) ref
   | Complete  of Response.t
   | Streaming of Response.t * [`write] Body.t
-  | Upgrade of
-    { response: Response.t
-    ; upgrade_handler : 'handle -> 'io }
+  | Upgrade of Response.t * ('handle -> 'io)
 
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
@@ -106,15 +104,15 @@ let response { response_state; _ } =
   match response_state with
   | Waiting _ -> None
   | Streaming(response, _)
-  | Complete (response)
-  | Upgrade { response; _ } -> Some response
+  | Complete response
+  | Upgrade (response, _) -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
   | Waiting _            -> failwith "httpaf.Reqd.response_exn: response has not started"
   | Streaming(response, _)
-  | Complete (response)
-  | Upgrade { response; _ } -> response
+  | Complete response
+  | Upgrade (response, _) -> response
 
 let respond_with_string t response str =
   if t.error_code <> `Ok then
@@ -173,7 +171,7 @@ let respond_with_streaming ?(flush_headers_immediately=false) t response =
 
 let upgrade_handler t =
   match t.response_state with
-  | Upgrade { upgrade_handler; _ } ->
+  | Upgrade (_, upgrade_handler) ->
     Some upgrade_handler
   | _ -> None
 
@@ -184,7 +182,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    t.response_state <- Upgrade { response; upgrade_handler };
+    t.response_state <- Upgrade (response, upgrade_handler);
     Body.close_reader t.request_body;
     done_waiting when_done_waiting
   | Streaming _ | Upgrade _ ->
