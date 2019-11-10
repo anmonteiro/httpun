@@ -29,6 +29,10 @@ Unreleased
   ([#24](https://github.com/anmonteiro/httpaf/pull/24))
 - httpaf: Shutdown the writer after closing a non chunk-encoded request body on
   the client ([#23](https://github.com/anmonteiro/httpaf/pull/23))
+- httpaf, httpaf-lwt, httpaf-lwt-unix, httpaf-async, httpaf-mirage: after
+  switching protocols, close the connection / file descriptors when the upgrade
+  handler's returned promise resolves
+  ([#26](https://github.com/anmonteiro/httpaf/pull/26))
 
 httpaf (upstream) 0.6.5
 --------------
