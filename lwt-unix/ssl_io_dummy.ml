@@ -30,13 +30,13 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-type nothing = [ `Ssl_not_available ]
+type descriptor = [ `Ssl_not_available ]
 
 module Io :
   Httpaf_lwt.IO
-    with type socket = Lwt_unix.file_descr * nothing
+    with type socket = descriptor
      and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr * nothing
+  type socket = descriptor
 
   type addr = Unix.sockaddr
 
@@ -50,10 +50,6 @@ module Io :
 
   let close _ = failwith "Ssl not available"
 end
-
-type client = nothing
-
-type server = nothing
 
 let[@ocaml.warning "-21"] make_client ?client:_ =
   failwith "Ssl not available";
