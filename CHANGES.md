@@ -30,8 +30,8 @@ Unreleased
 - httpaf: Shutdown the writer after closing a non chunk-encoded request body on
   the client ([#23](https://github.com/anmonteiro/httpaf/pull/23))
 
-httpaf (upstream) 0.6.0
+httpaf (upstream) 0.6.5
 --------------
 
 - Initial fork point
-  [025f5bc](https://github.com/anmonteiro/httpaf/commit/025f5bc94a48a7aa1c2dee4fd6e5667c0268d2a7)
+  [7de2d4ea](https://github.com/anmonteiro/httpaf/commit/7de2d4ea3bd09984d398854460a2d4c8a8e42127)
