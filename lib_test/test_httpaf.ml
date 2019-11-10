@@ -1320,7 +1320,7 @@ module Client_connection = struct
     Alcotest.(check int) "read_eof with no input returns 0" 0 c;
     reader_closed t;
     writer_closed t;
-	;;
+  ;;
 
   let test_fixed_body_persistent_connection () =
     let request' = Request.create
@@ -1349,7 +1349,7 @@ module Client_connection = struct
     read_response t (Response.create ~headers:(Headers.of_list []) `OK);
     reader_ready t;
     writer_yielded t;
-	;;
+  ;;
 
   let tests =
     [ "GET"         , `Quick, test_get
