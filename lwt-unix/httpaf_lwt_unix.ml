@@ -105,7 +105,7 @@ module Server = struct
           ~request_handler
           ~error_handler
           client_addr
-          (socket, tls_server)
+          tls_server
   end
 
   module SSL = struct
@@ -142,7 +142,7 @@ module Client = struct
         make_tls_client socket >>= fun tls_client ->
         create_connection
           ~config
-          (socket, tls_client)
+          tls_client
   end
 
   module SSL = struct
