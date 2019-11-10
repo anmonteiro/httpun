@@ -65,6 +65,9 @@ let create_empty () =
 
 let empty = create_empty ()
 
+let set_non_chunked t =
+  t.write_final_if_chunked <- false
+
 let write_char t c =
   Faraday.write_char t.faraday c
 
