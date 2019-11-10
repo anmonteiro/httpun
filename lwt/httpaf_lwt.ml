@@ -157,7 +157,7 @@ module Server (Io: IO) = struct
             writev io_vectors >>= fun result ->
             Server_connection.report_write_result connection result;
             upgrade_handler socket >|= fun () ->
-            Lwt.wakeup_later notify_write_loop_exited ();
+            Lwt.wakeup_later notify_write_loop_exited ()
 
           | `Yield ->
             Server_connection.yield_writer connection write_loop;
