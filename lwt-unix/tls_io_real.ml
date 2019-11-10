@@ -32,17 +32,17 @@
 
 open Lwt.Infix
 
-let _ = Nocrypto_entropy_lwt.initialize ()
+type descriptor = Tls_lwt.Unix.t
 
 module Io :
   Httpaf_lwt.IO
-    with type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
+    with type socket = descriptor
      and type addr = Unix.sockaddr = struct
-  type socket = Lwt_unix.file_descr * Tls_lwt.Unix.t
+  type socket = descriptor
 
   type addr = Unix.sockaddr
 
-  let read (_, tls) bigstring ~off ~len =
+  let read tls bigstring ~off ~len =
     Lwt.catch
       (fun () -> Tls_lwt.Unix.read_bytes tls bigstring off len)
       (function
@@ -57,7 +57,7 @@ module Io :
     else
       Lwt.return (`Ok bytes_read)
 
-  let writev (_, tls) iovecs =
+  let writev tls iovecs =
     Lwt.catch
       (fun () ->
         let cstruct_iovecs =
@@ -74,15 +74,12 @@ module Io :
         | exn ->
           Lwt.fail exn)
 
-  let shutdown_send (_, tls) = ignore (Tls_lwt.Unix.close_tls tls)
+  let shutdown_send tls = ignore (Tls_lwt.Unix.close_tls tls)
 
-  let shutdown_receive (_, tls) = ignore (Tls_lwt.Unix.close_tls tls)
+  let shutdown_receive tls = ignore (Tls_lwt.Unix.close_tls tls)
 
-  let close (_, tls) = Tls_lwt.Unix.close tls
+  let close tls = Tls_lwt.Unix.close tls
 end
-
-type client = Tls_lwt.Unix.t
-type server = Tls_lwt.Unix.t
 
 let make_client ?client socket =
   match client with

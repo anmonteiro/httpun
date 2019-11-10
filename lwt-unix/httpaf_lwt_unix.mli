@@ -35,7 +35,6 @@
 
 open Httpaf
 
-
 (* The function that results from [create_connection_handler] should be passed
    to [Lwt_io.establish_server_with_client_socket]. For an example, see
    [examples/lwt_echo_server.ml]. *)
@@ -46,11 +45,11 @@ module Server : sig
 
   module TLS : sig
     val create_connection_handler
-      :  ?server         : Tls_io.server
+      :  ?server         : Tls_io.descriptor
       -> ?certfile       : string
       -> ?keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Tls_io.Io.socket Server_connection.request_handler)
+      -> request_handler : (Unix.sockaddr -> Tls_io.descriptor Server_connection.request_handler)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
@@ -59,11 +58,11 @@ module Server : sig
 
   module SSL : sig
     val create_connection_handler
-      :  ?server         : Ssl_io.server
+      :  ?server         : Ssl_io.descriptor
       -> ?certfile       : string
       -> ?keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Ssl_io.Io.socket Server_connection.request_handler)
+      -> request_handler : (Unix.sockaddr -> Ssl_io.descriptor Server_connection.request_handler)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
@@ -79,7 +78,7 @@ module Client : sig
     include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
-      :  ?client          : Tls_io.client
+      :  ?client          : Tls_io.descriptor
       -> ?config          : Config.t
       -> Lwt_unix.file_descr
       -> t Lwt.t
@@ -89,7 +88,7 @@ module Client : sig
     include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
 
     val create_connection
-      :  ?client          : Ssl_io.client
+      :  ?client          : Ssl_io.descriptor
       -> ?config          : Config.t
       -> Lwt_unix.file_descr
       -> t Lwt.t
