@@ -119,6 +119,8 @@ module Server = struct
         | `Yield  ->
           (* Log.Global.printf "read_yield(%d)%!" (Fd.to_int_exn fd); *)
           Server_connection.yield_reader conn reader_thread
+        | `Upgrade ->
+          Ivar.fill read_complete ();
         | `Close ->
           (* Log.Global.printf "read_close(%d)%!" (Fd.to_int_exn fd); *)
           Ivar.fill read_complete ();
@@ -136,8 +138,7 @@ module Server = struct
         | `Upgrade (iovecs, upgrade_handler) ->
           writev iovecs >>> fun result ->
             Server_connection.report_write_result conn result;
-            upgrade_handler socket;
-            writer_thread ()
+            upgrade_handler socket >>> Ivar.fill write_complete
         | `Yield ->
           (* Log.Global.printf "write_yield(%d)%!" (Fd.to_int_exn fd); *)
           Server_connection.yield_writer conn writer_thread;

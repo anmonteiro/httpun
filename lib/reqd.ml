@@ -34,14 +34,11 @@
 type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-type 'handle response_state =
+type ('handle, 'io) response_state =
   | Waiting   of (unit -> unit) ref
   | Complete  of Response.t
   | Streaming of Response.t * [`write] Body.t
-  | Upgrade of
-    { response: Response.t
-    ; upgrade_handler : 'handle -> unit
-    ; upgraded : bool ref }
+  | Upgrade of Response.t * ('handle -> 'io)
 
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
@@ -71,14 +68,14 @@ module Writer = Serialize.Writer
  *  ]}
  *
  * *)
-type 'handle t =
+type ('handle, 'io) t =
   { request                 : Request.t
   ; request_body            : [`read] Body.t
   ; writer                  : Writer.t
   ; response_body_buffer    : Bigstringaf.t
   ; error_handler           : error_handler
   ; mutable persistent      : bool
-  ; mutable response_state  : 'handle response_state
+  ; mutable response_state  : ('handle, 'io) response_state
   ; mutable error_code      : [`Ok | error ]
   }
 
@@ -107,15 +104,15 @@ let response { response_state; _ } =
   match response_state with
   | Waiting _ -> None
   | Streaming(response, _)
-  | Complete (response)
-  | Upgrade { response; _ } -> Some response
+  | Complete response
+  | Upgrade (response, _) -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
   | Waiting _            -> failwith "httpaf.Reqd.response_exn: response has not started"
   | Streaming(response, _)
-  | Complete (response)
-  | Upgrade { response; _ } -> response
+  | Complete response
+  | Upgrade (response, _) -> response
 
 let respond_with_string t response str =
   if t.error_code <> `Ok then
@@ -174,7 +171,7 @@ let respond_with_streaming ?(flush_headers_immediately=false) t response =
 
 let upgrade_handler t =
   match t.response_state with
-  | Upgrade { upgrade_handler; upgraded; _ } when not !upgraded ->
+  | Upgrade (_, upgrade_handler) ->
     Some upgrade_handler
   | _ -> None
 
@@ -185,12 +182,8 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    let upgraded = ref false in
-    let upgrade_handler socket =
-      upgraded := true;
-      upgrade_handler socket
-    in
-    t.response_state <- Upgrade { response; upgrade_handler; upgraded };
+    t.response_state <- Upgrade (response, upgrade_handler);
+    Body.close_reader t.request_body;
     done_waiting when_done_waiting
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"

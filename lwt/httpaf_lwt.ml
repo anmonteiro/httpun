@@ -119,6 +119,10 @@ module Server (Io: IO) = struct
               read_loop_step ()
             end
 
+          | `Upgrade ->
+            Lwt.wakeup_later notify_read_loop_exited ();
+            Lwt.return_unit
+
           | `Yield ->
             Server_connection.yield_reader connection read_loop;
             Lwt.return_unit
@@ -152,8 +156,8 @@ module Server (Io: IO) = struct
           | `Upgrade (io_vectors, upgrade_handler) ->
             writev io_vectors >>= fun result ->
             Server_connection.report_write_result connection result;
-            upgrade_handler socket;
-            write_loop_step ()
+            upgrade_handler socket >|= fun () ->
+            Lwt.wakeup_later notify_write_loop_exited ()
 
           | `Yield ->
             Server_connection.yield_writer connection write_loop;

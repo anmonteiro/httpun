@@ -616,7 +616,7 @@ end
 
 (** {2 Request Descriptor} *)
 module Reqd : sig
-  type 'handle t
+  type ('handle, 'io) t
 
   val request : _ t -> Request.t
   val request_body : _ t -> [`read] Body.t
@@ -637,7 +637,7 @@ module Reqd : sig
   val respond_with_string    : _ t -> Response.t -> string -> unit
   val respond_with_bigstring : _ t -> Response.t -> Bigstringaf.t -> unit
   val respond_with_streaming : ?flush_headers_immediately:bool -> _ t -> Response.t -> [`write] Body.t
-  val respond_with_upgrade : 'fd t -> Headers.t -> ('fd -> unit) -> unit
+  val respond_with_upgrade : ('fd, 'io) t -> Headers.t -> ('fd -> 'io) -> unit
 
   (** {3 Exception Handling} *)
 
@@ -662,12 +662,12 @@ end
 (** {2 Server Connection} *)
 
 module Server_connection : sig
-  type 'fd t
+  type ('fd, 'io) t
 
   type error =
     [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-  type 'fd request_handler = 'fd Reqd.t -> unit
+  type ('fd, 'io) request_handler = ('fd, 'io) Reqd.t -> unit
 
   type error_handler =
     ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
@@ -675,12 +675,12 @@ module Server_connection : sig
   val create
     :  ?config:Config.t
     -> ?error_handler:error_handler
-    -> 'fd request_handler
-    -> 'fd t
+    -> ('fd, 'io) request_handler
+    -> ('fd, 'io) t
   (** [create ?config ?error_handler ~request_handler] creates a connection
       handler that will service individual requests with [request_handler]. *)
 
-  val next_read_operation : _ t -> [ `Read | `Yield | `Close ]
+  val next_read_operation : _ t -> [ `Read | `Yield | `Close | `Upgrade ]
   (** [next_read_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
 
@@ -704,13 +704,16 @@ module Server_connection : sig
       [continue] when reading should resume. {!yield_reader} should be called
       after {next_read_operation} returns a [`Yield] value. *)
 
-  val next_write_operation : 'fd t -> [
+  val next_write_operation : ('fd, 'io) t -> [
     | `Write of Bigstringaf.t IOVec.t list
-    | `Upgrade of Bigstringaf.t IOVec.t list * ('fd -> unit)
+    | `Upgrade of Bigstringaf.t IOVec.t list * ('fd -> 'io)
     | `Yield
     | `Close of int ]
   (** [next_write_operation t] returns a value describing the next operation
-      that the caller should conduct on behalf of the connection. *)
+      that the caller should conduct on behalf of the connection.
+      In the case of [`Upgrade], it is the responsibility of the caller to
+      guarantee that the upgrade callback is called only once; the function
+      will keep returning [`Upgrade] if called again. *)
 
   val report_write_result : _ t -> [`Ok of int | `Closed] -> unit
   (** [report_write_result t result] reports the result of the latest write
