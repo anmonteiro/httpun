@@ -24,14 +24,6 @@
     "@opam/odoc": "*"
   },
   "resolutions": {
-    "@opam/conf-openssl": "esy-packages/esy-openssl#860ad7f",
-    "@opam/merlin": {
-      "source": "ocaml/merlin:merlin.opam#cfc28bd",
-      "override": {
-        "dependencies": {
-          "ocaml": "~4.9.0"
-        }
-      }
-    }
+    "@opam/conf-libssl": "esy-packages/esy-openssl#860ad7f"
   }
 }

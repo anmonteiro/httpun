@@ -89,6 +89,8 @@ module Config = Httpaf.Config
 include Httpaf_lwt_intf
 
 module Server (Io: IO) = struct
+  type socket = Io.socket
+
   let create_connection_handler ?(config=Config.default) ~request_handler ~error_handler =
     fun client_addr socket ->
       let module Server_connection = Httpaf.Server_connection in
@@ -189,6 +191,7 @@ end
 module Client (Io: IO) = struct
   module Client_connection = Httpaf.Client_connection
 
+  type socket = Io.socket
   type t = Client_connection.t
 
   let create_connection ?(config=Config.default) socket =

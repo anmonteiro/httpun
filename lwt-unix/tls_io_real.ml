@@ -81,32 +81,18 @@ module Io :
   let close tls = Tls_lwt.Unix.close tls
 end
 
-let make_client ?client socket =
-  match client with
-  | Some client -> Lwt.return client
-  | None ->
-    X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-    let config = Tls.Config.client ~authenticator () in
-    Tls_lwt.Unix.client_of_fd config socket
+let make_client socket =
+  X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
+  let config = Tls.Config.client ~authenticator () in
+  Tls_lwt.Unix.client_of_fd config socket
 
-let make_server ?server ?certfile ?keyfile socket =
-  let server =
-    match server, certfile, keyfile with
-    | Some server, _, _ ->
-      Lwt.return server
-    | None, Some cert, Some priv_key ->
-      X509_lwt.private_of_pems ~cert ~priv_key >>= fun certificate ->
-      let config =
-        Tls.Config.server
-          ~alpn_protocols:[ "http/1.1" ]
-          ~certificates:
-            (`Single certificate)
-          ()
-      in
-      Tls_lwt.Unix.server_of_fd config socket
-    | _ ->
-      Lwt.fail
-        (Invalid_argument
-           "Certfile and Keyfile required when server isn't provided")
+let make_server ~certfile ~keyfile socket =
+  X509_lwt.private_of_pems ~cert:certfile ~priv_key:keyfile >>= fun certificate ->
+  let config =
+    Tls.Config.server
+      ~alpn_protocols:[ "http/1.1" ]
+      ~certificates:
+        (`Single certificate)
+      ()
   in
-  server
+  Tls_lwt.Unix.server_of_fd config socket

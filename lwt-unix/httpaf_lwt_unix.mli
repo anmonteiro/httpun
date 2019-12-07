@@ -40,14 +40,21 @@ open Httpaf
    [examples/lwt_echo_server.ml]. *)
 module Server : sig
   include Httpaf_lwt.Server
-    with type socket := Lwt_unix.file_descr
+    with type socket = Lwt_unix.file_descr
      and type addr := Unix.sockaddr
 
   module TLS : sig
     val create_connection_handler
-      :  ?server         : Tls_io.descriptor
-      -> ?certfile       : string
-      -> ?keyfile        : string
+      :  ?config         : Config.t
+      -> request_handler : (Unix.sockaddr -> (Tls_io.descriptor, unit Lwt.t) Server_connection.request_handler)
+      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
+      -> Unix.sockaddr
+      -> Tls_io.descriptor
+      -> unit Lwt.t
+
+    val create_connection_handler_with_default
+      :  certfile       : string
+      -> keyfile        : string
       -> ?config         : Config.t
       -> request_handler : (Unix.sockaddr -> (Tls_io.descriptor, unit Lwt.t) Server_connection.request_handler)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
@@ -58,9 +65,16 @@ module Server : sig
 
   module SSL : sig
     val create_connection_handler
-      :  ?server         : Ssl_io.descriptor
-      -> ?certfile       : string
-      -> ?keyfile        : string
+      :  ?config         : Config.t
+      -> request_handler : (Unix.sockaddr -> (Ssl_io.descriptor, unit Lwt.t) Server_connection.request_handler)
+      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
+      -> Unix.sockaddr
+      -> Ssl_io.descriptor
+      -> unit Lwt.t
+
+    val create_connection_handler_with_default
+      :  certfile       : string
+      -> keyfile        : string
       -> ?config         : Config.t
       -> request_handler : (Unix.sockaddr -> (Ssl_io.descriptor, unit Lwt.t) Server_connection.request_handler)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
@@ -72,24 +86,22 @@ end
 
 (* For an example, see [examples/lwt_get.ml]. *)
 module Client : sig
-  include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
+  include Httpaf_lwt.Client with type socket = Lwt_unix.file_descr
 
   module TLS : sig
-    include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
+    include Httpaf_lwt.Client with type socket = Tls_io.descriptor
 
-    val create_connection
-      :  ?client          : Tls_io.descriptor
-      -> ?config          : Config.t
+    val create_connection_with_default
+      :  ?config : Config.t
       -> Lwt_unix.file_descr
       -> t Lwt.t
   end
 
   module SSL : sig
-    include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
+    include Httpaf_lwt.Client with type socket = Ssl_io.descriptor
 
-    val create_connection
-      :  ?client          : Ssl_io.descriptor
-      -> ?config          : Config.t
+    val create_connection_with_default
+      :  ?config : Config.t
       -> Lwt_unix.file_descr
       -> t Lwt.t
   end

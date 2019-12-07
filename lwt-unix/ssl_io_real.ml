@@ -43,7 +43,6 @@ struct
   let read ssl bigstring ~off ~len =
     Lwt.catch
       (fun () ->
-        (* Lwt_unix.blocking (Lwt_ssl.get_fd socket) >>= fun _ -> *)
         Lwt_ssl.read_bytes ssl bigstring off len)
       (function
         | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
@@ -89,23 +88,14 @@ struct
   let close = Lwt_ssl.close
 end
 
-let make_client ?client socket =
-  match client with
-  | Some client -> Lwt.return client
-  | None ->
-    let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
-    Ssl.disable_protocols client_ctx [Ssl.SSLv23];
-    Ssl.honor_cipher_order client_ctx;
-    Lwt_ssl.ssl_connect socket client_ctx
+let make_default_client socket =
+  let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
+  Ssl.disable_protocols client_ctx [Ssl.SSLv23];
+  Ssl.honor_cipher_order client_ctx;
+  Lwt_ssl.ssl_connect socket client_ctx
 
-let make_server ?server ?certfile ?keyfile socket
-  =
-  match server, certfile, keyfile with
-  | Some server, _, _ -> Lwt.return server
-  | None, Some cert, Some priv_key ->
-    let server_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Server_context in
-    Ssl.disable_protocols server_ctx [Ssl.SSLv23];
-    Ssl.use_certificate server_ctx cert priv_key;
-    Lwt_ssl.ssl_accept socket server_ctx
-  | _ ->
-    Lwt.fail (Invalid_argument "Certfile and Keyfile required when server isn't provided")
+let make_server ~certfile ~keyfile socket =
+  let server_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Server_context in
+  Ssl.disable_protocols server_ctx [Ssl.SSLv23];
+  Ssl.use_certificate server_ctx certfile keyfile;
+  Lwt_ssl.ssl_accept socket server_ctx
