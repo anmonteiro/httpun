@@ -148,10 +148,8 @@ module Client = struct
   module SSL = struct
     include Httpaf_lwt.Client (Ssl_io.Io)
 
-    let create_connection ?client ?(config = Config.default) =
-      let make_ssl_client = Ssl_io.make_client ?client in
-      fun socket ->
-        make_ssl_client socket >>= fun ssl_client ->
-        create_connection ~config ssl_client
+    let create_connection_with_default_secure_client ?(config = Config.default) socket =
+      Ssl_io.make_default_client socket >>= fun ssl_client ->
+      create_connection ~config ssl_client
   end
 end

@@ -43,7 +43,6 @@ struct
   let read ssl bigstring ~off ~len =
     Lwt.catch
       (fun () ->
-        (* Lwt_unix.blocking (Lwt_ssl.get_fd socket) >>= fun _ -> *)
         Lwt_ssl.read_bytes ssl bigstring off len)
       (function
         | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
@@ -89,14 +88,11 @@ struct
   let close = Lwt_ssl.close
 end
 
-let make_client ?client socket =
-  match client with
-  | Some client -> Lwt.return client
-  | None ->
-    let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
-    Ssl.disable_protocols client_ctx [Ssl.SSLv23];
-    Ssl.honor_cipher_order client_ctx;
-    Lwt_ssl.ssl_connect socket client_ctx
+let make_default_client socket =
+  let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
+  Ssl.disable_protocols client_ctx [Ssl.SSLv23];
+  Ssl.honor_cipher_order client_ctx;
+  Lwt_ssl.ssl_connect socket client_ctx
 
 let make_server ?server ?certfile ?keyfile socket
   =

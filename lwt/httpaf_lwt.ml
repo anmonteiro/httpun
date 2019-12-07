@@ -189,6 +189,7 @@ end
 module Client (Io: IO) = struct
   module Client_connection = Httpaf.Client_connection
 
+  type socket = Io.socket
   type t = Client_connection.t
 
   let create_connection ?(config=Config.default) socket =

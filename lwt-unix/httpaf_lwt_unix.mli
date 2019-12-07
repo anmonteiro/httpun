@@ -72,7 +72,7 @@ end
 
 (* For an example, see [examples/lwt_get.ml]. *)
 module Client : sig
-  include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
+  include Httpaf_lwt.Client with type socket = Lwt_unix.file_descr
 
   module TLS : sig
     include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
@@ -85,11 +85,10 @@ module Client : sig
   end
 
   module SSL : sig
-    include Httpaf_lwt.Client with type socket := Lwt_unix.file_descr
+    include Httpaf_lwt.Client with type socket = Ssl_io.descriptor
 
-    val create_connection
-      :  ?client          : Ssl_io.descriptor
-      -> ?config          : Config.t
+    val create_connection_with_default_secure_client
+      :  ?config : Config.t
       -> Lwt_unix.file_descr
       -> t Lwt.t
   end
