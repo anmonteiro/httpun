@@ -29,6 +29,15 @@ Unreleased
   ([#24](https://github.com/anmonteiro/httpaf/pull/24))
 - httpaf: Shutdown the writer after closing a non chunk-encoded request body on
   the client ([#23](https://github.com/anmonteiro/httpaf/pull/23))
+- httpaf, httpaf-lwt, httpaf-lwt-unix, httpaf-async, httpaf-mirage: after
+  switching protocols, close the connection / file descriptors when the upgrade
+  handler's returned promise resolves
+  ([#26](https://github.com/anmonteiro/httpaf/pull/26))
+- httpaf-lwt, httpaf-lwt-unix: split HTTPS functions in 2: one that sets up a
+  default secure connection and performs the TLS handshake / accept, and one
+  that is more "raw", i.e. leaves that responsibility to the caller. Also
+  exposes the `socket` type to make it easier to abstract over HTTP / HTTPS
+  ([#28](https://github.com/anmonteiro/httpaf/pull/28))
 
 httpaf (upstream) 0.6.5
 --------------

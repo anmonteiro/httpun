@@ -14,11 +14,9 @@ let main port =
   Lwt.async (fun () ->
     Lwt_io.establish_server_with_client_socket
       listen_address
-      (Server.TLS.create_connection_handler
-        ?server:None
+      (Server.TLS.create_connection_handler_with_default
         ~certfile
         ~keyfile
-        ?config:None
         ~request_handler
         ~error_handler)
     >|= fun _server ->
