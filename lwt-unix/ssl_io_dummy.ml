@@ -54,6 +54,6 @@ end
 let make_default_client _socket =
   Lwt.fail_with "Ssl not available"
 
-let[@ocaml.warning "-21"] make_server ?server:_ ?certfile:_ ?keyfile:_ =
+let[@ocaml.warning "-21"] make_server ~certfile:_ ~keyfile:_ =
   failwith "Ssl not available";
   fun _socket -> Lwt.fail_with "Ssl not available"
