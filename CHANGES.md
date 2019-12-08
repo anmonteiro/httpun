@@ -38,6 +38,10 @@ Unreleased
   that is more "raw", i.e. leaves that responsibility to the caller. Also
   exposes the `socket` type to make it easier to abstract over HTTP / HTTPS
   ([#28](https://github.com/anmonteiro/httpaf/pull/28))
+- httpaf-lwt, httpaf-lwt-unix, httpaf-mirage: Improve the `Httpaf_lwt.IO`
+  interface, don't require a `report_exn` function, only a `state` function
+  that returns the socket state
+  ([#30](https://github.com/anmonteiro/httpaf/pull/30))
 
 httpaf (upstream) 0.6.5
 --------------

@@ -54,6 +54,8 @@ module type IO = sig
   val shutdown_receive : socket -> unit
 
   val close : socket -> unit Lwt.t
+
+  val state : socket -> [ `Open | `Error | `Closed ]
 end
 
 module type Server = sig

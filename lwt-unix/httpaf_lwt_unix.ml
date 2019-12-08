@@ -80,6 +80,15 @@ module Io
         (fun _exn -> Lwt.return_unit)
     else
       Lwt.return_unit
+
+  let state socket =
+    match Lwt_unix.state socket with
+    | Aborted _ ->
+      `Error
+    | Closed ->
+      `Closed
+    | Opened ->
+      `Open
 end
 
 module Config = Httpaf.Config

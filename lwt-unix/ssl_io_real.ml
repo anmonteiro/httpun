@@ -86,12 +86,22 @@ struct
         Lwt_ssl.shutdown ssl Unix.SHUTDOWN_RECEIVE )
 
   let close = Lwt_ssl.close
+
+  let state ssl =
+    match Lwt_unix.state (Lwt_ssl.get_fd ssl) with
+    | Aborted _ ->
+      `Error
+    | Closed ->
+      `Closed
+    | Opened ->
+      `Open
 end
 
 let make_default_client socket =
   let client_ctx = Ssl.create_context Ssl.SSLv23 Ssl.Client_context in
   Ssl.disable_protocols client_ctx [Ssl.SSLv23];
   Ssl.honor_cipher_order client_ctx;
+  Ssl.set_context_alpn_protos client_ctx [ "http/1.1" ];
   Lwt_ssl.ssl_connect socket client_ctx
 
 let make_server ~certfile ~keyfile socket =
