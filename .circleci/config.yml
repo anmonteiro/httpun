@@ -69,22 +69,6 @@ opam-steps: &opam-steps
         command: git diff --exit-code
 
 jobs:
-  OCaml-404:
-    docker:
-      - image: ocaml/opam2:debian-10-ocaml-4.04
-    environment:
-      - TERM: dumb
-      - OCAML_VERSION: "4.04.2"
-      - OPAMSOLVERTIMEOUT: "1200"
-    <<: *opam-steps
-  OCaml-405:
-    docker:
-      - image: ocaml/opam2:debian-10-ocaml-4.05
-    environment:
-      - TERM: dumb
-      - OCAML_VERSION: "4.05.0"
-      - OPAMSOLVERTIMEOUT: "600"
-    <<: *opam-steps
   OCaml-406:
     docker:
       - image: ocaml/opam2:debian-10-ocaml-4.06
@@ -162,18 +146,6 @@ workflows:
   version: 2
   build-deploy:
     jobs:
-      - OCaml-404:
-          all_tests: false
-          filters:
-            branches:
-              ignore:
-                - gh-pages
-      - OCaml-405:
-          all_tests: false
-          filters:
-            branches:
-              ignore:
-                - gh-pages
       - OCaml-406:
           all_tests: false
           filters:
