@@ -41,7 +41,7 @@ Unreleased
 - httpaf-lwt, httpaf-lwt-unix, httpaf-mirage: Improve the `Httpaf_lwt.IO`
   interface, don't require a `report_exn` function, only a `state` function
   that returns the socket state
-  ([#29](https://github.com/anmonteiro/httpaf/pull/29))
+  ([#30](https://github.com/anmonteiro/httpaf/pull/30))
 
 httpaf (upstream) 0.6.5
 --------------
