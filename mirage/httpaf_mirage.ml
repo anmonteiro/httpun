@@ -87,6 +87,8 @@ module Make_IO (Flow: Mirage_flow.S) :
         (fun exn ->
           shutdown flow >>= fun () ->
           Lwt.fail exn)
+
+  let state _flow = `Open
 end
 
 module Server (Flow : Mirage_flow.S) = struct

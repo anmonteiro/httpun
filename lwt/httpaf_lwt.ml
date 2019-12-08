@@ -91,6 +91,29 @@ include Httpaf_lwt_intf
 module Server (Io: IO) = struct
   type socket = Io.socket
 
+  let report_exn connection socket exn =
+    (* This needs to handle two cases. The case where the socket is
+     * still open and we can gracefully respond with an error, and the
+     * case where the client has already left. The second case is more
+     * common when communicating over HTTPS, given that the remote peer
+     * can close the connection without requiring an acknowledgement:
+     *
+     * From RFC5246§7.2.1:
+     *   Unless some other fatal alert has been transmitted, each party
+     *   is required to send a close_notify alert before closing the
+     *   write side of the connection.  The other party MUST respond
+     *   with a close_notify alert of its own and close down the
+     *   connection immediately, discarding any pending writes. It is
+     *   not required for the initiator of the close to wait for the
+     *   responding close_notify alert before closing the read side of
+     *   the connection. *)
+    (match Io.state socket with
+    | `Error | `Closed ->
+      Httpaf.Server_connection.shutdown connection
+    | `Open ->
+      Httpaf.Server_connection.report_exn connection exn);
+    Lwt.return_unit
+
   let create_connection_handler ?(config=Config.default) ~request_handler ~error_handler =
     fun client_addr socket ->
       let module Server_connection = Httpaf.Server_connection in
@@ -136,11 +159,7 @@ module Server (Io: IO) = struct
         in
 
         Lwt.async (fun () ->
-          Lwt.catch
-            read_loop_step
-            (fun exn ->
-              Server_connection.report_exn connection exn;
-              Lwt.return_unit))
+            Lwt.catch read_loop_step (report_exn connection socket))
       in
 
 
@@ -172,11 +191,7 @@ module Server (Io: IO) = struct
         in
 
         Lwt.async (fun () ->
-          Lwt.catch
-            write_loop_step
-            (fun exn ->
-              Server_connection.report_exn connection exn;
-              Lwt.return_unit))
+            Lwt.catch write_loop_step (report_exn connection socket))
       in
 
 

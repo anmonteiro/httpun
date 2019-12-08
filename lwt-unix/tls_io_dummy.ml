@@ -49,6 +49,8 @@ module Io :
   let shutdown_receive _ = failwith "Tls not available"
 
   let close _ = Lwt.fail_with "Tls not available"
+
+  let state _ = failwith "Tls not available"
 end
 
 let make_client _socket = Lwt.return `Tls_not_available
