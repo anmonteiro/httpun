@@ -79,6 +79,9 @@ module Io :
   let shutdown_receive tls = ignore (Tls_lwt.Unix.close_tls tls)
 
   let close tls = Tls_lwt.Unix.close tls
+
+  let state tls =
+    match Tls_lwt.Unix.epoch tls with `Error -> `Error | `Ok _ -> `Open
 end
 
 let make_client socket =
