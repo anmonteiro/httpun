@@ -185,6 +185,8 @@ module Client = struct
               |> ignore;
               reader_thread ()
           end
+      | `Yield ->
+        Client_connection.yield_writer conn reader_thread;
       | `Close ->
         (* Log.Global.printf "read_close(%d)%!" (Fd.to_int_exn fd); *)
         Ivar.fill read_complete ();

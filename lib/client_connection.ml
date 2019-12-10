@@ -207,9 +207,22 @@ let advance_request_queue_if_necessary t =
   end else if Reader.is_closed t.reader
   then shutdown t
 
-let next_read_operation t =
+let _next_read_operation t =
   advance_request_queue_if_necessary t;
-  match Reader.next t.reader with
+  if is_active t then begin
+    let respd = current_respd_exn t in
+    if      Respd.requires_input        respd then Reader.next t.reader
+    else if Respd.persistent_connection respd then `Yield
+    else begin
+      shutdown_reader t;
+      Reader.next t.reader
+    end
+  end else
+    Reader.next t.reader
+
+let next_read_operation t =
+  (* advance_request_queue_if_necessary t; *)
+  match _next_read_operation t with
   | `Error (`Parse(marks, message)) ->
     let message = String.concat "" [ String.concat ">" marks; ": "; message] in
     set_error_and_handle t (`Malformed_response message);
@@ -217,7 +230,7 @@ let next_read_operation t =
   | `Error (`Invalid_response_body_length _ as error) ->
     set_error_and_handle t error;
     `Close
-  | (`Read | `Close) as operation -> operation
+  | (`Read | `Yield | `Close) as operation -> operation
 ;;
 
 let read_with_more t bs ~off ~len more =
@@ -237,7 +250,7 @@ let read_eof t bs ~off ~len =
     (* TODO: could just check for `Respd.requires_input`? *)
     match respd.state with
     | Uninitialized -> assert false
-    | Received_response _ | Closed -> ()
+    | Received_response _ | Closed | Upgraded _ -> ()
     | Awaiting_response ->
       (* TODO: review this. It makes sense to tear down the connection if an
        * unexpected EOF is received. *)
@@ -251,6 +264,11 @@ let next_write_operation t =
   advance_request_queue_if_necessary t;
   flush_request_body t;
   Writer.next t.writer
+;;
+
+let yield_reader _t _k =
+  ()
+  (* on_wakeup_reader t k *)
 ;;
 
 let yield_writer t k =
