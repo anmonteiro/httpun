@@ -42,6 +42,8 @@ Unreleased
   interface, don't require a `report_exn` function, only a `state` function
   that returns the socket state
   ([#30](https://github.com/anmonteiro/httpaf/pull/30))
+- httpaf, httpaf-lwt, httpaf-async: Add support for upgrading connections on
+  the client. ([#31](https://github.com/anmonteiro/httpaf/pull/31))
 
 httpaf (upstream) 0.6.5
 --------------
