@@ -49,6 +49,7 @@ type t =
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already written the request headers to the wire. *)
   ; wakeup_writer  : (unit -> unit) list ref
+  ; wakeup_reader  : (unit -> unit) list ref
   }
 
 let is_closed t =
@@ -63,6 +64,11 @@ let is_active t =
 let current_respd_exn t =
   Queue.peek t.request_queue
 
+let on_wakeup_reader t k =
+  if is_closed t
+  then failwith "on_wakeup_reader on closed conn"
+  else t.wakeup_reader := k::!(t.wakeup_reader)
+
 let on_wakeup_writer t k =
   if is_closed t
   then failwith "on_wakeup_writer on closed conn"
@@ -73,6 +79,11 @@ let wakeup_writer t =
   t.wakeup_writer := [];
   List.iter (fun f -> f ()) fs
 
+let wakeup_reader t =
+  let fs = !(t.wakeup_reader) in
+  t.wakeup_reader := [];
+  List.iter (fun f -> f ()) fs
+
 let[@ocaml.warning "-16"] create ?(config=Config.default) =
   let request_queue = Queue.create () in
   { config
@@ -80,6 +91,7 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   ; writer = Writer.create ()
   ; request_queue
   ; wakeup_writer = ref []
+  ; wakeup_reader = ref []
   }
 
 let request t request ~error_handler ~response_handler =
@@ -123,6 +135,7 @@ let shutdown_reader t =
   Reader.force_close t.reader;
   if is_active t
   then Respd.close_response_body (current_respd_exn t)
+  else wakeup_reader t
 
 let shutdown_writer t =
   flush_request_body t;
@@ -136,6 +149,7 @@ let shutdown_writer t =
 let shutdown t =
   shutdown_reader t;
   shutdown_writer t;
+  wakeup_reader t;
   wakeup_writer t;
 ;;
 
@@ -221,7 +235,6 @@ let _next_read_operation t =
     Reader.next t.reader
 
 let next_read_operation t =
-  (* advance_request_queue_if_necessary t; *)
   match _next_read_operation t with
   | `Error (`Parse(marks, message)) ->
     let message = String.concat "" [ String.concat ">" marks; ": "; message] in
@@ -266,9 +279,8 @@ let next_write_operation t =
   Writer.next t.writer
 ;;
 
-let yield_reader _t _k =
-  ()
-  (* on_wakeup_reader t k *)
+let yield_reader t k =
+  on_wakeup_reader t k
 ;;
 
 let yield_writer t k =

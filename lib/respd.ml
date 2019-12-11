@@ -86,10 +86,10 @@ let close_response_body t =
   match t.state with
   | Uninitialized
   | Awaiting_response
-  | Upgraded _
   | Closed -> ()
   | Received_response (_, response_body) ->
     Body.close_reader response_body
+  | Upgraded _ -> t.state <- Closed
 
 let requires_input t =
   match t.state with
@@ -102,7 +102,12 @@ let requires_input t =
 
 let requires_output { request_body; state; _ } =
   match state with
-  | Upgraded _ -> true
+  | Upgraded _ ->
+    (* XXX(anmonteiro): Connections that have been upgraded "require output"
+     * forever, but outside the HTTP layer, meaning they're permanently
+     * "yielding". For now they need to be explicitly shutdown in order to
+     * transition the response descriptor to the `Closed` state. *)
+    true
   | state ->
     state = Uninitialized ||
     not (Body.is_closed request_body) ||
@@ -112,14 +117,14 @@ let is_complete t =
   not (requires_input t || requires_output t)
 
 let flush_request_body { request; request_body; writer; _ } =
-  if Body.has_pending_output request_body
-  then
+  if Body.has_pending_output request_body then begin
     let encoding =
       match Request.body_length request with
       | `Fixed _ | `Chunked as encoding -> encoding
       | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
     in
     Body.transfer_to_writer_with_encoding request_body ~encoding writer
+  end
 
 let flush_response_body t =
   match t.state with

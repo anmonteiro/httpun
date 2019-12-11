@@ -892,6 +892,11 @@ module Client_connection = struct
       `Read (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade]);
   ;;
 
+  let reader_yielded t =
+    Alcotest.check read_operation "Reader is in a yield state"
+      `Yield (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade]);
+  ;;
+
   let write_string ?(msg="output written") t str =
     let len = String.length str in
     Alcotest.(check (option string)) msg
@@ -1242,7 +1247,7 @@ module Client_connection = struct
       request
         t
         request'
-        ~response_handler:response_handler
+        ~response_handler
         ~error_handler:no_error_handler
     in
     write_request t request';
@@ -1276,7 +1281,7 @@ module Client_connection = struct
       request
         t
         request'
-        ~response_handler:response_handler
+        ~response_handler
         ~error_handler:no_error_handler
     in
     write_request t request';
@@ -1307,7 +1312,7 @@ module Client_connection = struct
       request
         t
         request'
-        ~response_handler:response_handler
+        ~response_handler
         ~error_handler:no_error_handler
     in
     write_request t request';
@@ -1341,7 +1346,7 @@ module Client_connection = struct
       request
         t
         request'
-        ~response_handler:response_handler
+        ~response_handler
         ~error_handler:no_error_handler
     in
     write_request t request';
@@ -1351,6 +1356,32 @@ module Client_connection = struct
     read_response t (Response.create ~headers:(Headers.of_list []) `OK);
     reader_ready t;
     writer_yielded t;
+  ;;
+
+  let test_client_upgrade () =
+    let request' = Request.create
+      ~headers:(Headers.of_list ["Content-Length", "0"])
+      `GET "/"
+    in
+    let t = create ?config:None in
+    let response = Response.create `Switching_protocols in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    writer_yielded t;
+    Body.close_writer body;
+    reader_ready t;
+    read_response t response;
+    reader_yielded t;
+    writer_yielded t;
+    shutdown t;
+    reader_closed t;
+    writer_closed t;
   ;;
 
   let tests =
@@ -1365,7 +1396,8 @@ module Client_connection = struct
     ; "Persistent connections, read response body", `Quick, test_persistent_connection_requests_body
     ; "Empty fixed body shuts down writer", `Quick, test_empty_fixed_body
     ; "Fixed body shuts down writer if connection is not persistent", `Quick, test_fixed_body
-    ; "Fixed body doesn't shut down the writer if connection is persistent",`Quick, test_fixed_body_persistent_connection]
+    ; "Fixed body doesn't shut down the writer if connection is persistent",`Quick, test_fixed_body_persistent_connection
+    ; "Client support for upgrading a connection", `Quick, test_client_upgrade ]
 
 end
 
