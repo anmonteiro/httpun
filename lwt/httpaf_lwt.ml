@@ -207,7 +207,7 @@ module Client (Io: IO) = struct
     let read_buffer = Buffer.create config.read_buffer_size in
     let read_loop_exited, notify_read_loop_exited = Lwt.wait () in
 
-    let read_loop () =
+    let rec read_loop () =
       let rec read_loop_step () =
         match Client_connection.next_read_operation connection with
         | `Read ->
@@ -223,6 +223,10 @@ module Client (Io: IO) = struct
             |> ignore;
             read_loop_step ()
           end
+
+        | `Yield ->
+          Client_connection.yield_reader connection read_loop;
+          Lwt.return_unit
 
         | `Close ->
           Lwt.wakeup_later notify_read_loop_exited ();

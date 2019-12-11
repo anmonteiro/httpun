@@ -770,7 +770,7 @@ module Client_connection : sig
     -> response_handler:response_handler
     -> [`write] Body.t
 
-  val next_read_operation : t -> [ `Read | `Close ]
+  val next_read_operation : t -> [ `Read | `Yield | `Close ]
   (** [next_read_operation t] returns a value describing the next operation
       that the caller should conduct on behalf of the connection. *)
 
@@ -807,6 +807,8 @@ module Client_connection : sig
         {next_write_operation}. }
         {- [`Closed] indicates that the output destination will no longer
         accept bytes from the write processor. }} *)
+
+  val yield_reader : t -> (unit -> unit) -> unit
 
   val yield_writer : t -> (unit -> unit) -> unit
   (** [yield_writer t continue] registers with the connection to call
