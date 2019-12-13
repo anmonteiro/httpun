@@ -44,6 +44,10 @@ Unreleased
   ([#30](https://github.com/anmonteiro/httpaf/pull/30))
 - httpaf, httpaf-lwt, httpaf-async: Add support for upgrading connections on
   the client. ([#31](https://github.com/anmonteiro/httpaf/pull/31))
+- httpaf: Fix the order of parsed request / response headers to match what it's
+  advertised in the interface file. They are now served to the respective
+  handlers in the original transmission order
+  ([#32](https://github.com/anmonteiro/httpaf/pull/32))
 
 httpaf (upstream) 0.6.5
 --------------

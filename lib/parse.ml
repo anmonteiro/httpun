@@ -106,14 +106,16 @@ let header =
   <?> "header"
 
 let headers =
-  let cons x xs = x :: xs in
   fix (fun headers ->
-    let _emp = return [] in
-    let _rec = lift2 cons header headers in
+    let _emp = return (fun x -> x) in
+    let _rec =
+      lift2 (fun header f headers -> f (header :: headers)) header headers
+    in
     peek_char_fail
     >>= function
       | '\r' -> _emp
       | _    -> _rec)
+  >>| fun f -> f []
 
 let request =
   let meth = take_till P.is_space >>| Method.of_string in
