@@ -48,6 +48,11 @@ Unreleased
   advertised in the interface file. They are now served to the respective
   handlers in the original transmission order
   ([#32](https://github.com/anmonteiro/httpaf/pull/32))
+- httpaf: Fix persistent connections getting stuck (reader never waking up)
+  when using `~flush_headers_immediately:true` in combination with an empty
+  response body ([#34](https://github.com/anmonteiro/httpaf/pull/34)). This is
+  a fix for an issue opened in the upstream repo:
+  [inhabitedtype/httpaf#162](https://github.com/inhabitedtype/httpaf/issues/162)
 
 httpaf (upstream) 0.6.5
 --------------

@@ -836,6 +836,46 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_closed t;
 	;;
 
+ let test_immediate_flush_empty_body () =
+    let reader_woken_up = ref false in
+    let response = Response.create `OK in
+    let request_handler reqd =
+      let resp_body = Reqd.respond_with_streaming
+        ~flush_headers_immediately:true reqd response
+      in
+      Body.close_writer resp_body;
+    in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    yield_writer t (fun () ->
+      write_response t ~body:"" response);
+    read_request t (Request.create `GET "/");
+    yield_reader t (fun () -> reader_woken_up := true);
+    writer_yielded t;
+    Alcotest.(check bool) "Reader woken up"
+      true !reader_woken_up;
+	;;
+
+  let test_empty_body_no_immediate_flush () =
+    let reader_woken_up = ref false in
+    let response = Response.create `OK in
+    let request_handler reqd =
+      let resp_body = Reqd.respond_with_streaming
+        ~flush_headers_immediately:false reqd response
+      in
+      Body.close_writer resp_body;
+    in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    read_request t (Request.create `GET "/");
+    yield_reader t (fun () -> reader_woken_up := true);
+    write_response t ~body:"" response;
+    writer_yielded t;
+    Alcotest.(check bool) "Reader woken up"
+      true !reader_woken_up;
+	;;
+
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -859,6 +899,8 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "respond with upgrade", `Quick, test_respond_with_upgrade
     ; "writer unexpected eof", `Quick, test_unexpected_eof
     ; "input shrunk", `Quick, test_input_shrunk
+    ; "`flush_headers_immediately` with empty body", `Quick, test_immediate_flush_empty_body
+    ; "empty body with no immediate flush", `Quick, test_empty_body_no_immediate_flush
     ]
 end
 
