@@ -157,6 +157,20 @@ let when_ready_to_write t callback =
 
 let transfer_to_writer_with_encoding t ~encoding writer =
   let faraday = t.faraday in
+  begin match t.write_final_if_chunked, encoding with
+  | true, (`Fixed _ | `Close_delimited) ->
+    (* Play nicely with [has_pending_output] in the case of a fixed or
+       close-delimited encoding.
+
+       Immediately set `t.write_final_if_chunked` to `false` because we may
+       not have another opportunity to do so before advancing the request
+       queue. *)
+    t.write_final_if_chunked <- false;
+  | false, (`Fixed _ | `Close_delimited)
+  | _, `Chunked ->
+    (* Handled explicitly later when closing the writer. *)
+    ()
+  end;
   begin match Faraday.operation faraday with
   | `Yield -> ()
   | `Close ->
@@ -178,9 +192,6 @@ let transfer_to_writer_with_encoding t ~encoding writer =
       buffered := !buffered + lengthv;
       begin match encoding with
       | `Fixed _ | `Close_delimited ->
-        (* Play nicely with [has_pending_output] in the case of a fixed or
-           close-delimited encoding. *)
-        t.write_final_if_chunked <- false;
         Serialize.Writer.schedule_fixed writer iovecs
       | `Chunked ->
         Serialize.Writer.schedule_chunk writer iovecs
