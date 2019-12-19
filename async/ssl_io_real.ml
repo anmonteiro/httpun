@@ -7,7 +7,7 @@ module Unix = Core.Unix
 
 let readf ssl_reader =
   fun _fd buffer ->
-  Buffer.put_async buffer ~f:(fun bigstring ~off ~len ->
+  Bigstring_buffer.put_async buffer ~f:(fun bigstring ~off ~len ->
     let bigsubstr = Bigsubstring.create ~pos:off ~len bigstring in
     Reader.read_bigsubstring ssl_reader bigsubstr >>| function
       | `Eof -> 0

@@ -69,7 +69,7 @@ module Server = struct
         match Server_connection.next_read_operation connection with
         | `Read ->
           (* Log.Global.printf "read(%d)%!" (Fd.to_int_exn fd); *)
-          read fd buffer
+          readf fd buffer
           >>> begin function
             | `Eof  ->
               Bigstring_buffer.get buffer ~f:(fun bigstring ~off ~len ->
@@ -89,9 +89,8 @@ module Server = struct
           Ivar.fill read_complete ();
         | `Close ->
           (* Log.Global.printf "read_close(%d)%!" (Fd.to_int_exn fd); *)
-          Ivar.fill read_complete ();
-          if not (Fd.is_closed fd)
-          then Socket.shutdown socket `Receive
+	        Deferred.don't_wait_for
+          (close_read socket >>| Ivar.fill read_complete)
       in
       let write_complete = Ivar.create () in
       let rec writer_thread () =
@@ -110,9 +109,8 @@ module Server = struct
           Server_connection.yield_writer connection writer_thread;
         | `Close _ ->
           (* Log.Global.printf "write_close(%d)%!" (Fd.to_int_exn fd); *)
-          Ivar.fill write_complete ();
-          if not (Fd.is_closed fd)
-          then Socket.shutdown socket `Send
+          Deferred.don't_wait_for
+          (close_write socket >>| Ivar.fill write_complete)
       in
       let conn_monitor = Monitor.create () in
       Scheduler.within ~monitor:conn_monitor reader_thread;
@@ -225,7 +223,7 @@ module Client = struct
       >>| fun () ->
         if not (Fd.is_closed fd)
         then don't_wait_for (Fd.close fd));
-    connection
+    Deferred.return connection
 
   let create_connection ?(config=Config.default) socket =
     let conn   = Client_connection.create ~config in
@@ -239,7 +237,7 @@ module Client = struct
 
   module SSL = struct
     let create_connection ?client ?(config=Config.default) socket =
-      Ssl_io.make_client ?client socket >>| begin fun ssl ->
+      Ssl_io.make_client ?client socket >>= begin fun ssl ->
       let ssl_reader = Ssl_io.reader ssl in
       let ssl_writer = Ssl_io.writer ssl in
       let readf = Ssl_io.readf ssl_reader in

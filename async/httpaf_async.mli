@@ -17,7 +17,7 @@ module Server : sig
       -> ?certfile       : string
       -> ?keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : ('a -> (Ssl_io.server, unit Deferred.t) Server_connection.request_handler)
+      -> request_handler : ('a -> (([`Active], 'a) Socket.t, unit Deferred.t) Server_connection.request_handler)
       -> error_handler   : ('a -> Server_connection.error_handler)
       -> ([< Socket.Address.t] as 'a)
       -> ([`Active], 'a) Socket.t
@@ -32,7 +32,7 @@ module Client : sig
   val create_connection
     : ?config:Config.t
     -> ([`Active], [< Socket.Address.t]) Socket.t
-    -> t
+    -> t Deferred.t
 
   val request
     :  t
@@ -50,7 +50,7 @@ module Client : sig
     :  ?client          : Ssl_io.client
     -> ?config:Config.t
     -> ([`Active], [< Socket.Address.t]) Socket.t
-    -> t
+    -> t Deferred.t
 
   val request
     :  t
