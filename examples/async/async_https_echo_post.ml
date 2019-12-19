@@ -47,8 +47,7 @@ let main port max_accepts_per_batch () =
     (Tcp.Bind_to_port.On_port port) in
   Tcp.(Server.create_sock ~on_handler_error:`Ignore
       ~backlog:10_000 ~max_connections:10_000 ~max_accepts_per_batch where_to_listen)
-    (Server.SSL.create_connection_handler
-      ?server:None
+    (Server.SSL.create_connection_handler_with_default
       ~certfile:"./certificates/server.pem"
       ~keyfile:"./certificates/server.key"
       ~request_handler

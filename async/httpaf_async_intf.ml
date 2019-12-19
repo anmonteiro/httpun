@@ -30,34 +30,68 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-type descriptor = [ `Ssl_not_available ]
-
 open Async
+open Httpaf
 
-module Io :
-  Httpaf_async_intf.IO
-    with type socket = descriptor
-     and type addr = [ Socket.Address.Inet.t | Socket.Address.Unix.t ] = struct
-  type socket = descriptor
+module type IO = sig
+  type socket
+  type addr
 
-  type addr = [ Socket.Address.Inet.t | Socket.Address.Unix.t ]
+  (** The region [[off, off + len)] is where read bytes can be written to *)
+  val read
+    :  socket
+    -> Bigstringaf.t
+    -> off:int
+    -> len:int
+    -> [ `Eof | `Ok of int ] Deferred.t
 
-  let read _ _bigstring ~off:_ ~len:_ = Core.failwith "Ssl not available"
+  val writev
+    : socket
+    -> Faraday.bigstring Faraday.iovec list
+    -> [ `Closed | `Ok of int ] Deferred.t
 
-  let writev _ _iovecs = Core.failwith "Ssl not available"
+  val shutdown_send : socket -> unit
 
-  let shutdown_send _ = failwith "Ssl not available"
+  val shutdown_receive : socket -> unit
 
-  let shutdown_receive _ = failwith "Ssl not available"
+  val close : socket -> unit Deferred.t
 
-  let close _ = failwith "Ssl not available"
-
-  let state _ = failwith "Ssl not available"
+  val state : socket -> [ `Open | `Error | `Closed ]
 end
 
-let make_default_client _socket =
-  Core.failwith "Ssl not available"
+module type Server = sig
+  type socket
 
-let[@ocaml.warning "-21"] make_server ~certfile:_ ~keyfile:_ =
-  failwith "Ssl not available";
-  fun _socket -> Core.failwith "Ssl not available"
+  type addr
+
+  val create_connection_handler
+    :  ?config         : Config.t
+    -> request_handler : (addr -> (socket, unit Deferred.t) Server_connection.request_handler)
+    -> error_handler   : (addr -> Server_connection.error_handler)
+    -> addr
+    -> socket
+    -> unit Deferred.t
+end
+
+module type Client = sig
+  type t
+
+  type socket
+
+  val create_connection
+    : ?config          : Config.t
+    -> socket
+    -> t Deferred.t
+
+  val request
+    :  t
+    -> Request.t
+    -> error_handler    : Client_connection.error_handler
+    -> response_handler : Client_connection.response_handler
+    -> [`write] Body.t
+
+  val shutdown: t -> unit
+
+  val is_closed : t -> bool
+end
+

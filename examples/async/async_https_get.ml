@@ -8,7 +8,7 @@ let response_handler finished response response_body =
   match response with
   | { Response.status = `OK; _ } ->
     let rec on_read bs ~off ~len =
-      Bigstring.to_string ~off ~len bs |> print_endline;
+      Bigstring.to_string ~pos:off ~len bs |> print_endline;
       Body.schedule_read response_body ~on_read ~on_eof
     and on_eof () = Ivar.fill finished () in
     Body.schedule_read response_body ~on_read ~on_eof;
@@ -24,12 +24,13 @@ let main port host () =
   let finished = Ivar.create () in
   Tcp.connect_sock where_to_connect
   >>= fun socket ->
+    Client.SSL.create_connection_with_default socket >>= fun conn ->
     let headers = Headers.of_list [ "host", host ] in
     let request_body =
       Client.SSL.request
         ~error_handler
         ~response_handler:(response_handler finished)
-        socket
+        conn
         (Request.create ~headers `GET "/")
     in
     Body.close_writer request_body;

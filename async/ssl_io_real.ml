@@ -1,43 +1,87 @@
+(*----------------------------------------------------------------------------
+ *  Copyright (c) 2019 António Nuno Monteiro
+ *
+ *  All rights reserved.
+ *
+ *  Redistribution and use in source and binary forms, with or without
+ *  modification, are permitted provided that the following conditions are met:
+ *
+ *  1. Redistributions of source code must retain the above copyright notice,
+ *  this list of conditions and the following disclaimer.
+ *
+ *  2. Redistributions in binary form must reproduce the above copyright
+ *  notice, this list of conditions and the following disclaimer in the
+ *  documentation and/or other materials provided with the distribution.
+ *
+ *  3. Neither the name of the copyright holder nor the names of its
+ *  contributors may be used to endorse or promote products derived from this
+ *  software without specific prior written permission.
+ *
+ *  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ *  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ *  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ *  ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+ *  LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ *  CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ *  SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ *  INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ *  CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ *  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ *  POSSIBILITY OF SUCH DAMAGE.
+ *---------------------------------------------------------------------------*)
+
 open Core
 open Async
 open Async_ssl
 
 module Unix = Core.Unix
 
+type descriptor = Ssl.Connection.t * Reader.t * Writer.t
 
-let readf ssl_reader =
-  fun _fd buffer ->
-  Bigstring_buffer.put_async buffer ~f:(fun bigstring ~off ~len ->
+module Io :
+  Httpaf_async_intf.IO
+    with type socket = descriptor
+     and type addr = [ Socket.Address.Inet.t | Socket.Address.Unix.t ] = struct
+  type socket = descriptor
+
+  type addr = [ Socket.Address.Inet.t | Socket.Address.Unix.t ]
+
+  let read (_conn, reader, _writer) bigstring ~off ~len =
     let bigsubstr = Bigsubstring.create ~pos:off ~len bigstring in
-    Reader.read_bigsubstring ssl_reader bigsubstr >>| function
-      | `Eof -> 0
-      | `Ok n -> n)
-  >>| function
-  | 0 -> `Eof
-  | n -> `Ok n
+    Reader.read_bigsubstring reader bigsubstr
 
-let writev ssl_writer _fd =
-  fun iovecs ->
+  let writev (_conn, _reader, writer) iovecs =
     let iovecs_q = Queue.create ~capacity:(List.length iovecs) () in
     let len = List.fold ~init:0 ~f:(fun acc { Faraday.buffer; off = pos; len } ->
       Queue.enqueue iovecs_q (Unix.IOVec.of_bigstring ~pos ~len buffer);
       acc + len) iovecs
     in
-    Writer.schedule_iovecs ssl_writer iovecs_q;
-    Writer.flushed ssl_writer
-    >>| fun () -> `Ok len
+    if Writer.is_closed writer then
+     Deferred.return `Closed
+    else begin
+      Writer.schedule_iovecs writer iovecs_q;
+      Writer.flushed writer
+      >>| fun () -> `Ok len
+    end
 
-let close_read ssl_reader = fun _socket ->
-  Reader.close ssl_reader
+  let shutdown_send (_conn, _reader, writer) =
+   Async.don't_wait_for (Writer.close writer)
 
-let close_write ssl_writer = fun _socket ->
-  Writer.close ssl_writer
+  let shutdown_receive (_conn, reader, _writer) =
+   Async.don't_wait_for (Reader.close reader)
 
-type client = Reader.t * Writer.t
-type server = Reader.t * Writer.t
+  let close (conn, _reader, _writer) =
+   Ssl.Connection.close conn;
+   Deferred.unit
 
-let reader (r, _) = r
-let writer (_, w) = w
+  let state (_conn, reader, writer) =
+    if Writer.is_stopped_permanently writer then
+     `Error
+    else if Writer.is_closed writer && Reader.is_closed reader then
+     `Closed
+    else
+     `Open
+end
 
 (* taken from https://github.com/janestreet/async_extra/blob/master/src/tcp.ml *)
 let reader_writer_of_sock ?buffer_age_limit ?reader_buffer_size ?writer_buffer_size s =
@@ -69,14 +113,11 @@ let connect r w =
       Pipe.close_read app_rd ;
       Writer.close w ;
     end ;
-    (app_reader, app_writer)
+    (conn, app_reader, app_writer)
 
-let make_client ?client socket =
-  match client with
-  | Some client -> Deferred.return client
-  | None ->
-    let reader, writer = reader_writer_of_sock socket in
-    connect reader writer
+let make_default_client socket =
+  let reader, writer = reader_writer_of_sock socket in
+  connect reader writer
 
 let listen ~crt_file ~key_file r w =
   let net_to_ssl = Reader.pipe r in
@@ -104,13 +145,9 @@ let listen ~crt_file ~key_file r w =
     Pipe.close_read app_rd ;
     Writer.close w ;
   end;
-  (app_reader, app_writer)
+  (conn, app_reader, app_writer)
 
-let make_server ?server ?certfile ?keyfile socket =
-  match server, certfile, keyfile with
-  | Some server, _, _ -> Deferred.return server
-  | None, Some crt_file, Some key_file ->
-    let reader, writer = reader_writer_of_sock socket in
-    listen ~crt_file ~key_file reader writer
-  | _ ->
-    failwith "Certfile and Keyfile required when server isn't provided"
+let make_server ~certfile ~keyfile socket =
+  let reader, writer = reader_writer_of_sock socket in
+  listen ~crt_file:certfile ~key_file:keyfile reader writer
+

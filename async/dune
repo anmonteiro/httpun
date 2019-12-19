@@ -11,6 +11,6 @@
    from
    (async_ssl -> ssl_io_real.ml)
    (!async_ssl -> ssl_io_dummy.ml)))
- (modules bigstring_buffer httpaf_async ssl_io)
+ (modules httpaf_async httpaf_async_intf ssl_io)
  (flags
   (:standard -safe-string)))
