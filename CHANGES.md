@@ -53,6 +53,8 @@ Unreleased
   response body ([#34](https://github.com/anmonteiro/httpaf/pull/34)). This is
   a fix for an issue opened in the upstream repo:
   [inhabitedtype/httpaf#162](https://github.com/inhabitedtype/httpaf/issues/162)
+- httpaf-async: Add HTTPS support for the Async bindings
+  ([#35](https://github.com/anmonteiro/httpaf/pull/35)).
 
 httpaf (upstream) 0.6.5
 --------------
