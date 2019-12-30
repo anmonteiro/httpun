@@ -44,13 +44,9 @@ module Server : sig
      and type addr := Unix.sockaddr
 
   module TLS : sig
-    val create_connection_handler
-      :  ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> (Tls_io.descriptor, unit Lwt.t) Server_connection.request_handler)
-      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
-      -> Unix.sockaddr
-      -> Tls_io.descriptor
-      -> unit Lwt.t
+  include Httpaf_lwt.Server
+    with type socket = Tls_io.descriptor
+     and type addr := Unix.sockaddr
 
     val create_connection_handler_with_default
       :  certfile       : string
@@ -64,13 +60,9 @@ module Server : sig
   end
 
   module SSL : sig
-    val create_connection_handler
-      :  ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> (Ssl_io.descriptor, unit Lwt.t) Server_connection.request_handler)
-      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
-      -> Unix.sockaddr
-      -> Ssl_io.descriptor
-      -> unit Lwt.t
+  include Httpaf_lwt.Server
+    with type socket = Ssl_io.descriptor
+     and type addr := Unix.sockaddr
 
     val create_connection_handler_with_default
       :  certfile       : string

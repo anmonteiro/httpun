@@ -13,6 +13,7 @@
     "@opam/faraday-async": "*",
     "@opam/faraday-lwt-unix": "*",
     "@opam/async": "*",
+    "@opam/async_ssl": "*",
     "@opam/conduit-mirage": "*",
     "@opam/mirage-flow": "*",
     "@opam/lwt_ssl": "*",

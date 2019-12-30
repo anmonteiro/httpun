@@ -18,6 +18,7 @@ depends: [
   "async"
   "httpaf" {>= "0.6.0"}
 ]
+depopts: ["async_ssl"]
 pin-depends: [
   [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
 ]
