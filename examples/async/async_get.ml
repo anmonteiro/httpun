@@ -13,7 +13,7 @@ let main port host () =
     let finished = Ivar.create () in
     let response_handler = Httpaf_examples.Client.print ~on_eof:(Ivar.fill finished) in
     let headers = Headers.of_list [ "host", host ] in
-    let connection = Client.create_connection socket in
+    Client.create_connection socket >>= fun connection ->
     let request_body =
       Client.request
         connection

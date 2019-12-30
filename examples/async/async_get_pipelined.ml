@@ -15,7 +15,7 @@ let main port host () =
     let request_headers =
       Request.create ~headers:(Headers.of_list [ "host", host ]) `GET "/"
     in
-    let connection = Client.create_connection socket in
+    Client.create_connection socket >>= fun connection ->
     let request_body =
       Client.request
         connection
