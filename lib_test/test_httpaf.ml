@@ -834,7 +834,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
       `Close (next_read_operation t);
     !continue_response ();
     writer_closed t;
-	;;
+  ;;
 
  let test_immediate_flush_empty_body () =
     let reader_woken_up = ref false in
@@ -854,7 +854,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_yielded t;
     Alcotest.(check bool) "Reader woken up"
       true !reader_woken_up;
-	;;
+  ;;
 
   let test_empty_body_no_immediate_flush () =
     let reader_woken_up = ref false in
@@ -874,7 +874,29 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_yielded t;
     Alcotest.(check bool) "Reader woken up"
       true !reader_woken_up;
-	;;
+  ;;
+
+  let test_yield_before_starting_a_response () =
+    let reader_woken_up = ref false in
+    let response = Response.create `OK in
+    let continue_response = ref (fun () -> ()) in
+    let request_handler reqd =
+      continue_response := (fun () ->
+        let resp_body = Reqd.respond_with_streaming reqd response in
+        Body.close_writer resp_body)
+    in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    read_request t (Request.create `GET "/");
+    yield_reader t (fun () -> reader_woken_up := true);
+    yield_writer t ignore;
+    !continue_response ();
+    write_response t ~body:"" response;
+    writer_yielded t;
+    Alcotest.(check bool) "Reader woken up"
+      true !reader_woken_up;
+  ;;
 
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
@@ -901,6 +923,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "input shrunk", `Quick, test_input_shrunk
     ; "`flush_headers_immediately` with empty body", `Quick, test_immediate_flush_empty_body
     ; "empty body with no immediate flush", `Quick, test_empty_body_no_immediate_flush
+    ; "yield before starting a response", `Quick, test_yield_before_starting_a_response
     ]
 end
 
