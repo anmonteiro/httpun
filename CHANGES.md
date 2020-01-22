@@ -55,6 +55,10 @@ Unreleased
   [inhabitedtype/httpaf#162](https://github.com/inhabitedtype/httpaf/issues/162)
 - httpaf-async: Add HTTPS support for the Async bindings
   ([#35](https://github.com/anmonteiro/httpaf/pull/35)).
+- httpaf: Fix upstream regression introduced in
+  [inhabitedtype/httpaf#161](https://github.com/inhabitedtype/httpaf/pull/161)
+  that caused `wake_up_writer` callback bookkeeping to be slightly wrong due to
+  physical equality, producing runtime errors in cases where it shouldn't.
 
 httpaf (upstream) 0.6.5
 --------------

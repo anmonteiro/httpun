@@ -104,9 +104,17 @@ let wakeup_writer t =
 ;;
 
 let transfer_writer_callback t reqd =
-  let f = t.wakeup_writer in
-  t.wakeup_writer <- default_wakeup;
-  Reqd.on_more_output_available reqd f
+  (* Note: it's important that we don't call `Reqd.on_more_output_available` if
+   * no `wakeup_writer` callback has been registered. In the current
+   * implementation, `Reqd` performs its own bookkeeping by performing its own
+   * physical equality check. If `Server_connection` registers its dummy
+   * callback, `Reqd`'s physical equality check with _its own_ dummy callback
+   * will fail and cause weird bugs. *)
+  if not (t.wakeup_writer == default_wakeup) then begin
+    let f = t.wakeup_writer in
+    t.wakeup_writer <- default_wakeup;
+    Reqd.on_more_output_available reqd f
+  end
 ;;
 
 let default_error_handler ?request:_ error handle =
