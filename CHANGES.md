@@ -58,7 +58,8 @@ Unreleased
 - httpaf: Fix upstream regression introduced in
   [inhabitedtype/httpaf#161](https://github.com/inhabitedtype/httpaf/pull/161)
   that caused `wake_up_writer` callback bookkeeping to be slightly wrong due to
-  physical equality, producing runtime errors in cases where it shouldn't.
+  physical equality, producing runtime errors in cases where it shouldn't
+  ([#37](https://github.com/anmonteiro/httpaf/pull/37)).
 
 httpaf (upstream) 0.6.5
 --------------
