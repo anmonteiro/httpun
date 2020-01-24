@@ -1,8 +1,7 @@
 let
-  sources = import ./nix/sources.nix {};
-  inherit (sources) pkgs ocamlPackages;
+  pkgs = import ./nix/sources.nix {};
   inherit (pkgs) stdenv lib;
-  httpafPkgs = pkgs.recurseIntoAttrs (import ./nix { inherit sources; doCheck = false; });
+  httpafPkgs = pkgs.recurseIntoAttrs (import ./nix { inherit pkgs; doCheck = false; });
   httpafDrvs = lib.filterAttrs (_: value: lib.isDerivation value) httpafPkgs;
 
 in
