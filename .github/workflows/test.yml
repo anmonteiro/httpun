@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - fork
 jobs:
   tests:
     runs-on: ubuntu-latest
