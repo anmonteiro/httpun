@@ -1,5 +1,5 @@
 { pkgs ? import ./sources.nix { inherit ocamlVersion; }
-, ocamlVersion ? "4_09"
+, ocamlVersion ? "4_10"
 , doCheck ? true }:
 
 let
