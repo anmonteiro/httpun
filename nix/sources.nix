@@ -1,12 +1,14 @@
-{ ocamlVersion ? "4_09" }:
+{ ocamlVersion ? "4_10" }:
 
 let
   overlays = builtins.fetchTarball {
-    url = https://github.com/anmonteiro/nix-overlays/archive/98b6ee7.tar.gz;
-    sha256 = "12vqdghlz2v7ln28jmrnxy210zv5x21g8kw2s0dvszfmz0p2inkh";
+    url = https://github.com/anmonteiro/nix-overlays/archive/5d6ac00.tar.gz;
+    sha256 = "0dl92riggcz2zxrlrkqh51rbjz2kc5k8ad2wri1y2ivk3b6qa37n";
   };
 
-  pkgs = import <nixpkgs> {
+in
+
+  import "${overlays}/sources.nix" {
     overlays = [
       (import overlays)
       (self: super: {
@@ -14,7 +16,4 @@ let
             (super.callPackage "${overlays}/ocaml" {});
       })
     ];
-  };
-
-in
-  pkgs
+  }
