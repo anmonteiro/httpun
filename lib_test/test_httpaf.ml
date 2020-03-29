@@ -152,6 +152,101 @@ module Headers = struct
     ; "replace", `Quick, test_replace ]
 end
 
+module Request = struct
+  include Request
+
+  let check =
+    let alco =
+      Alcotest.result
+        (Alcotest.of_pp pp_hum)
+        Alcotest.string
+    in
+    fun message ~expect input ->
+      let actual =
+        Angstrom.parse_string Httpaf_private.Parse.request input
+      in
+      Alcotest.check alco message expect actual
+  ;;
+
+  let test_parse_valid () =
+    check
+      "valid GET without headers"
+      ~expect:(Ok (Request.create `GET "/"))
+      "GET / HTTP/1.1\r\n\r\n";
+    check
+      "valid non-standard method without headers"
+      ~expect:(Ok (Request.create (`Other "some-other-verb") "/"))
+      "some-other-verb / HTTP/1.1\r\n\r\n";
+    check
+      "valid GET with headers"
+      ~expect:(Ok (Request.create ~headers:(Headers.of_list [ "Link", "/path/to/some/website"]) `GET "/"))
+      "GET / HTTP/1.1\r\nLink: /path/to/some/website\r\n\r\n";
+  ;;
+
+  let test_parse_invalid_errors () =
+    check
+      "doesn't end"
+      ~expect:(Error ": not enough input")
+      "GET / HTTP/1.1\r\n";
+    check
+      "invalid version"
+      ~expect:(Error "eol: string")
+      "GET / HTTP/1.22\r\n\r\n";
+    check
+      "malformed header"
+      ~expect:(Error "header: char ':'")
+      "GET / HTTP/1.1\r\nLink : /path/to/some/website\r\n\r\n";
+  ;;
+
+  let tests =
+    [ "parse valid"         , `Quick, test_parse_valid
+    ; "parse invalid errors", `Quick, test_parse_invalid_errors
+    ]
+end
+
+module Response = struct
+  include Response
+
+  let check =
+    let alco =
+      Alcotest.result
+        (Alcotest.of_pp pp_hum)
+        Alcotest.string
+    in
+    fun message ~expect input ->
+      let actual =
+        Angstrom.parse_string Httpaf_private.Parse.response input
+      in
+      Alcotest.check alco message expect actual
+  ;;
+
+  let test_parse_valid () =
+    check
+      "OK response without headers"
+      ~expect:(Ok (Response.create `OK))
+      "HTTP/1.1 200 OK\r\n\r\n";
+  ;;
+
+  let test_parse_invalid_error () =
+    check
+      "OK response without a status message"
+      ~expect:(Error ": char ' '")
+      "HTTP/1.1 200\r\n\r\n";
+    check
+      "OK response without a status message"
+      ~expect:(Error ": status-code empty")
+      "HTTP/1.1 OK\r\n\r\n";
+    check
+      "OK response without a status message"
+      ~expect:(Error ": status-code too long: \"999999937377999999999200\"")
+      "HTTP/1.1 999999937377999999999200\r\n\r\n";
+  ;;
+
+  let tests =
+    [ "parse valid"        , `Quick, test_parse_valid
+    ; "parse invalid error", `Quick, test_parse_invalid_error ]
+end
+
 let maybe_serialize_body f body =
   match body with
   | None -> ()
@@ -1449,10 +1544,40 @@ module Client_connection = struct
     writer_closed t;
   ;;
 
+  let test_input_shrunk () =
+    let request' = Request.create `GET "/" in
+    let t = create ?config:None in
+    let response = Response.create `OK in (* not actually writen to the channel *)
+
+    let error_message = ref None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(default_response_handler response)
+        ~error_handler:(function
+          | `Exn (Failure msg) -> error_message := Some msg
+          | _ -> assert false)
+    in
+    Body.close_writer body;
+    write_request  t request';
+    writer_yielded t;
+    (* writer_closed  t; *)
+    reader_ready t;
+    let c = feed_string  t "HTTP/1.1 200 OK\r\nDate" in
+    Alcotest.(check int) "read the status line" c 17;
+    report_exn t (Failure "something went wrong");
+    connection_is_shutdown t;
+    Alcotest.(check (option string)) "something went wrong"
+      (Some "something went wrong")
+      !error_message
+  ;;
+
   let tests =
     [ "GET"         , `Quick, test_get
     ; "Response EOF", `Quick, test_response_eof
     ; "report_exn"  , `Quick, test_report_exn
+    ; "input_shrunk", `Quick, test_input_shrunk
     ; "multiple GET, last request closes connection", `Quick, test_get_last_close
     ; "Response EOF", `Quick, test_response_eof
     ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
@@ -1462,8 +1587,8 @@ module Client_connection = struct
     ; "Empty fixed body shuts down writer", `Quick, test_empty_fixed_body
     ; "Fixed body shuts down writer if connection is not persistent", `Quick, test_fixed_body
     ; "Fixed body doesn't shut down the writer if connection is persistent",`Quick, test_fixed_body_persistent_connection
-    ; "Client support for upgrading a connection", `Quick, test_client_upgrade ]
-
+    ; "Client support for upgrading a connection", `Quick, test_client_upgrade
+    ]
 end
 
 let () =
@@ -1472,6 +1597,8 @@ let () =
     ; "method"           , Method.tests
     ; "iovec"            , IOVec.tests
     ; "headers"          , Headers.tests
+    ; "request"          , Request.tests
+    ; "response"         , Response.tests
     ; "client connection", Client_connection.tests
     ; "server connection", Server_connection.tests
     ]
