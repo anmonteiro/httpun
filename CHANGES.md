@@ -60,6 +60,8 @@ Unreleased
   that caused `wake_up_writer` callback bookkeeping to be slightly wrong due to
   physical equality, producing runtime errors in cases where it shouldn't
   ([#37](https://github.com/anmonteiro/httpaf/pull/37)).
+- httpaf-lwt: Close the communication channel after shutting down the client
+  ([#45](https://github.com/anmonteiro/httpaf/pull/45))
 
 httpaf (upstream) 0.6.5
 --------------
