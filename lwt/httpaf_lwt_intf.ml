@@ -89,7 +89,7 @@ module type Client = sig
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 
-  val shutdown: t -> unit
+  val shutdown: t -> unit Lwt.t
 
   val is_closed : t -> bool
 end
