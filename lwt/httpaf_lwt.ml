@@ -197,7 +197,10 @@ module Client (Io: IO) = struct
   module Client_connection = Httpaf.Client_connection
 
   type socket = Io.socket
-  type t = Client_connection.t
+  type t =
+    { connection : Client_connection.t
+    ; socket : socket
+    }
 
   let create_connection ?(config=Config.default) socket =
     let connection =
@@ -279,11 +282,13 @@ module Client (Io: IO) = struct
       Lwt.join [read_loop_exited; write_loop_exited] >>= fun () ->
       Io.close socket);
 
-    Lwt.return connection
+    Lwt.return { connection; socket }
 
-  let request = Client_connection.request
+  let request t = Client_connection.request t.connection
 
-  let shutdown = Client_connection.shutdown
+  let shutdown t =
+    Client_connection.shutdown t.connection;
+    Io.close t.socket
 
-  let is_closed = Client_connection.is_closed
+  let is_closed t = Client_connection.is_closed t.connection
 end

@@ -124,7 +124,8 @@ let set_error_and_handle_without_shutdown t error =
     let respd = current_respd_exn t in
     Respd.report_error respd error
   end
-  (* TODO: not active?! can be because of a closed FD for example. *)
+  (* If the connection is not active, we could have requested a shutdown +
+   * closed the communication channel. Nothing to do here. *)
 ;;
 
 let unexpected_eof t =
