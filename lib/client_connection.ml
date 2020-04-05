@@ -48,8 +48,8 @@ type t =
   ; request_queue : Respd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already written the request headers to the wire. *)
-  ; wakeup_writer  : (unit -> unit) list ref
-  ; wakeup_reader  : (unit -> unit) list ref
+  ; mutable wakeup_writer  : Optional_thunk.t
+  ; mutable wakeup_reader  : Optional_thunk.t
   }
 
 let is_closed t =
@@ -64,25 +64,29 @@ let is_active t =
 let current_respd_exn t =
   Queue.peek t.request_queue
 
-let on_wakeup_reader t k =
+let yield_reader t k =
   if is_closed t
-  then failwith "on_wakeup_reader on closed conn"
-  else t.wakeup_reader := k::!(t.wakeup_reader)
+  then failwith "yield_reader on closed conn"
+  else if Optional_thunk.is_some t.wakeup_reader
+  then failwith "yield_reader: only one callback can be registered at a time"
+  else t.wakeup_reader <- Optional_thunk.some k
+
+let wakeup_reader t =
+  let f = t.wakeup_reader in
+  t.wakeup_reader <- Optional_thunk.none;
+  Optional_thunk.call_if_some f
 
 let on_wakeup_writer t k =
   if is_closed t
   then failwith "on_wakeup_writer on closed conn"
-  else t.wakeup_writer := k::!(t.wakeup_writer)
+  else if Optional_thunk.is_some t.wakeup_writer
+  then failwith "on_wakeup_writer: only one callback can be registered at a time"
+  else t.wakeup_writer <- Optional_thunk.some k
 
 let wakeup_writer t =
-  let fs = !(t.wakeup_writer) in
-  t.wakeup_writer := [];
-  List.iter (fun f -> f ()) fs
-
-let wakeup_reader t =
-  let fs = !(t.wakeup_reader) in
-  t.wakeup_reader := [];
-  List.iter (fun f -> f ()) fs
+  let f = t.wakeup_writer in
+  t.wakeup_writer <- Optional_thunk.none;
+  Optional_thunk.call_if_some f
 
 let[@ocaml.warning "-16"] create ?(config=Config.default) =
   let request_queue = Queue.create () in
@@ -90,8 +94,8 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   ; reader = Reader.response request_queue
   ; writer = Writer.create ()
   ; request_queue
-  ; wakeup_writer = ref []
-  ; wakeup_reader = ref []
+  ; wakeup_writer = Optional_thunk.none
+  ; wakeup_reader = Optional_thunk.none
   }
 
 let request t request ~error_handler ~response_handler =
@@ -278,10 +282,6 @@ let next_write_operation t =
   advance_request_queue_if_necessary t;
   flush_request_body t;
   Writer.next t.writer
-;;
-
-let yield_reader t k =
-  on_wakeup_reader t k
 ;;
 
 let yield_writer t k =

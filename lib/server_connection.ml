@@ -75,7 +75,7 @@ let current_reqd_exn t =
 
 let yield_reader t k =
   if is_closed t
-  then failwith "on_wakeup_reader on closed conn"
+  then failwith "yield_reader on closed conn"
   else if Optional_thunk.is_some t.wakeup_reader
   then failwith "yield_reader: only one callback can be registered at a time"
   else t.wakeup_reader <- Optional_thunk.some k
@@ -91,7 +91,7 @@ let on_wakeup_writer t k =
   if is_closed t
   then failwith "on_wakeup_writer on closed conn"
   else if Optional_thunk.is_some t.wakeup_writer
-  then failwith "yield_writer: only one callback can be registered at a time"
+  then failwith "on_wakeup_writer: only one callback can be registered at a time"
   else t.wakeup_writer <- Optional_thunk.some k
 ;;
 

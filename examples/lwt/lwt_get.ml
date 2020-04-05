@@ -27,7 +27,7 @@ let main port host =
       (Request.create ~headers `GET "/")
   in
   Body.close_writer request_body;
-  finished >|= fun () ->
+  finished >>= fun () ->
     Client.shutdown connection
 ;;
 
