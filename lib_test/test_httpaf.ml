@@ -126,6 +126,13 @@ module Headers = struct
         "a"
         "d");
 
+    check "replace middle element"
+      ~expect:["e", "f"; "c", "z"; "a", "b"]
+      (Headers.replace
+         (Headers.of_list ["e", "f"; "c", "d"; "a", "b"])
+         "c"
+         "z");
+
     check "remove multiple trailing elements"
       ~expect:["c", "d"; "a", "d"]
       (Headers.replace

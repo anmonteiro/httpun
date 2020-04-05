@@ -53,15 +53,13 @@ type ('fd, 'io) t =
   ; request_queue          : ('fd, 'io) Reqd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already had [request_handler] called on it. *)
-  ; mutable wakeup_writer  : (unit -> unit)
-  ; mutable wakeup_reader  : (unit -> unit)
+  ; mutable wakeup_writer  : Optional_thunk.t
+  ; mutable wakeup_reader  : Optional_thunk.t
     (* Represents an unrecoverable error that will cause the connection to
      * shutdown. Holds on to the response body created by the error handler
      * that might be streaming to the client. *)
   ; mutable error_code : [`Ok | `Error of [`write] Body.t ]
   }
-
-let default_wakeup = Sys.opaque_identity (fun () -> ())
 
 let is_closed t =
   Reader.is_closed t.reader && Writer.is_closed t.writer
@@ -78,43 +76,37 @@ let current_reqd_exn t =
 let yield_reader t k =
   if is_closed t
   then failwith "on_wakeup_reader on closed conn"
-  else if not (t.wakeup_reader == default_wakeup);
+  else if Optional_thunk.is_some t.wakeup_reader
   then failwith "yield_reader: only one callback can be registered at a time"
-  else t.wakeup_reader <- k
+  else t.wakeup_reader <- Optional_thunk.some k
 ;;
 
 let wakeup_reader t =
   let f = t.wakeup_reader in
-  t.wakeup_reader <- default_wakeup;
-  f ()
+  t.wakeup_reader <- Optional_thunk.none;
+  Optional_thunk.call_if_some f
 ;;
 
 let on_wakeup_writer t k =
   if is_closed t
   then failwith "on_wakeup_writer on closed conn"
-  else if not (t.wakeup_writer == default_wakeup)
+  else if Optional_thunk.is_some t.wakeup_writer
   then failwith "yield_writer: only one callback can be registered at a time"
-  else t.wakeup_writer <- k
+  else t.wakeup_writer <- Optional_thunk.some k
 ;;
 
 let wakeup_writer t =
   let f = t.wakeup_writer in
-  t.wakeup_writer <- default_wakeup;
-  f ()
+  t.wakeup_writer <- Optional_thunk.none;
+  Optional_thunk.call_if_some f
 ;;
 
 let transfer_writer_callback t reqd =
-  (* Note: it's important that we don't call `Reqd.on_more_output_available` if
-   * no `wakeup_writer` callback has been registered. In the current
-   * implementation, `Reqd` performs its own bookkeeping by performing its own
-   * physical equality check. If `Server_connection` registers its dummy
-   * callback, `Reqd`'s physical equality check with _its own_ dummy callback
-   * will fail and cause weird bugs. *)
-  if not (t.wakeup_writer == default_wakeup) then begin
+  if Optional_thunk.is_some t.wakeup_writer
+  then (
     let f = t.wakeup_writer in
-    t.wakeup_writer <- default_wakeup;
-    Reqd.on_more_output_available reqd f
-  end
+    t.wakeup_writer <- Optional_thunk.none;
+    Reqd.on_more_output_available reqd (Optional_thunk.unchecked_value f))
 ;;
 
 let default_error_handler ?request:_ error handle =
@@ -150,8 +142,8 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   ; request_handler = request_handler
   ; error_handler   = error_handler
   ; request_queue
-  ; wakeup_writer   = default_wakeup
-  ; wakeup_reader   = default_wakeup
+  ; wakeup_writer   = Optional_thunk.none
+  ; wakeup_reader   = Optional_thunk.none
   ; error_code = `Ok
   }
 
