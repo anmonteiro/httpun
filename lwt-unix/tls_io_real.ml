@@ -84,9 +84,10 @@ module Io :
     match Tls_lwt.Unix.epoch tls with `Error -> `Error | `Ok _ -> `Open
 end
 
+let null_auth ~host:_ _ = Ok None
+
 let make_client socket =
-  X509_lwt.authenticator `No_authentication_I'M_STUPID >>= fun authenticator ->
-  let config = Tls.Config.client ~authenticator () in
+  let config = Tls.Config.client ~authenticator:null_auth () in
   Tls_lwt.Unix.client_of_fd config socket
 
 let make_server ~certfile ~keyfile socket =
