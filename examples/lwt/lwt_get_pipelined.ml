@@ -41,7 +41,7 @@ let main port host =
   in
   Body.close_writer request_body';
   Body.close_writer request_body;
-  Lwt.join [finished; finished'] >|= fun () ->
+  Lwt.join [finished; finished'] >>= fun () ->
     Client.shutdown connection
 ;;
 
