@@ -74,9 +74,9 @@ module Io :
         | exn ->
           Lwt.fail exn)
 
-  let shutdown_send tls = ignore (Tls_lwt.Unix.close_tls tls)
+  let shutdown_send _tls = ()
 
-  let shutdown_receive tls = ignore (Tls_lwt.Unix.close_tls tls)
+  let shutdown_receive _tls = ()
 
   let close tls = Tls_lwt.Unix.close tls
 

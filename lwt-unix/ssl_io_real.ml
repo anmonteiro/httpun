@@ -75,17 +75,21 @@ struct
         | exn ->
           Lwt.fail exn)
 
-  let shutdown_send ssl =
-    ignore
-      ( Lwt_ssl.ssl_shutdown ssl >|= fun () ->
-        Lwt_ssl.shutdown ssl Unix.SHUTDOWN_SEND )
+  (* From RFC8446§6.1:
+   *   The client and the server must share knowledge that the connection is
+   *   ending in order to avoid a truncation attack.
+   *
+   * Note: In the SSL / TLS runtimes we can't just shutdown one part of the
+   * full-duplex connection, as both sides must know that the underlying TLS
+   * conection is closing. *)
+  let shutdown_send _ssl = ()
 
-  let shutdown_receive ssl =
-    ignore
-      ( Lwt_ssl.ssl_shutdown ssl >|= fun () ->
-        Lwt_ssl.shutdown ssl Unix.SHUTDOWN_RECEIVE )
+  let shutdown_receive _ssl = ()
 
-  let close = Lwt_ssl.close
+  let close ssl =
+    Lwt_ssl.ssl_shutdown ssl >>= fun () ->
+      Lwt.wrap2 Lwt_ssl.shutdown ssl Unix.SHUTDOWN_ALL >>= fun () ->
+      Lwt_ssl.close ssl
 
   let state ssl =
     match Lwt_unix.state (Lwt_ssl.get_fd ssl) with
