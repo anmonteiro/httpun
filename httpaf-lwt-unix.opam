@@ -21,7 +21,7 @@ depends: [
   "lwt"
 ]
 depopts: [
-  "tls" {>= "0.11.0"}
+  "tls"
   "lwt_ssl"
 ]
 pin-depends: [

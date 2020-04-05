@@ -42,44 +42,39 @@ module Io
   type socket = Lwt_unix.file_descr
   type addr = Unix.sockaddr
 
+  let close socket =
+    match Lwt_unix.state socket with
+    | Closed -> Lwt.return_unit
+    | _ ->
+      Lwt.catch
+        (fun () -> Lwt_unix.close socket)
+        (fun _exn -> Lwt.return_unit)
+
   let read socket bigstring ~off ~len =
     Lwt.catch
-      (fun () -> Lwt_bytes.read socket bigstring off len)
+      (fun () ->
+        Lwt_bytes.read socket bigstring off len >|= function
+          | 0 -> `Eof
+          | n -> `Ok n)
       (function
       | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
         Lwt.fail exn
       | exn ->
-        Lwt.async (fun () ->
-          Lwt_unix.close socket);
+        Lwt.async (fun () -> close socket);
         Lwt.fail exn)
-
-     >>= fun bytes_read ->
-    if bytes_read = 0 then
-      Lwt.return `Eof
-    else
-      Lwt.return (`Ok bytes_read)
 
   let writev socket = Faraday_lwt_unix.writev_of_fd socket
 
-   let shutdown socket command =
-    try Lwt_unix.shutdown socket command
-    with Unix.Unix_error (Unix.ENOTCONN, _, _) -> ()
+  let shutdown socket command =
+    if Lwt_unix.state socket <> Lwt_unix.Closed then
+      try Lwt_unix.shutdown socket command
+      with Unix.Unix_error (Unix.ENOTCONN, _, _) -> ()
 
   let shutdown_send socket =
-    if not (Lwt_unix.state socket = Lwt_unix.Closed) then
-      shutdown socket Unix.SHUTDOWN_SEND
+    shutdown socket Unix.SHUTDOWN_SEND
 
   let shutdown_receive socket =
-    if not (Lwt_unix.state socket = Lwt_unix.Closed) then
-      shutdown socket Unix.SHUTDOWN_RECEIVE
-
-  let close socket =
-    if Lwt_unix.state socket <> Lwt_unix.Closed then
-      Lwt.catch
-        (fun () -> Lwt_unix.close socket)
-        (fun _exn -> Lwt.return_unit)
-    else
-      Lwt.return_unit
+    shutdown socket Unix.SHUTDOWN_RECEIVE
 
   let state socket =
     match Lwt_unix.state socket with
