@@ -861,6 +861,7 @@ module Server_connection = struct
       (String.length eof_request_string) c;
     Alcotest.check read_operation "Error shuts down the reader"
       `Close (next_read_operation t);
+    Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
     !continue_error ();
     Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     writer_woken_up := false;
@@ -1019,6 +1020,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "malformed request", `Quick, test_malformed_request
     ; "malformed request (async)", `Quick, test_malformed_request_async
     ; "multiple malformed requests?", `Quick, test_malformed_request_async_multiple_errors
+    ; "malformed request, streaming error response", `Quick, test_malformed_request_streaming_error_response
     ; "malformed request (EOF)", `Quick, test_malformed_request_eof
     ; "respond with upgrade", `Quick, test_respond_with_upgrade
     ; "writer unexpected eof", `Quick, test_unexpected_eof
