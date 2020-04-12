@@ -92,7 +92,9 @@ let yield_writer t k =
   then failwith "yield_writer on closed conn"
   else if Optional_thunk.is_some t.wakeup_writer
   then failwith "on_wakeup_writer: only one callback can be registered at a time"
-  else t.wakeup_writer <- Optional_thunk.some k
+  else match t.error_code with
+  | `Ok -> t.wakeup_writer <- Optional_thunk.some k
+  | `Error body -> Body.when_ready_to_write body k
 ;;
 
 let wakeup_writer t =
@@ -203,35 +205,6 @@ let set_error_and_handle ?request t error =
 let report_exn t exn =
   set_error_and_handle t (`Exn exn)
 
-(* let advance_request_queue_if_necessary t =
-  if is_active t then begin
-    let reqd = current_reqd_exn t in
-    if Reqd.persistent_connection reqd then begin
-      if Reqd.is_complete reqd then begin
-        ignore (Queue.take t.request_queue);
-        if not (Queue.is_empty t.request_queue)
-        then t.request_handler (current_reqd_exn t);
-        wakeup_reader t;
-      end
-    end else begin
-      ignore (Queue.take t.request_queue);
-      Queue.iter Reqd.close_request_body t.request_queue;
-      Queue.clear t.request_queue;
-      Queue.push reqd t.request_queue;
-      wakeup_writer t;
-      if Reqd.is_complete reqd
-      then shutdown t
-      else if not (Reqd.requires_input reqd)
-      then shutdown_reader t
-    end
-  end else if Reader.is_failed t.reader then
-    (* Don't tear down the whole connection if we saw an unrecoverable parsing
-     * error, as we might be in the process of streaming back the error
-     * response body to the client. *)
-    shutdown_reader t
-  else if Reader.is_closed t.reader
-  then shutdown t *)
-
 let advance_request_queue t =
   ignore (Queue.take t.request_queue);
   if not (Queue.is_empty t.request_queue)
@@ -239,9 +212,13 @@ let advance_request_queue t =
 ;;
 
 let rec _next_read_operation t =
-  Format.eprintf "HAH: %B@."(Reader.is_failed t.reader);
   if not (is_active t) then (
-    if Reader.is_closed t.reader
+    if Reader.is_failed t.reader then
+      (* Don't tear down the whole connection if we saw an unrecoverable
+       * parsing error, as we might be in the process of streaming back the
+       * error response body to the client. *)
+      shutdown_reader t
+    else if Reader.is_closed t.reader
     then shutdown t;
     Reader.next t.reader
   ) else (
@@ -270,7 +247,6 @@ and _final_read_operation_for t reqd =
 
 let next_read_operation t =
   match _next_read_operation t with
-  (* XXX(dpatti): These two [`Error _] constructors are never returned *)
   | `Error (`Parse _)             -> set_error_and_handle          t `Bad_request; `Close
   | `Error (`Bad_request request) -> set_error_and_handle ~request t `Bad_request; `Close
   | (`Read | `Yield | `Close) as operation ->
@@ -304,15 +280,9 @@ let read t bs ~off ~len =
 let read_eof t bs ~off ~len =
   read_with_more t bs ~off ~len Complete
 
-let flush_response_body t =
-  if is_active t then
-    let reqd = current_reqd_exn t in
-    Reqd.flush_response_body reqd
-;;
-
 let rec _next_write_operation t =
   if not (is_active t) then (
-    if Reader.is_closed t.reader
+    if Reader.is_closed t.reader && t.error_code = `Ok
     then shutdown t;
     Writer.next t.writer
   ) else (
