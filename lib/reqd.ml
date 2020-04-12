@@ -35,10 +35,11 @@ type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
 module Response_state = struct
-  type t =
+  type ('handle, 'io) t =
     | Waiting   of Optional_thunk.t ref
     | Complete  of Response.t
     | Streaming of Response.t * [`write] Body.t
+    | Upgrade of Response.t * ('handle -> 'io)
 end
 
 module Input_state = struct
@@ -89,7 +90,7 @@ type ('handle, 'io) t =
   ; response_body_buffer    : Bigstringaf.t
   ; error_handler           : error_handler
   ; mutable persistent      : bool
-  ; mutable response_state  : Response_state.t
+  ; mutable response_state  : ('handle, 'io) Response_state.t
   ; mutable error_code      : [`Ok | error ]
   }
 
@@ -116,13 +117,15 @@ let response { response_state; _ } =
   match response_state with
   | Waiting _ -> None
   | Streaming(response, _)
-  | Complete response -> Some response
+  | Complete response
+  | Upgrade (response, _) -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
   | Waiting _            -> failwith "httpaf.Reqd.response_exn: response has not started"
   | Streaming(response, _)
-  | Complete response -> response
+  | Complete response
+  | Upgrade (response, _) -> response
 
 let respond_with_string t response str =
   if t.error_code <> `Ok then
@@ -277,13 +280,13 @@ let input_state t : Input_state.t =
 let output_state t : Output_state.t =
   match t.response_state with
   | Complete _ -> Complete
-  | Waiting _  -> Wait
+  | Waiting _ -> Wait
   | Streaming(_, response_body) ->
-    if Body.has_pending_output response_body
+    if not (Body.is_closed response_body)
+       || Body.has_pending_output response_body
     then Consume
-    else if Body.is_closed response_body
-    then Complete
-    else Wait
+    else Complete
+  | Upgrade _ -> Consume
 
 let flush_request_body t =
   let request_body = request_body t in
