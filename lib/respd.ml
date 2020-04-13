@@ -150,5 +150,5 @@ let flush_response_body t =
     try Body.execute_read response_body
     (* TODO: report_exn *)
     with exn ->
-      Format.eprintf "EXN %S@." Printexc.to_string exn
+      Format.eprintf "EXN %S@." (Printexc.to_string exn)
     (* report_exn t exn *)
