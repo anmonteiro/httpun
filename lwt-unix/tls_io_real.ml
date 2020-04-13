@@ -80,8 +80,6 @@ module Io :
 
   let shutdown_receive _tls = ()
 
-  let close tls = Tls_lwt.Unix.close tls
-
   let state tls =
     match Tls_lwt.Unix.epoch tls with `Error -> `Error | `Ok _ -> `Open
 end

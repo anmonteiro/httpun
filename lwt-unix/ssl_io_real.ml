@@ -41,21 +41,25 @@ struct
   type addr = Unix.sockaddr
 
   let close ssl =
-    Lwt_ssl.ssl_shutdown ssl >>= fun () ->
+    let fd = Lwt_ssl.get_fd ssl in
+    match Lwt_unix.state fd with
+    | Closed ->
+      Lwt.return_unit
+    | _ ->
+      Lwt_ssl.ssl_shutdown ssl >>= fun () ->
       Lwt.catch
-      (fun () -> Lwt.wrap2 Lwt_ssl.shutdown ssl Unix.SHUTDOWN_ALL)
-      (function
-       | Unix.Unix_error (Unix.ENOTCONN, _, _) ->
-           Lwt.return_unit
-       | exn -> Lwt.fail exn)
+        (fun () -> Lwt.wrap2 Lwt_ssl.shutdown ssl Unix.SHUTDOWN_ALL)
+        (function
+          | Unix.Unix_error (Unix.ENOTCONN, _, _) ->
+            Lwt.return_unit
+          | exn ->
+            Lwt.fail exn)
       >>= fun () ->
-       let fd = Lwt_ssl.get_fd ssl in
-       match Lwt_unix.state fd with
-       | Lwt_unix.Closed -> Lwt.return_unit
-       | _ ->
-         Lwt.catch
-           (fun () -> Lwt_ssl.close ssl)
-           (fun _exn -> Lwt.return_unit)
+      match Lwt_unix.state fd with
+      | Lwt_unix.Closed ->
+        Lwt.return_unit
+      | _ ->
+        Lwt.catch (fun () -> Lwt_ssl.close ssl) (fun _exn -> Lwt.return_unit)
 
   let read ssl bigstring ~off ~len =
     Lwt.catch
