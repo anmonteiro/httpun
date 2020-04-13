@@ -1569,9 +1569,8 @@ module Client_connection = struct
           | _ -> assert false)
     in
     Body.close_writer body;
-    write_request  t request';
+    write_request t request';
     writer_yielded t;
-    (* writer_closed  t; *)
     reader_ready t;
     let c = feed_string  t "HTTP/1.1 200 OK\r\nDate" in
     Alcotest.(check int) "read the status line" c 17;
@@ -1588,7 +1587,6 @@ module Client_connection = struct
     ; "report_exn"  , `Quick, test_report_exn
     ; "input_shrunk", `Quick, test_input_shrunk
     ; "multiple GET, last request closes connection", `Quick, test_get_last_close
-    ; "Response EOF", `Quick, test_response_eof
     ; "Persistent connection, multiple GETs", `Quick, test_persistent_connection_requests
     ; "Persistent connection, request pipelining", `Quick, test_persistent_connection_requests_pipelining
     ; "Persistent connection, first request includes body", `Quick, test_persistent_connection_requests_pipelining_send_body
