@@ -103,6 +103,7 @@ let header =
   lift2 (fun key value -> (key, value))
     (take_till P.is_space_or_colon <* char ':' <* spaces)
     (take_till P.is_cr <* eol >>| String.trim)
+  <* commit
   <?> "header"
 
 let headers =
