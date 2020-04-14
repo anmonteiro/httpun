@@ -75,6 +75,50 @@ let default_response_handler expected_response response body =
 
 let no_error_handler _ = assert false
 
+let test_commit_parse_after_every_header () =
+  let request' = Request.create `GET "/" in
+  let response =
+    Response.create
+      ~headers:(Headers.of_list
+        [ "Links", "/path/to/some/website"
+        ; "Links", "/path/to/some/website"
+        ; "connection", "close"
+        ])
+      `OK
+  in
+
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:no_error_handler
+  in
+  Body.close_writer body;
+  write_request t request';
+
+  let response_line = "HTTP/1.1 200 OK\r\n" in
+  let single_header = "Links: /path/to/some/website\r\n" in
+  let r =
+    (* Each header is 30 bytes *)
+    response_line ^ single_header ^ single_header ^ "connection: close\r\n\r\n"
+  in
+  let bs = Bigstringaf.of_string r ~off:0 ~len:(String.length r) in
+  let c = read t bs ~off:0 ~len:(String.length response_line + 15) in
+  Alcotest.(check int) "only reads the response line" (String.length response_line) c;
+
+  let c' =
+    read t bs ~off:c ~len:(String.length single_header)
+  in
+  Alcotest.(check int) "parser can read a single header and commit" (String.length single_header) c';
+
+  let c'' = read_eof t bs ~off:(c + c') ~len:(String.length r - (c + c')) in
+  Alcotest.(check int) "read_eof with the rest of the input is accepted" (String.length r - (c + c')) c'';
+
+  connection_is_shutdown t;
+;;
+
 let test_get () =
   let request' = Request.create `GET "/" in
   let response = Response.create `OK in
@@ -580,7 +624,8 @@ let test_client_upgrade () =
 ;;
 
 let tests =
-  [ "GET"         , `Quick, test_get
+  [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
+  ; "GET"         , `Quick, test_get
   ; "Response EOF", `Quick, test_response_eof
   ; "Response header order preserved", `Quick, test_response_header_order
   ; "report_exn"  , `Quick, test_report_exn

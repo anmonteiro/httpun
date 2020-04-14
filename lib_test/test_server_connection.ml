@@ -126,6 +126,29 @@ let test_reader_is_closed_after_eof () =
   connection_is_shutdown t;
 ;;
 
+let test_commit_parse_after_every_header () =
+  let t = create default_request_handler in
+  let request_line = "GET / HTTP/1.1\r\n" in
+  let single_header = "Links: /path/to/some/website\r\n" in
+  let r =
+    (* Each header is 30 bytes *)
+    request_line ^ single_header ^ single_header ^ "connection: close\r\n\r\n"
+  in
+  let bs = Bigstringaf.of_string r ~off:0 ~len:(String.length r) in
+  let c = read t bs ~off:0 ~len:30 in
+  Alcotest.(check int) "only reads the request line" (String.length request_line) c;
+
+  let c' =
+    read t bs ~off:c ~len:(String.length single_header)
+  in
+  Alcotest.(check int) "parser can read a single header and commit" (String.length single_header) c';
+
+  let c'' = read_eof t bs ~off:(c + c') ~len:(String.length r - (c + c')) in
+  Alcotest.(check int) "read_eof with the rest of the input is accepted" (String.length r - (c + c')) c'';
+  write_response t (Response.create `OK);
+  connection_is_shutdown t;
+;;
+
 let test_single_get () =
   (* Single GET *)
   let t = create default_request_handler in
@@ -748,6 +771,7 @@ let test_yield_before_starting_a_response () =
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
+  ; "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "single GET"            , `Quick, test_single_get
   ; "multiple GETs"         , `Quick, test_multiple_get
   ; "asynchronous response" , `Quick, test_asynchronous_response
