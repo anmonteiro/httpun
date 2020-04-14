@@ -103,13 +103,14 @@ let header =
   lift2 (fun key value -> (key, value))
     (take_till P.is_space_or_colon <* char ':' <* spaces)
     (take_till P.is_cr <* eol >>| String.trim)
+  <* commit
   <?> "header"
 
 let headers =
   fix (fun headers ->
     let _emp = return (fun x -> x) in
     let _rec =
-      lift2 (fun header f headers -> f (header :: headers)) (header <* commit) headers
+      lift2 (fun header f headers -> f (header :: headers)) header headers
     in
     peek_char_fail
     >>= function
