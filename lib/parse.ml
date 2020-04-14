@@ -109,7 +109,7 @@ let headers =
   fix (fun headers ->
     let _emp = return (fun x -> x) in
     let _rec =
-      lift2 (fun header f headers -> f (header :: headers)) header headers
+      lift2 (fun header f headers -> f (header :: headers)) (header <* commit) headers
     in
     peek_char_fail
     >>= function
