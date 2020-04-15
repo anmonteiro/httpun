@@ -34,11 +34,26 @@
 type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-type ('handle, 'io) response_state =
-  | Waiting   of Optional_thunk.t ref
-  | Complete  of Response.t
-  | Streaming of Response.t * [`write] Body.t
-  | Upgrade of Response.t * ('handle -> 'io)
+module Response_state = struct
+  type ('handle, 'io) t =
+    | Waiting   of Optional_thunk.t ref
+    | Complete  of Response.t
+    | Streaming of Response.t * [`write] Body.t
+    | Upgrade of Response.t * ('handle -> 'io)
+end
+
+module Input_state = struct
+  type t =
+    | Provide
+    | Complete
+end
+
+module Output_state = struct
+  type t =
+    | Consume
+    | Wait
+    | Complete
+end
 
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
@@ -75,7 +90,7 @@ type ('handle, 'io) t =
   ; response_body_buffer    : Bigstringaf.t
   ; error_handler           : error_handler
   ; mutable persistent      : bool
-  ; mutable response_state  : ('handle, 'io) response_state
+  ; mutable response_state  : ('handle, 'io) Response_state.t
   ; mutable error_code      : [`Ok | error ]
   }
 
@@ -118,7 +133,7 @@ let respond_with_string t response str =
   match t.response_state with
   | Waiting when_done_waiting ->
     (* XXX(seliopou): check response body length *)
-    Writer.write_response  t.writer response;
+    Writer.write_response t.writer response;
     Writer.write_string t.writer str;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
@@ -171,7 +186,8 @@ let upgrade_handler t =
   match t.response_state with
   | Upgrade (_, upgrade_handler) ->
     Some upgrade_handler
-  | _ -> None
+  | _ ->
+      None
 
 let unsafe_respond_with_upgrade t headers upgrade_handler =
   match t.response_state with
@@ -257,19 +273,21 @@ let on_more_output_available t f =
 let persistent_connection t =
   t.persistent
 
-let requires_input { request_body; _ } =
-  not (Body.is_closed request_body)
+let input_state t : Input_state.t =
+  if Body.is_closed t.request_body
+  then Complete
+  else Provide
 
-let requires_output { response_state; _ } =
-  match response_state with
-  | Complete _ -> false
-  | Streaming (_, response_body) ->
-    not (Body.is_closed response_body)
-    || Body.has_pending_output response_body
-  | Waiting _ | Upgrade _ -> true
-
-let is_complete t =
-  not (requires_input t || requires_output t)
+let output_state t : Output_state.t =
+  match t.response_state with
+  | Complete _ -> Complete
+  | Waiting _ -> Wait
+  | Streaming(_, response_body) ->
+    if not (Body.is_closed response_body)
+       || Body.has_pending_output response_body
+    then Consume
+    else Complete
+  | Upgrade _ -> Consume
 
 let flush_request_body t =
   let request_body = request_body t in
