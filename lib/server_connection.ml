@@ -44,6 +44,13 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
+type ('fd, 'io) error_code =
+  | No_error
+  | Error of
+    { request: Request.t option
+    ; mutable response_state: ('fd, 'io) Reqd.Response_state.t
+    }
+
 type ('fd, 'io) t =
   { reader                 : Reader.request
   ; writer                 : Writer.t
@@ -58,7 +65,7 @@ type ('fd, 'io) t =
     (* Represents an unrecoverable error that will cause the connection to
      * shutdown. Holds on to the response body created by the error handler
      * that might be streaming to the client. *)
-  ; mutable error_code : [`Ok | `Error of [`write] Body.t ]
+  ; mutable error_code : ('fd, 'io) error_code
   }
 
 let is_closed t =
@@ -87,14 +94,31 @@ let wakeup_reader t =
   Optional_thunk.call_if_some f
 ;;
 
+let on_more_error_output_available response_state f =
+  match response_state with
+  | Reqd.Response_state.Waiting when_done_waiting ->
+    if Optional_thunk.is_some !when_done_waiting
+    then failwith "httpaf.Reqd.on_more_output_available: only one callback can be registered at a time";
+    when_done_waiting := Optional_thunk.some f
+  | Streaming(_, response_body) ->
+    Body.when_ready_to_write response_body f
+  | Complete _ ->
+    failwith "httpaf.Reqd.on_more_output_available: response already complete"
+  | Upgrade _ ->
+    (* XXX(anmonteiro): Connections that have been upgraded "require output"
+     * forever, but outside the HTTP layer, meaning they're permanently
+     * "yielding". We don't register the wakeup callback because it's not going
+     * to get called. *)
+    ()
+
 let yield_writer t k =
   if is_closed t
   then failwith "yield_writer on closed conn"
   else if Optional_thunk.is_some t.wakeup_writer
   then failwith "on_wakeup_writer: only one callback can be registered at a time"
   else match t.error_code with
-  | `Ok -> t.wakeup_writer <- Optional_thunk.some k
-  | `Error body -> Body.when_ready_to_write body k
+  | No_error -> t.wakeup_writer <- Optional_thunk.some k
+  | Error { response_state; _ } -> on_more_error_output_available response_state k
 ;;
 
 let wakeup_writer t =
@@ -146,7 +170,7 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   ; request_queue
   ; wakeup_writer   = Optional_thunk.none
   ; wakeup_reader   = Optional_thunk.none
-  ; error_code = `Ok
+  ; error_code = No_error
   }
 
 let shutdown_reader t =
@@ -187,19 +211,31 @@ let set_error_and_handle ?request t error =
     shutdown_reader t;
     let writer = t.writer in
     match t.error_code with
-    | `Ok ->
-      let body = Body.of_faraday (Writer.faraday writer) in
-      t.error_code <- `Error body;
+    | No_error ->
+      (* TODO(anmonteiro): can we share the response body buffer?
+       * Does this corner case exist?
+       * trying to write to the response body while we're sending the
+       * error response + body? Feels like we could share the response body
+       * buffer per the above if.
+       *
+       * *)
+      (* let error_body_buffer = Bigstringaf.create (Bigstringaf.length t.response_body_buffer) in *)
+      let response_body = Body.create t.response_body_buffer in
+      t.error_code <- Error { request; response_state = Waiting (ref Optional_thunk.none) };
       t.error_handler ?request error (fun headers ->
-          Writer.write_response writer (Response.create ~headers status);
+          let response = Response.create ~headers status in
+          Writer.write_response writer response;
+          t.error_code <- Error { request; response_state = Streaming(response, response_body) };
           wakeup_writer t;
-          body)
-    | `Error _ ->
+          response_body)
+    | Error _ ->
       (* This should not happen. Even if we try to read more, the parser does
        * not ingest it, and even if someone attempts to feed more bytes to the
        * server when we already told them to [`Close], it's not really our
        * problem. *)
-      assert false
+      (* TODO: fix this. Sigpipe when writing the error message can happen. How to shutdown well? *)
+      (* assert false *)
+      ()
   end
 
 let report_exn t exn =
@@ -280,11 +316,55 @@ let read t bs ~off ~len =
 let read_eof t bs ~off ~len =
   read_with_more t bs ~off ~len Complete
 
+let flush_response_error_body t ?request response_state =
+  match response_state with
+  | Reqd.Response_state.Streaming (response, response_body) ->
+    let request_method = match request with
+      | Some { Request.meth; _ } -> meth
+      | None ->
+        (* XXX(anmonteiro): Error responses may not have a request method if
+         * they are the result of e.g. an EOF error. *)
+        `GET
+    in
+    let encoding =
+      match Response.body_length ~request_method response with
+      | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
+      | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
+    in
+    Body.transfer_to_writer_with_encoding response_body ~encoding t.writer
+  | _ -> ()
+
+let error_output_state response_state : Reqd.Output_state.t =
+  match response_state with
+  | Reqd.Response_state.Complete _ -> Complete
+  | Waiting _ -> Wait
+  | Streaming(_, response_body) ->
+    if Body.requires_output response_body
+    then Consume
+    else Complete
+  | Upgrade _ -> Consume
+
 let rec _next_write_operation t =
   if not (is_active t) then (
-    if Reader.is_closed t.reader && t.error_code = `Ok
-    then shutdown t;
-    Writer.next t.writer
+    let next = begin match t.error_code with
+    | No_error ->
+      if Reader.is_closed t.reader
+      then shutdown t;
+      Writer.next t.writer
+    | Error { request; response_state } ->
+      begin match error_output_state response_state with
+      | Wait -> `Yield
+      | Consume ->
+        flush_response_error_body t ?request response_state;
+        Writer.next t.writer
+      | Complete ->
+        shutdown_writer t;
+        Writer.next t.writer;
+      end
+    end;
+    in
+    Format.eprintf "noooo: %s@." (match next with | `Write _ -> "write" | `Close _ -> "close" | `Yield -> "yield");
+    next
   ) else (
     let reqd = current_reqd_exn t in
     match Reqd.output_state reqd with

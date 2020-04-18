@@ -282,8 +282,7 @@ let output_state t : Output_state.t =
   | Complete _ -> Complete
   | Waiting _ -> Wait
   | Streaming(_, response_body) ->
-    if not (Body.is_closed response_body)
-       || Body.has_pending_output response_body
+    if Body.requires_output response_body
     then Consume
     else Complete
   | Upgrade _ -> Consume

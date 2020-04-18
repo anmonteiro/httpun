@@ -889,8 +889,9 @@ module Server_connection = struct
     !continue_error ();
     Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     writer_woken_up := false;
-    write_string t ~msg:"Error response and first output written"
-      "HTTP/1.1 400 Bad Request\r\n\r\ngot an error\n";
+    write_response t
+      ~body:"got an error\n"
+      (Response.create `Bad_request ~headers:Headers.empty);
     Alcotest.check write_operation "Writer is in a yield state"
       `Yield (next_write_operation t);
     yield_writer t (fun () -> writer_woken_up := true);
@@ -898,6 +899,67 @@ module Server_connection = struct
     Alcotest.(check bool) "Writer woken up once more input is available"
       true !writer_woken_up;
     write_string t ~msg:"Rest of the error response written" "more output";
+    writer_closed t;
+    Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
+  ;;
+
+  let chunked_error_handler continue_error ?request:_ _error start_response =
+    let resp_body =
+      start_response (Headers.of_list ["transfer-encoding", "chunked"])
+    in
+    Body.write_string resp_body "chunk 1\n";
+    continue_error := (fun () ->
+      Body.write_string resp_body "chunk 2\n";
+      continue_error := (fun () ->
+        Body.write_string resp_body "chunk 3\n";
+        Body.close_writer resp_body))
+  ;;
+
+  let test_malformed_request_chunked_error_response () =
+    let eof_request_string =
+      "GET / HTTP/1.1\r\nconnection: close\r\nX-Other-Header: EOF_after_this"
+    in
+    let writer_woken_up = ref false in
+    let continue_error = ref (fun () -> ()) in
+    let error_handler ?request error start_response =
+      continue_error := (fun () ->
+        chunked_error_handler continue_error ?request error start_response)
+    in
+    let t = create ~error_handler (basic_handler "") in
+    Alcotest.check write_operation "Writer is in a yield state"
+      `Yield (next_write_operation t);
+    yield_writer t (fun () -> writer_woken_up := true);
+    let c = read_string_eof t eof_request_string in
+    Alcotest.(check int) "read consumes all input"
+      (String.length eof_request_string) c;
+    Alcotest.check read_operation "Error shuts down the reader"
+      `Close (next_read_operation t);
+    Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
+    !continue_error ();
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    writer_woken_up := false;
+    write_response t
+      ~msg:"First chunk written"
+      ~body:"8\r\nchunk 1\n\r\n"
+      (Response.create `Bad_request
+        ~headers:(Headers.of_list ["transfer-encoding", "chunked"]));
+    Alcotest.check write_operation "Writer is in a yield state"
+      `Yield (next_write_operation t);
+    yield_writer t (fun () -> writer_woken_up := true);
+    !continue_error ();
+    write_string t
+      ~msg:"Second chunk"
+      "8\r\nchunk 2\n\r\n";
+    !continue_error ();
+    write_string t
+      ~msg:"Second chunk"
+      "8\r\nchunk 3\n\r\n";
+    write_string t
+      ~msg:"Final chunk written"
+      "0\r\n\r\n";
+    Alcotest.(check bool) "Writer woken up once more input is available"
+      true !writer_woken_up;
+    writer_closed t;
     Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
   ;;
 
@@ -1046,6 +1108,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "malformed request (async)", `Quick, test_malformed_request_async
     ; "multiple malformed requests?", `Quick, test_malformed_request_async_multiple_errors
     ; "malformed request, streaming error response", `Quick, test_malformed_request_streaming_error_response
+    ; "malformed request, chunked error response", `Quick, test_malformed_request_chunked_error_response
     ; "malformed request (EOF)", `Quick, test_malformed_request_eof
     ; "respond with upgrade", `Quick, test_respond_with_upgrade
     ; "writer unexpected eof", `Quick, test_unexpected_eof
