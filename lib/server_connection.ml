@@ -302,8 +302,18 @@ let flush_response_error_body t ?request response_state =
   let request_method = match request with
     | Some { Request.meth; _ } -> meth
     | None ->
-      (* XXX(anmonteiro): Error responses may not have a request method if
-       * they are the result of e.g. an EOF error. *)
+      (* XXX(anmonteiro): Error responses may not have a request method if they
+       * are the result of e.g. an EOF error. Assuming that the request method
+       * is `GET` smells a little because it's exposing implementation details,
+       * though the only case where it'd matter would be potentially assuming
+       * the _successful_ response to a CONNECT request and sending one of the
+       * forbidden headers according to RFC7231§4.3.6:
+       *
+       *   A server MUST NOT send any Transfer-Encoding or Content-Length
+       *   header fields in a 2xx (Successful) response to CONNECT.
+       *
+       * If we're running this code, however, we're not responding with a
+       * successful status code, which makes us compliant to the above. *)
       `GET
   in
   Response_state.flush_response_body response_state ~request_method t.writer
