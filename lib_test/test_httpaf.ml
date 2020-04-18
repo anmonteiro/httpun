@@ -867,9 +867,6 @@ module Server_connection = struct
   ;;
 
   let test_malformed_request_streaming_error_response () =
-    let eof_request_string =
-      "GET / HTTP/1.1\r\nconnection: close\r\nX-Other-Header: EOF_after_this"
-    in
     let writer_woken_up = ref false in
     let continue_error = ref (fun () -> ()) in
     let error_handler ?request error start_response =
@@ -916,9 +913,6 @@ module Server_connection = struct
   ;;
 
   let test_malformed_request_chunked_error_response () =
-    let eof_request_string =
-      "GET / HTTP/1.1\r\nconnection: close\r\nX-Other-Header: EOF_after_this"
-    in
     let writer_woken_up = ref false in
     let continue_error = ref (fun () -> ()) in
     let error_handler ?request error start_response =
@@ -960,6 +954,37 @@ module Server_connection = struct
     Alcotest.(check bool) "Writer woken up once more input is available"
       true !writer_woken_up;
     writer_closed t;
+    Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
+  ;;
+
+  (* This may happen when writing an asynchronous error response on a broken
+   * pipe. *)
+  let test_malformed_request_double_report_exn () =
+    let writer_woken_up = ref false in
+    let continue_error = ref (fun () -> ()) in
+    let error_handler ?request error start_response =
+      continue_error := (fun () ->
+        streaming_error_handler continue_error ?request error start_response)
+    in
+    let t = create ~error_handler (basic_handler "") in
+    Alcotest.check write_operation "Writer is in a yield state"
+      `Yield (next_write_operation t);
+    yield_writer t (fun () -> writer_woken_up := true);
+    let c = read_string_eof t eof_request_string in
+    Alcotest.(check int) "read consumes all input"
+      (String.length eof_request_string) c;
+    Alcotest.check read_operation "Error shuts down the reader"
+      `Close (next_read_operation t);
+    Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
+    !continue_error ();
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    writer_woken_up := false;
+    write_response t
+      ~body:"got an error\n"
+      (Response.create `Bad_request ~headers:Headers.empty);
+    Alcotest.check write_operation "Writer is in a yield state"
+      `Yield (next_write_operation t);
+    report_exn t (Failure "broken pipe");
     Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
   ;;
 
@@ -1109,6 +1134,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "multiple malformed requests?", `Quick, test_malformed_request_async_multiple_errors
     ; "malformed request, streaming error response", `Quick, test_malformed_request_streaming_error_response
     ; "malformed request, chunked error response", `Quick, test_malformed_request_chunked_error_response
+    ; "malformed request, double report_exn", `Quick, test_malformed_request_double_report_exn
     ; "malformed request (EOF)", `Quick, test_malformed_request_eof
     ; "respond with upgrade", `Quick, test_respond_with_upgrade
     ; "writer unexpected eof", `Quick, test_unexpected_eof

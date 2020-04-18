@@ -208,13 +208,16 @@ let set_error_and_handle ?request t error =
           wakeup_writer t;
           response_body)
     | Error _ ->
-      (* This should not happen. Even if we try to read more, the parser does
-       * not ingest it, and even if someone attempts to feed more bytes to the
-       * server when we already told them to [`Close], it's not really our
-       * problem. *)
-      (* TODO: fix this. Sigpipe when writing the error message can happen. How to shutdown well? *)
-      (* assert false *)
-      ()
+      (* When reading, this should be impossible: even if we try to read more,
+       * the parser does not ingest it, and even if someone attempts to feed
+       * more bytes to the parser when we already told them to [`Close], that's
+       * really their own fault.
+       *
+       * We do, however, need to handle this case if any other exception is
+       * reported (we're already handling an error and e.g. the writing channel
+       * is closed). Just shut down the connection in that case.
+       *)
+      shutdown t
   end
 
 let report_exn t exn =
