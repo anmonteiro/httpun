@@ -460,7 +460,7 @@ let test_input_shrunk () =
         | _ -> assert false)
   in
   Body.close_writer body;
-  write_request  t request';
+  write_request t request';
   writer_yielded  t;
   reader_ready t;
   let c = feed_string  t "HTTP/1.1 200 OK\r\nDate" in

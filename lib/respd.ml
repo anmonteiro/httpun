@@ -5,12 +5,27 @@ type error =
   | `Invalid_response_body_length of Response.t
   | `Exn of exn ]
 
-type state =
-  | Uninitialized
-  | Awaiting_response
-  | Received_response of Response.t * [`read] Body.t
-  | Upgraded of Response.t
-  | Closed
+module Request_state = struct
+  type t =
+    | Uninitialized
+    | Awaiting_response
+    | Received_response of Response.t * [`read] Body.t
+    | Upgraded of Response.t
+    | Closed
+end
+
+module Input_state = struct
+  type t =
+    | Provide
+    | Complete
+end
+
+module Output_state = struct
+  type t =
+    | Consume
+    | Wait
+    | Complete
+end
 
 type t =
   { request          : Request.t
@@ -19,8 +34,8 @@ type t =
   ; error_handler    : (error -> unit)
   ; mutable error_code : [ `Ok | error ]
   ; writer : Writer.t
-  ; mutable state    : state
-  ; mutable persistent      : bool
+  ; mutable state : Request_state.t
+  ; mutable persistent : bool
   }
 
 let create error_handler request request_body writer response_handler =
@@ -28,7 +43,7 @@ let create error_handler request request_body writer response_handler =
     let t = Lazy.force t in
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    let next_state = match response.status with
+    let next_state : Request_state.t = match response.status with
       | `Switching_protocols ->
         Upgraded response
       | _ ->
@@ -56,7 +71,8 @@ let request_body { request_body; _ } = request_body
 
 let write_request t =
   Writer.write_request t.writer t.request;
-  t.state <- Awaiting_response
+  Writer.flush t.writer (fun () ->
+    t.state <- Awaiting_response)
 
 let on_more_output_available { request_body; _ } f =
   Body.when_ready_to_write request_body f
@@ -89,30 +105,31 @@ let close_response_body t =
     Body.close_reader response_body
   | Upgraded _ -> t.state <- Closed
 
-let requires_input t =
+let input_state t : Input_state.t =
   match t.state with
-  | Uninitialized -> true
-  | Awaiting_response -> true
-  | Upgraded _ -> false
+  | Uninitialized
+  | Awaiting_response -> Provide
   | Received_response (_, response_body) ->
-    not (Body.is_closed response_body)
-  | Closed -> false
+    if not (Body.is_closed response_body)
+    then Provide
+    else Complete
+  | Upgraded _
+  | Closed -> Complete
 
-let requires_output { request_body; state; _ } =
+let output_state { request_body; state; _ } : Output_state.t =
   match state with
   | Upgraded _ ->
     (* XXX(anmonteiro): Connections that have been upgraded "require output"
      * forever, but outside the HTTP layer, meaning they're permanently
      * "yielding". For now they need to be explicitly shutdown in order to
      * transition the response descriptor to the `Closed` state. *)
-    true
+    Consume
   | state ->
-    state = Uninitialized ||
-    not (Body.is_closed request_body) ||
-    Body.has_pending_output request_body
-
-let is_complete t =
-  not (requires_input t || requires_output t)
+    if state = Uninitialized ||
+       not (Body.is_closed request_body) ||
+       Body.has_pending_output request_body
+    then Consume
+    else Complete
 
 let flush_request_body { request; request_body; writer; _ } =
   if Body.has_pending_output request_body then begin
@@ -130,6 +147,6 @@ let flush_response_body t =
   | Received_response(_, response_body) ->
     try Body.execute_read response_body
     (* TODO: report_exn *)
-    with _exn ->
-      Format.eprintf "EXN@."
+    with exn ->
+      Format.eprintf "EXN %S@." (Printexc.to_string exn)
     (* report_exn t exn *)

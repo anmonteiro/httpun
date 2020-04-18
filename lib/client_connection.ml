@@ -76,9 +76,9 @@ let wakeup_reader t =
   t.wakeup_reader <- Optional_thunk.none;
   Optional_thunk.call_if_some f
 
-let on_wakeup_writer t k =
+let yield_writer t k =
   if is_closed t
-  then failwith "on_wakeup_writer on closed conn"
+  then failwith "yield_writer on closed conn"
   else if Optional_thunk.is_some t.wakeup_writer
   then failwith "yield_writer: only one callback can be registered at a time"
   else t.wakeup_writer <- Optional_thunk.some k
@@ -117,25 +117,6 @@ let request t request ~error_handler ~response_handler =
   request_body
 ;;
 
-let flush_request_body t =
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    Respd.flush_request_body respd
-  end
-
-let set_error_and_handle_without_shutdown t error =
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    Respd.report_error respd error
-  end
-  (* If the connection is not active, we could have requested a shutdown +
-   * closed the communication channel. Nothing to do here. *)
-;;
-
-let unexpected_eof t =
-  set_error_and_handle_without_shutdown t (`Malformed_response "unexpected eof");
-;;
-
 let shutdown_reader t =
   Reader.force_close t.reader;
   if is_active t
@@ -143,7 +124,6 @@ let shutdown_reader t =
   else wakeup_reader t
 
 let shutdown_writer t =
-  flush_request_body t;
   Writer.close t.writer;
   if is_active t then begin
     let respd = current_respd_exn t in
@@ -152,6 +132,8 @@ let shutdown_writer t =
 ;;
 
 let shutdown t =
+  Queue.iter Respd.close_response_body t.request_queue;
+  Queue.clear t.request_queue;
   shutdown_reader t;
   shutdown_writer t;
   wakeup_reader t;
@@ -161,8 +143,15 @@ let shutdown t =
 (* TODO: Need to check in the RFC if reporting an error, e.g. in a malformed
  * response causes the whole connection to shutdown. *)
 let set_error_and_handle t error =
-  shutdown t;
-  set_error_and_handle_without_shutdown t error;
+  if is_active t then begin
+    let respd = current_respd_exn t in
+    shutdown t;
+    Respd.report_error respd error
+  end
+;;
+
+let unexpected_eof t =
+  set_error_and_handle t (`Malformed_response "unexpected eof");
 ;;
 
 let report_exn t exn =
@@ -174,70 +163,63 @@ exception Local
 let maybe_pipeline_queued_requests t =
   (* Don't bother trying to pipeline if there aren't multiple requests in the
    * queue. *)
-  if Queue.length t.request_queue > 1 then begin
-    match Queue.fold (fun prev respd ->
-      begin match prev with
-      | None -> ()
-      | Some prev ->
-        if respd.Respd.state = Uninitialized && not (Respd.requires_output prev)
-        then Respd.write_request respd
-        else
-          (* bail early. If we can't pipeline this request, we can't write
-           * next ones either. *)
-          raise Local
-      end;
-      Some respd)
-      None
-      t.request_queue
+  if Queue.length t.request_queue > 1 then
+    try
+      let _ = Queue.fold (fun prev respd ->
+        begin match prev with
+        | None -> ()
+        | Some prev ->
+          match respd.Respd.state, Respd.output_state prev with
+          | Uninitialized, Complete ->
+            Respd.write_request respd
+          | _ ->
+            (* bail early. If we can't pipeline this request, we can't write
+             * next ones either. *)
+            raise Local
+        end;
+        Some respd)
+        None
+        t.request_queue
+      in ()
     with
     | _ -> ()
-    | exception Local -> ()
+
+let advance_request_queue t =
+  ignore (Queue.take t.request_queue);
+  if not (Queue.is_empty t.request_queue) then begin
+    (* write request to the wire *)
+    Respd.write_request (current_respd_exn t);
+    wakeup_writer t;
   end
 
-let advance_request_queue_if_necessary t =
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    if Respd.persistent_connection respd then begin
-      if Respd.is_complete respd then begin
-        ignore (Queue.take t.request_queue);
-        if not (Queue.is_empty t.request_queue) then begin
-          (* write request to the wire *)
-          let respd = current_respd_exn t in
-          Respd.write_request respd;
-        end;
-        wakeup_writer t;
-      end else if not (Respd.requires_output respd) then
-        (* From RFC7230§6.3.2:
-         *   A client that supports persistent connections MAY "pipeline" its
-         *   requests (i.e., send multiple requests without waiting for each
-         *   response). *)
-        maybe_pipeline_queued_requests t
-    end else begin
-      ignore (Queue.take t.request_queue);
-      Queue.iter Respd.close_response_body t.request_queue;
-      Queue.clear t.request_queue;
-      Queue.push respd t.request_queue;
-      wakeup_writer t;
-      if Respd.is_complete respd
-      then shutdown t
-      else if not (Respd.requires_output respd)
-      then shutdown_writer t
-    end
-  end else if Reader.is_closed t.reader
-  then shutdown t
-
-let _next_read_operation t =
-  advance_request_queue_if_necessary t;
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    if      Respd.requires_input        respd then Reader.next t.reader
-    else if Respd.persistent_connection respd then `Yield
-    else begin
-      shutdown_reader t;
-      Reader.next t.reader
-    end
-  end else
+let rec _next_read_operation t =
+  if not (is_active t) then (
+    if Reader.is_closed t.reader
+    then shutdown t;
     Reader.next t.reader
+  ) else (
+    let respd = current_respd_exn t in
+    match Respd.input_state respd with
+    | Provide  -> Reader.next t.reader
+    | Complete -> _final_read_operation_for t respd
+  )
+
+and _final_read_operation_for t respd =
+  let next =
+    if not (Respd.persistent_connection respd) then (
+      shutdown_reader t;
+      Reader.next t.reader;
+    ) else (
+      match Respd.output_state respd with
+      | Wait | Consume -> `Yield
+      | Complete       ->
+        advance_request_queue t;
+        _next_read_operation t;
+    )
+  in
+  wakeup_writer t;
+  next
+;;
 
 let next_read_operation t =
   match _next_read_operation t with
@@ -265,39 +247,52 @@ let read_eof t bs ~off ~len =
   let bytes_read = read_with_more t bs ~off ~len Complete in
   if is_active t then begin
     let respd = current_respd_exn t in
-    (* TODO: could just check for `Respd.requires_input`? *)
-    match respd.state with
-    | Uninitialized -> assert false
-    | Received_response _ | Closed | Upgraded _ -> ()
-    | Awaiting_response ->
-      (* TODO: review this. It makes sense to tear down the connection if an
-       * unexpected EOF is received. *)
-      shutdown t;
-      unexpected_eof t
+    match Respd.input_state respd with
+    | Provide -> unexpected_eof t
+    | Complete -> ()
   end;
   bytes_read
 ;;
 
-let next_write_operation t =
-  advance_request_queue_if_necessary t;
-  flush_request_body t;
-  Writer.next t.writer
+let rec _next_write_operation t =
+  if not (is_active t) then (
+    if Reader.is_closed t.reader
+    then shutdown t;
+    Writer.next t.writer
+  ) else (
+    let respd = current_respd_exn t in
+    match Respd.output_state respd with
+    | Wait -> `Yield
+    | Consume ->
+      Respd.flush_request_body respd;
+      Writer.next t.writer
+    | Complete -> _final_write_operation_for t respd
+  )
+
+and _final_write_operation_for t respd =
+  let next =
+    if not (Respd.persistent_connection respd) then (
+      shutdown_writer t;
+      Writer.next t.writer;
+    ) else (
+      match Respd.input_state respd with
+      | Provide ->
+        (* From RFC7230§6.3.2:
+         *   A client that supports persistent connections MAY "pipeline" its
+         *   requests (i.e., send multiple requests without waiting for each
+         *   response). *)
+        maybe_pipeline_queued_requests t;
+        Writer.next t.writer;
+      | Complete ->
+        advance_request_queue t;
+        _next_write_operation t;
+    )
+  in
+  wakeup_reader t;
+  next
 ;;
 
-let yield_writer t k =
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    if Respd.requires_output respd then
-      Respd.on_more_output_available respd k
-    else if Respd.persistent_connection respd then
-      on_wakeup_writer t k
-    else begin
-      (*  TODO: call shutdown? *)
-      Writer.close t.writer;
-      k ()
-    end
-  end else
-    on_wakeup_writer t k
+let next_write_operation t = _next_write_operation t
 
 let report_write_result t result =
   Writer.report_result t.writer result
