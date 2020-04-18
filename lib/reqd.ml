@@ -34,24 +34,9 @@
 type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-module Response_state = struct
-  type ('handle, 'io) t =
-    | Waiting   of Optional_thunk.t ref
-    | Complete  of Response.t
-    | Streaming of Response.t * [`write] Body.t
-    | Upgrade of Response.t * ('handle -> 'io)
-end
-
 module Input_state = struct
   type t =
     | Provide
-    | Complete
-end
-
-module Output_state = struct
-  type t =
-    | Consume
-    | Wait
     | Complete
 end
 
@@ -183,10 +168,7 @@ let respond_with_streaming ?(flush_headers_immediately=false) t response =
   unsafe_respond_with_streaming ~flush_headers_immediately t response
 
 let upgrade_handler t =
-  match t.response_state with
-  | Upgrade (_, upgrade_handler) ->
-    Some upgrade_handler
-  | _ -> None
+  Response_state.upgrade_handler t.response_state
 
 let unsafe_respond_with_upgrade t headers upgrade_handler =
   match t.response_state with
@@ -253,21 +235,7 @@ let error_code t =
   | `Ok             -> None
 
 let on_more_output_available t f =
-  match t.response_state with
-  | Waiting when_done_waiting ->
-    if Optional_thunk.is_some !when_done_waiting
-    then failwith "httpaf.Reqd.on_more_output_available: only one callback can be registered at a time";
-    when_done_waiting := Optional_thunk.some f
-  | Streaming(_, response_body) ->
-    Body.when_ready_to_write response_body f
-  | Complete _ ->
-    failwith "httpaf.Reqd.on_more_output_available: response already complete"
-  | Upgrade _ ->
-    (* XXX(anmonteiro): Connections that have been upgraded "require output"
-     * forever, but outside the HTTP layer, meaning they're permanently
-     * "yielding". We don't register the wakeup callback because it's not going
-     * to get called. *)
-    ()
+  Response_state.on_more_output_available t.response_state f
 
 let persistent_connection t =
   t.persistent
@@ -277,15 +245,7 @@ let input_state t : Input_state.t =
   then Complete
   else Provide
 
-let output_state t : Output_state.t =
-  match t.response_state with
-  | Complete _ -> Complete
-  | Waiting _ -> Wait
-  | Streaming(_, response_body) ->
-    if Body.requires_output response_body
-    then Consume
-    else Complete
-  | Upgrade _ -> Consume
+let output_state t = Response_state.output_state t.response_state
 
 let flush_request_body t =
   let request_body = request_body t in
@@ -294,13 +254,5 @@ let flush_request_body t =
   with exn -> report_exn t exn
 
 let flush_response_body t =
-  match t.response_state with
-  | Streaming (response, response_body) ->
-    let request_method = t.request.Request.meth in
-    let encoding =
-      match Response.body_length ~request_method response with
-      | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
-      | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
-    in
-    Body.transfer_to_writer_with_encoding response_body ~encoding t.writer
-  | _ -> ()
+  let request_method = t.request.Request.meth in
+  Response_state.flush_response_body t.response_state ~request_method t.writer
