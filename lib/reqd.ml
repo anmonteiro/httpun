@@ -39,11 +39,19 @@ module Response_state = struct
     | Waiting   of Optional_thunk.t ref
     | Complete  of Response.t
     | Streaming of Response.t * [`write] Body.t
+    | Upgrade of Response.t * (unit -> unit)
 end
 
 module Input_state = struct
   type t =
     | Ready
+    | Complete
+end
+
+module Output_state = struct
+  type t =
+    | Consume
+    | Wait
     | Complete
 end
 
@@ -123,7 +131,7 @@ let respond_with_string t response str =
   match t.response_state with
   | Waiting when_done_waiting ->
     (* XXX(seliopou): check response body length *)
-    Writer.write_response  t.writer response;
+    Writer.write_response t.writer response;
     Writer.write_string t.writer str;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
@@ -236,19 +244,16 @@ let input_state t : Input_state.t =
   else Ready
 ;;
 
-let requires_output { response_state; _ } =
-  match response_state with
-  | Complete _ -> false
-  | Streaming (_, response_body) ->
-    not (Body.is_closed response_body)
-    || Body.has_pending_output response_body
-  | Waiting _ -> true
-
-let is_complete t =
-  match input_state t with
-  | Complete -> not (requires_output t)
-  | Ready    -> false
-;;
+let output_state t : Output_state.t =
+  match t.response_state with
+  | Complete _ -> Complete
+  | Waiting _ -> Wait
+  | Streaming(_, response_body) ->
+    if not (Body.is_closed response_body)
+       || Body.has_pending_output response_body
+    then Consume
+    else Complete
+  | Upgrade _ -> Consume
 
 let flush_request_body t =
   let request_body = request_body t in
