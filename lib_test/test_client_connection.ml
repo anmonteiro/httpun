@@ -34,6 +34,10 @@ let reader_yielded t =
     `Yield (next_read_operation t :> [`Close | `Read | `Yield]);
 ;;
 
+let reader_closed t =
+  Alcotest.check read_operation "Reader is closed"
+    `Close (next_read_operation t :> [`Close | `Read | `Yield])
+
 let write_string ?(msg="output written") t str =
   let len = String.length str in
   Alcotest.(check (option string)) msg
@@ -56,10 +60,6 @@ let writer_closed t =
   Alcotest.check write_operation "Writer is closed"
     (`Close 0) (next_write_operation t);
 ;;
-
-let reader_closed t =
-  Alcotest.check read_operation "Reader is closed"
-    `Close (next_read_operation t :> [`Close | `Read | `Yield])
 
 let connection_is_shutdown t =
   reader_closed t;
@@ -641,9 +641,3 @@ let tests =
   ; "Fixed body doesn't shut down the writer if connection is persistent",`Quick, test_fixed_body_persistent_connection
   ; "Client support for upgrading a connection", `Quick, test_client_upgrade
   ]
-
-(*
- * TODO:
- * - test client connection error handling
- *
- *)
