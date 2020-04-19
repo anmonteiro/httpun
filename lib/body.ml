@@ -142,6 +142,9 @@ let has_pending_output t =
   Faraday.has_pending_output t.faraday
   || (Faraday.is_closed t.faraday && t.write_final_if_chunked)
 
+let requires_output t =
+  not (is_closed t) || has_pending_output t
+
 let close_reader t =
   Faraday.close t.faraday;
   execute_read t

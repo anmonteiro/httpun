@@ -44,6 +44,13 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
+type error_code =
+  | No_error
+  | Error of
+    { request: Request.t option
+    ; mutable response_state: Response_state.t
+    }
+
 type t =
   { reader                 : Reader.request
   ; writer                 : Writer.t
@@ -58,7 +65,7 @@ type t =
     (* Represents an unrecoverable error that will cause the connection to
      * shutdown. Holds on to the response body created by the error handler
      * that might be streaming to the client. *)
-  ; mutable error_code : [`Ok | `Error of [`write] Body.t ]
+  ; mutable error_code : error_code
   }
 
 let is_closed t =
@@ -93,8 +100,9 @@ let yield_writer t k =
   else if Optional_thunk.is_some t.wakeup_writer
   then failwith "yield_writer: only one callback can be registered at a time"
   else match t.error_code with
-  | `Ok -> t.wakeup_writer <- Optional_thunk.some k
-  | `Error body -> Body.when_ready_to_write body k
+  | No_error -> t.wakeup_writer <- Optional_thunk.some k
+  | Error { response_state; _ } ->
+    Response_state.on_more_output_available response_state k
 ;;
 
 let wakeup_writer t =
@@ -146,7 +154,7 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   ; request_queue
   ; wakeup_writer   = Optional_thunk.none
   ; wakeup_reader   = Optional_thunk.none
-  ; error_code = `Ok
+  ; error_code = No_error
   }
 
 let shutdown_reader t =
@@ -187,19 +195,30 @@ let set_error_and_handle ?request t error =
     shutdown_reader t;
     let writer = t.writer in
     match t.error_code with
-    | `Ok ->
-      let body = Body.of_faraday (Writer.faraday writer) in
-      t.error_code <- `Error body;
+    | No_error ->
+      (* The (shared) response body buffer can be used in this case because in
+       * this conditional branch we're not sending a response
+       * (is_active t == false), and are therefore not making use of that
+       * buffer. *)
+      let response_body = Body.create t.response_body_buffer in
+      t.error_code <- Error { request; response_state = Waiting (ref Optional_thunk.none) };
       t.error_handler ?request error (fun headers ->
-          Writer.write_response writer (Response.create ~headers status);
+          let response = Response.create ~headers status in
+          Writer.write_response writer response;
+          t.error_code <- Error { request; response_state = Streaming(response, response_body) };
           wakeup_writer t;
-          body)
-    | `Error _ ->
-      (* This should not happen. Even if we try to read more, the parser does
-       * not ingest it, and even if someone attempts to feed more bytes to the
-       * server when we already told them to [`Close], it's not really our
-       * problem. *)
-      assert false
+          response_body)
+    | Error _ ->
+      (* When reading, this should be impossible: even if we try to read more,
+       * the parser does not ingest it, and even if someone attempts to feed
+       * more bytes to the parser when we already told them to [`Close], that's
+       * really their own fault.
+       *
+       * We do, however, need to handle this case if any other exception is
+       * reported (we're already handling an error and e.g. the writing channel
+       * is closed). Just shut down the connection in that case.
+       *)
+      shutdown t
   end
 
 let report_exn t exn =
@@ -273,11 +292,42 @@ let read t bs ~off ~len =
 let read_eof t bs ~off ~len =
   read_with_more t bs ~off ~len Complete
 
+let flush_response_error_body t ?request response_state =
+  let request_method = match request with
+    | Some { Request.meth; _ } -> meth
+    | None ->
+      (* XXX(anmonteiro): Error responses may not have a request method if they
+       * are the result of e.g. an EOF error. Assuming that the request method
+       * is `GET` smells a little because it's exposing implementation details,
+       * though the only case where it'd matter would be potentially assuming
+       * the _successful_ response to a CONNECT request and sending one of the
+       * forbidden headers according to RFC7231§4.3.6:
+       *
+       *   A server MUST NOT send any Transfer-Encoding or Content-Length
+       *   header fields in a 2xx (Successful) response to CONNECT.
+       *
+       * If we're running this code, however, we're not responding with a
+       * successful status code, which makes us compliant to the above. *)
+      `GET
+  in
+  Response_state.flush_response_body response_state ~request_method t.writer
+
 let rec _next_write_operation t =
   if not (is_active t) then (
-    if Reader.is_closed t.reader && t.error_code = `Ok
-    then shutdown t;
-    Writer.next t.writer
+    match t.error_code with
+    | No_error ->
+      if Reader.is_closed t.reader
+      then shutdown t;
+      Writer.next t.writer
+    | Error { request; response_state } ->
+      match Response_state.output_state response_state with
+      | Wait -> `Yield
+      | Consume ->
+        flush_response_error_body t ?request response_state;
+        Writer.next t.writer
+      | Complete ->
+        shutdown_writer t;
+        Writer.next t.writer
   ) else (
     let reqd = current_reqd_exn t in
     match Reqd.output_state reqd with

@@ -34,24 +34,9 @@
 type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-module Response_state = struct
-  type t =
-    | Waiting   of Optional_thunk.t ref
-    | Complete  of Response.t
-    | Streaming of Response.t * [`write] Body.t
-    | Upgrade of Response.t * (unit -> unit)
-end
-
 module Input_state = struct
   type t =
     | Ready
-    | Complete
-end
-
-module Output_state = struct
-  type t =
-    | Consume
-    | Wait
     | Complete
 end
 
@@ -180,6 +165,26 @@ let respond_with_streaming ?(flush_headers_immediately=false) t response =
     failwith "httpaf.Reqd.respond_with_streaming: invalid state, currently handling error";
   unsafe_respond_with_streaming ~flush_headers_immediately t response
 
+let unsafe_respond_with_upgrade t headers upgrade_handler =
+  match t.response_state with
+  | Waiting when_done_waiting ->
+    let response = Response.create ~headers `Switching_protocols in
+    Writer.write_response t.writer response;
+    if t.persistent then
+      t.persistent <- Response.persistent_connection response;
+    t.response_state <- Upgrade (response, upgrade_handler);
+    Body.close_reader t.request_body;
+    done_waiting when_done_waiting
+  | Streaming _ | Upgrade _ ->
+    failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"
+  | Complete _ ->
+    failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already complete"
+
+let respond_with_upgrade t response upgrade_handler =
+  if t.error_code <> `Ok then
+    failwith "httpaf.Reqd.respond_with_streaming: invalid state, currently handling error";
+  unsafe_respond_with_upgrade t response upgrade_handler
+
 let report_error t error =
   t.persistent <- false;
   Body.close_reader t.request_body;
@@ -225,15 +230,7 @@ let error_code t =
   | `Ok             -> None
 
 let on_more_output_available t f =
-  match t.response_state with
-  | Waiting when_done_waiting ->
-    if Optional_thunk.is_some !when_done_waiting
-    then failwith "httpaf.Reqd.on_more_output_available: only one callback can be registered at a time";
-    when_done_waiting := Optional_thunk.some f
-  | Streaming(_, response_body) ->
-    Body.when_ready_to_write response_body f
-  | Complete _ ->
-    failwith "httpaf.Reqd.on_more_output_available: response already complete"
+  Response_state.on_more_output_available t.response_state f
 
 let persistent_connection t =
   t.persistent
@@ -244,16 +241,7 @@ let input_state t : Input_state.t =
   else Ready
 ;;
 
-let output_state t : Output_state.t =
-  match t.response_state with
-  | Complete _ -> Complete
-  | Waiting _ -> Wait
-  | Streaming(_, response_body) ->
-    if not (Body.is_closed response_body)
-       || Body.has_pending_output response_body
-    then Consume
-    else Complete
-  | Upgrade _ -> Consume
+let output_state t = Response_state.output_state t.response_state
 
 let flush_request_body t =
   let request_body = request_body t in
@@ -262,13 +250,5 @@ let flush_request_body t =
   with exn -> report_exn t exn
 
 let flush_response_body t =
-  match t.response_state with
-  | Streaming (response, response_body) ->
-    let request_method = t.request.Request.meth in
-    let encoding =
-      match Response.body_length ~request_method response with
-      | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
-      | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
-    in
-    Body.transfer_to_writer_with_encoding response_body ~encoding t.writer
-  | _ -> ()
+  let request_method = t.request.Request.meth in
+  Response_state.flush_response_body t.response_state ~request_method t.writer
