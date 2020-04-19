@@ -89,8 +89,8 @@ let yield_reader t k =
     let reqd = current_reqd_exn t in
     begin match Reqd.input_state reqd with
     | Wait ->
-      (* `Wait` means that the request body isn't closed yet (there might be
-       * more incoming bytes) but the request handler hasn't scheduled a read
+      (* `Wait` means that the request body isn't closed yet (there may be more
+       * incoming bytes) but the request handler hasn't scheduled a read
        * either. *)
       Reqd.on_more_input_available reqd k
     | Provide -> t.wakeup_reader <- Optional_thunk.some k

@@ -139,6 +139,8 @@ let schedule_read t ~on_eof ~on_read =
     ready_to_read t;
   end
 
+let has_scheduled_read t = t.read_scheduled
+
 let has_pending_output t =
   (* Force another write poll to make sure that the final chunk is emitted for
      chunk-encoded bodies.

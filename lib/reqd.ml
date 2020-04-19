@@ -34,13 +34,6 @@
 type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
-module Input_state = struct
-  type t =
-    | Provide
-    | Wait
-    | Complete
-end
-
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
@@ -247,7 +240,7 @@ let persistent_connection t =
 let input_state t : Input_state.t =
   if Body.is_closed t.request_body
   then Complete
-  else if t.request_body.read_scheduled
+  else if Body.has_scheduled_read t.request_body
   then Provide
   else Wait
 

@@ -1,10 +1,3 @@
-module Output_state = struct
-  type t =
-    | Consume
-    | Wait
-    | Complete
-end
-
 type ('handle, 'io) t =
   | Waiting   of Optional_thunk.t ref
   | Complete  of Response.t
