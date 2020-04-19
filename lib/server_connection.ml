@@ -100,7 +100,16 @@ let yield_writer t k =
   else if Optional_thunk.is_some t.wakeup_writer
   then failwith "on_wakeup_writer: only one callback can be registered at a time"
   else match t.error_code with
-  | No_error -> t.wakeup_writer <- Optional_thunk.some k
+  | No_error ->
+    if is_active t then
+      let reqd = current_reqd_exn t in
+      begin match Reqd.output_state reqd with
+      | Wait -> t.wakeup_writer <- Optional_thunk.some k
+      | Consume -> Reqd.on_more_output_available reqd k
+      | Complete -> k ()
+      end
+    else
+      t.wakeup_writer <- Optional_thunk.some k
   | Error { response_state; _ } ->
     Response_state.on_more_output_available response_state k
 ;;
