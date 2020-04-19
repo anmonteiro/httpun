@@ -218,6 +218,7 @@ let set_error_and_handle ?request t error =
        * reported (we're already handling an error and e.g. the writing channel
        * is closed). Just shut down the connection in that case.
        *)
+      Writer.close_and_drain t.writer;
       shutdown t
   end
 
