@@ -725,6 +725,41 @@ module Server_connection = struct
       ~body:"got an error"
   ;;
 
+  let test_asynchronous_error_asynchronous_response_body () =
+    let continue_request = ref (fun () -> ()) in
+    let asynchronous_raise reqd =
+      continue_request := (fun () -> synchronous_raise reqd)
+    in
+    let continue_error = ref (fun () -> ()) in
+    let error_handler ?request:_ _error start_response =
+      continue_error := (fun () ->
+        let resp_body = start_response Headers.empty in
+        continue_error := (fun () ->
+          Body.write_string resp_body "got an error";
+          Body.close_writer resp_body))
+    in
+    let writer_woken_up = ref false in
+    let t = create ~error_handler asynchronous_raise in
+    writer_yielded t;
+    yield_writer   t (fun () -> writer_woken_up := true);
+    read_request   t (Request.create `GET "/");
+    writer_yielded t;
+    reader_yielded t;
+    !continue_request ();
+    writer_yielded t;
+    !continue_error ();
+    reader_errored t;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    writer_woken_up := false;
+    write_response t
+      ~msg:"Error response written"
+      (Response.create `Internal_server_error);
+    yield_writer t (fun () -> writer_woken_up := true);
+    !continue_error ();
+    write_string t "got an error";
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  ;;
+
   let test_chunked_encoding () =
     let request_handler reqd =
       let response =
@@ -1113,6 +1148,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "synchronous error, asynchronous handling", `Quick, test_synchronous_error_asynchronous_handling
     ; "asynchronous error, synchronous handling", `Quick, test_asynchronous_error
     ; "asynchronous error, asynchronous handling", `Quick, test_asynchronous_error_asynchronous_handling
+    ; "asynchronous error, asynchronous handling + asynchronous body", `Quick, test_asynchronous_error_asynchronous_response_body
     ; "chunked encoding", `Quick, test_chunked_encoding
     ; "blocked write on chunked encoding", `Quick, test_blocked_write_on_chunked_encoding
     ; "malformed request", `Quick, test_malformed_request
