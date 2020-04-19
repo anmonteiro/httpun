@@ -85,13 +85,33 @@ let yield_reader t k =
   then failwith "yield_reader on closed conn"
   else if Optional_thunk.is_some t.wakeup_reader
   then failwith "yield_reader: only one callback can be registered at a time"
-  else t.wakeup_reader <- Optional_thunk.some k
+  else if is_active t then
+    let reqd = current_reqd_exn t in
+    begin match Reqd.input_state reqd with
+    | Wait ->
+      (* `Wait` means that the request body isn't closed yet (there might be
+       * more incoming bytes) but the request handler hasn't scheduled a read
+       * either. *)
+      Reqd.on_more_input_available reqd k
+    | Provide -> t.wakeup_reader <- Optional_thunk.some k
+    | Complete -> k ()
+    end
+  else
+    t.wakeup_reader <- Optional_thunk.some k
 ;;
 
 let wakeup_reader t =
   let f = t.wakeup_reader in
   t.wakeup_reader <- Optional_thunk.none;
   Optional_thunk.call_if_some f
+;;
+
+let transfer_reader_callback t reqd =
+  if Optional_thunk.is_some t.wakeup_reader
+  then (
+    let f = t.wakeup_reader in
+    t.wakeup_reader <- Optional_thunk.none;
+    Reqd.on_more_input_available reqd (Optional_thunk.unchecked_value f))
 ;;
 
 let yield_writer t k =
@@ -252,6 +272,9 @@ let rec _next_read_operation t =
   ) else (
     let reqd = current_reqd_exn t in
     match Reqd.input_state reqd with
+    | Wait ->
+      transfer_reader_callback t reqd;
+      `Yield
     | Provide  -> Reader.next t.reader
     | Complete -> _final_read_operation_for t reqd
   )
@@ -369,7 +392,7 @@ and _final_write_operation_for t reqd =
       Writer.next t.writer;
     ) else (
       match Reqd.input_state reqd with
-      | Provide  -> assert false
+      | Wait | Provide  -> assert false
       | Complete ->
         advance_request_queue t;
         _next_write_operation t;
