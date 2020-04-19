@@ -197,7 +197,8 @@ let set_error_and_handle ?request t error =
     match t.error_code with
     | No_error ->
       (* The (shared) response body buffer can be used in this case because in
-       * this branch we're sending a response, and therefore making use of that
+       * this conditional branch we're not sending a response
+       * (is_active t == false), and are therefore not making use of that
        * buffer. *)
       let response_body = Body.create t.response_body_buffer in
       t.error_code <- Error { request; response_state = Waiting (ref Optional_thunk.none) };
