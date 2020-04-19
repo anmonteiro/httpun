@@ -127,9 +127,7 @@ let output_state { request_body; state; _ } : Output_state.t =
      * transition the response descriptor to the `Closed` state. *)
     Consume
   | state ->
-    if state = Uninitialized ||
-       not (Body.is_closed request_body) ||
-       Body.has_pending_output request_body
+    if state = Uninitialized || Body.requires_output request_body
     then Consume
     else Complete
 

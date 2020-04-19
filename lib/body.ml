@@ -142,6 +142,9 @@ let has_pending_output t =
   Faraday.has_pending_output t.faraday
   || (Faraday.is_closed t.faraday && t.write_final_if_chunked)
 
+let requires_output t =
+  not (is_closed t) || has_pending_output t
+
 let close_reader t =
   Faraday.close t.faraday;
   execute_read t
@@ -150,7 +153,7 @@ let close_reader t =
 let when_ready_to_write t callback =
   if is_closed t
   then callback ()
-  else if Optional_thunk.is_some t.when_ready_to_write 
+  else if Optional_thunk.is_some t.when_ready_to_write
   then failwith "Body.when_ready_to_write: only one callback can be registered at a time"
   else t.when_ready_to_write <- Optional_thunk.some callback
 

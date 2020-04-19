@@ -62,6 +62,8 @@ Unreleased
   ([#37](https://github.com/anmonteiro/httpaf/pull/37)).
 - httpaf-lwt: Close the communication channel after shutting down the client
   ([#45](https://github.com/anmonteiro/httpaf/pull/45))
+- httpaf: Fix sending streaming error responses; in particular, allow sending
+  chunk-encoded responses ([#56](https://github.com/anmonteiro/httpaf/pull/56))
 
 httpaf (upstream) 0.6.5
 --------------
