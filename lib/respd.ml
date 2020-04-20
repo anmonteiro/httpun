@@ -14,19 +14,6 @@ module Request_state = struct
     | Closed
 end
 
-module Input_state = struct
-  type t =
-    | Provide
-    | Complete
-end
-
-module Output_state = struct
-  type t =
-    | Consume
-    | Wait
-    | Complete
-end
-
 type t =
   { request          : Request.t
   ; request_body     : [ `write ] Body.t
@@ -74,6 +61,19 @@ let write_request t =
   Writer.flush t.writer (fun () ->
     t.state <- Awaiting_response)
 
+let on_more_input_available t f =
+  match t.state with
+  | Received_response (_, response_body) ->
+    Body.when_ready_to_read response_body f
+
+  (* Don't expect to be called in these states. *)
+  | Uninitialized
+  | Awaiting_response ->
+    failwith "httpaf.Respd.on_more_input_available: response hasn't started"
+  | Upgraded _
+  | Closed ->
+    failwith "httpaf.Respd.on_more_input_available: response already complete"
+
 let on_more_output_available { request_body; _ } f =
   Body.when_ready_to_write request_body f
 
@@ -108,11 +108,13 @@ let close_response_body t =
 let input_state t : Input_state.t =
   match t.state with
   | Uninitialized
-  | Awaiting_response -> Provide
+  | Awaiting_response -> Ready
   | Received_response (_, response_body) ->
-    if not (Body.is_closed response_body)
-    then Provide
-    else Complete
+    if Body.is_closed response_body
+    then Complete
+    else if Body.is_read_scheduled response_body
+    then Ready
+    else Wait
   | Upgraded _
   | Closed -> Complete
 

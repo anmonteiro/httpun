@@ -69,12 +69,30 @@ let yield_reader t k =
   then failwith "on_wakeup_reader on closed conn"
   else if Optional_thunk.is_some t.wakeup_reader
   then failwith "yield_reader: only one callback can be registered at a time"
+  else if is_active t then
+    let respd = current_respd_exn t in
+    begin match Respd.input_state respd with
+    | Wait ->
+      (* `Wait` means that the response body isn't closed yet (there may be
+       * more incoming bytes) but the response handler hasn't scheduled a read
+       * either. *)
+      Respd.on_more_input_available respd k
+    | Ready -> t.wakeup_reader <- Optional_thunk.some k
+    | Complete -> k ()
+    end
   else t.wakeup_reader <- Optional_thunk.some k
 
 let wakeup_reader t =
   let f = t.wakeup_reader in
   t.wakeup_reader <- Optional_thunk.none;
   Optional_thunk.call_if_some f
+
+let transfer_reader_callback t respd =
+  if Optional_thunk.is_some t.wakeup_reader
+  then (
+    let f = t.wakeup_reader in
+    t.wakeup_reader <- Optional_thunk.none;
+    Respd.on_more_input_available respd (Optional_thunk.unchecked_value f))
 
 let yield_writer t k =
   if is_closed t
@@ -207,7 +225,10 @@ let rec _next_read_operation t =
   ) else (
     let respd = current_respd_exn t in
     match Respd.input_state respd with
-    | Provide  -> Reader.next t.reader
+    | Wait ->
+      transfer_reader_callback t respd;
+      `Yield
+    | Ready  -> Reader.next t.reader
     | Complete -> _final_read_operation_for t respd
   )
 
@@ -255,7 +276,7 @@ let read_eof t bs ~off ~len =
   if is_active t then begin
     let respd = current_respd_exn t in
     match Respd.input_state respd with
-    | Provide -> unexpected_eof t
+    | Wait | Ready -> unexpected_eof t
     | Complete -> ()
   end;
   bytes_read
@@ -283,7 +304,7 @@ and _final_write_operation_for t respd =
       Writer.next t.writer;
     ) else (
       match Respd.input_state respd with
-      | Provide ->
+      | Wait | Ready ->
         (* From RFC7230§6.3.2:
          *   A client that supports persistent connections MAY "pipeline" its
          *   requests (i.e., send multiple requests without waiting for each
