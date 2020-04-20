@@ -637,14 +637,35 @@ module Server_connection = struct
     write_response t (Response.create `OK);
   ;;
 
+  let test_asynchronous_streaming_response () =
+    let writer_woken_up = ref false in
+    let continue_response = ref (fun () -> ()) in
+    let request  = Request.create `GET "/" in
+    let response = Response.create `OK in
+    let request_handler reqd =
+      let body = Reqd.respond_with_streaming ~flush_headers_immediately:true reqd response in
+      continue_response := (fun () ->
+        Body.write_string body "hello";
+        Body.close_writer body)
+    in
+    let t = create request_handler in
+    read_request   t request;
+    write_response t response;
+    writer_yielded t;
+    yield_writer t (fun () -> writer_woken_up := true);
+    !continue_response ();
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    write_string   t "hello";
+    writer_yielded t;
+  ;;
+
   let test_synchronous_error () =
     let writer_woken_up = ref false in
     let t = create ~error_handler synchronous_raise in
     yield_writer t (fun () -> writer_woken_up := true);
     read_request t (Request.create `GET "/");
     reader_errored t;
-    Alcotest.(check bool) "Writer woken up"
-      true !writer_woken_up;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     write_response t
       ~msg:"Error response written"
       (Response.create `Internal_server_error)
@@ -665,8 +686,7 @@ module Server_connection = struct
     reader_errored t;
     writer_yielded t;
     !continue ();
-    Alcotest.(check bool) "Writer woken up"
-      true !writer_woken_up;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     write_response t
       ~msg:"Error response written"
       (Response.create `Internal_server_error)
@@ -688,8 +708,7 @@ module Server_connection = struct
     reader_yielded t;
     !continue ();
     reader_errored t;
-    Alcotest.(check bool) "Writer woken up"
-      true !writer_woken_up;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     write_response t
       ~msg:"Error response written"
       (Response.create `Internal_server_error)
@@ -717,8 +736,7 @@ module Server_connection = struct
     writer_yielded t;
     !continue_error ();
     reader_errored t;
-    Alcotest.(check bool) "Writer woken up"
-      true !writer_woken_up;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     write_response t
       ~msg:"Error response written"
       (Response.create `Internal_server_error)
@@ -1140,6 +1158,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "single GET"            , `Quick, test_single_get
     ; "multiple GETs"         , `Quick, test_multiple_get
     ; "asynchronous response" , `Quick, test_asynchronous_response
+    ; "asynchronous response, asynchronous body", `Quick, test_asynchronous_streaming_response
     ; "echo POST"             , `Quick, test_echo_post
     ; "streaming response"    , `Quick, test_streaming_response
     ; "empty fixed streaming response", `Quick, test_empty_fixed_streaming_response
@@ -1679,8 +1698,9 @@ module Client_connection = struct
   ;;
 
   let test_fixed_body_persistent_connection () =
+    let writer_woken_up = ref false in
     let request' = Request.create
-      ~headers:(Headers.of_list ["Content-Length", "0"])
+      ~headers:(Headers.of_list ["Content-Length", "2"])
       `GET "/"
     in
     let response_handler response response_body =
@@ -1700,7 +1720,11 @@ module Client_connection = struct
     in
     write_request t request';
     writer_yielded t;
+    yield_writer t (fun () -> writer_woken_up := true);
+    Body.write_string body "hi";
     Body.close_writer body;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    write_string t "hi";
     reader_ready t;
     read_response t (Response.create ~headers:(Headers.of_list []) `OK);
     reader_ready t;
