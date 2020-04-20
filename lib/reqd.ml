@@ -240,7 +240,7 @@ let persistent_connection t =
 let input_state t : Input_state.t =
   if Body.is_closed t.request_body
   then Complete
-  else if Body.has_scheduled_read t.request_body
+  else if Body.is_read_scheduled t.request_body
   then Provide
   else Wait
 

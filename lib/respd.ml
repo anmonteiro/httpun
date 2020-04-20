@@ -114,7 +114,7 @@ let input_state t : Input_state.t =
   | Received_response (_, response_body) ->
     if Body.is_closed response_body
     then Complete
-    else if Body.has_scheduled_read response_body
+    else if Body.is_read_scheduled response_body
     then Provide
     else Wait
   | Upgraded _
