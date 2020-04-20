@@ -569,8 +569,9 @@ let test_fixed_body () =
 ;;
 
 let test_fixed_body_persistent_connection () =
+  let writer_woken_up = ref false in
   let request' = Request.create
-    ~headers:(Headers.of_list ["Content-Length", "0"])
+    ~headers:(Headers.of_list ["Content-Length", "2"])
     `GET "/"
   in
   let response_handler response response_body =
@@ -590,7 +591,11 @@ let test_fixed_body_persistent_connection () =
   in
   write_request t request';
   writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  Body.write_string body "hi";
   Body.close_writer body;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  write_string t "hi";
   reader_ready t;
   read_response t (Response.create ~headers:(Headers.of_list []) `OK);
   reader_ready t;

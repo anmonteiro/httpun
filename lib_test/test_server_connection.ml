@@ -288,8 +288,7 @@ let test_asynchronous_streaming_response () =
   yield_writer t (fun () ->
     writer_woken_up := true;
     writer_yielded t);
-  Alcotest.(check bool) "Writer not woken up"
-    false !writer_woken_up;
+  Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
 
   read_request t request;
   let body =
@@ -300,19 +299,16 @@ let test_asynchronous_streaming_response () =
   (* XXX(dpatti): This is an observation of a current behavior where the writer
      is awoken only to find that it was asked to yield again. It is cleaned up
      in another branch where we move the continuation off of the reqd/body. *)
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   let writer_woken_up = ref false in
   yield_writer t (fun () ->
     writer_woken_up := true;
     write_response t ~body:"Hello " response);
 
   Body.write_string body "Hello ";
-  Alcotest.(check bool) "Writer not woken up"
-    false !writer_woken_up;
+  Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
   Body.flush body ignore;
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
 
   let writer_woken_up = ref false in
   writer_yielded t;
@@ -321,11 +317,9 @@ let test_asynchronous_streaming_response () =
     write_string t "world!";
     writer_closed t);
   Body.write_string body "world!";
-  Alcotest.(check bool) "Writer not woken up"
-    false !writer_woken_up;
+  Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
   Body.close_writer body;
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up
 ;;
 
 let test_asynchronous_streaming_response_with_immediate_flush () =
@@ -341,8 +335,7 @@ let test_asynchronous_streaming_response_with_immediate_flush () =
   yield_writer t (fun () ->
     writer_woken_up := true;
     write_response t response);
-  Alcotest.(check bool) "Writer not woken up"
-    false !writer_woken_up;
+  Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
 
   read_request t request;
   let body =
@@ -350,8 +343,7 @@ let test_asynchronous_streaming_response_with_immediate_flush () =
     | None -> failwith "no body found"
     | Some body -> body
   in
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
 
   let writer_woken_up = ref false in
   writer_yielded t;
@@ -359,8 +351,7 @@ let test_asynchronous_streaming_response_with_immediate_flush () =
     writer_woken_up := true;
     writer_closed t);
   Body.close_writer body;
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up
 ;;
 
 let test_empty_fixed_streaming_response () =
@@ -398,14 +389,35 @@ let test_multiple_get () =
   write_response t (Response.create `OK);
 ;;
 
+let test_asynchronous_streaming_response_flush_immediately () =
+  let writer_woken_up = ref false in
+  let continue_response = ref (fun () -> ()) in
+  let request  = Request.create `GET "/" in
+  let response = Response.create `OK in
+  let request_handler reqd =
+    let body = Reqd.respond_with_streaming ~flush_headers_immediately:true reqd response in
+    continue_response := (fun () ->
+      Body.write_string body "hello";
+      Body.close_writer body)
+  in
+  let t = create request_handler in
+  read_request   t request;
+  write_response t response;
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  !continue_response ();
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  write_string   t "hello";
+  writer_yielded t;
+;;
+
 let test_synchronous_error () =
   let writer_woken_up = ref false in
   let t = create ~error_handler synchronous_raise in
   yield_writer t (fun () -> writer_woken_up := true);
   read_request t (Request.create `GET "/");
   reader_errored t;
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t
     ~msg:"Error response written"
     (Response.create `Internal_server_error)
@@ -426,8 +438,7 @@ let test_synchronous_error_asynchronous_handling () =
   reader_errored t;
   writer_yielded t;
   !continue ();
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t
     ~msg:"Error response written"
     (Response.create `Internal_server_error)
@@ -449,8 +460,7 @@ let test_asynchronous_error () =
   reader_yielded t;
   !continue ();
   reader_errored t;
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t
     ~msg:"Error response written"
     (Response.create `Internal_server_error)
@@ -478,8 +488,7 @@ let test_asynchronous_error_asynchronous_handling () =
   writer_yielded t;
   !continue_error ();
   reader_errored t;
-  Alcotest.(check bool) "Writer woken up"
-    true !writer_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t
     ~msg:"Error response written"
     (Response.create `Internal_server_error)
@@ -881,6 +890,7 @@ let tests =
   ; "single GET"            , `Quick, test_single_get
   ; "multiple GETs"         , `Quick, test_multiple_get
   ; "asynchronous response" , `Quick, test_asynchronous_response
+  ; "asynchronous response, asynchronous body", `Quick, test_asynchronous_streaming_response_flush_immediately
   ; "echo POST"             , `Quick, test_echo_post
   ; "streaming response"    , `Quick, test_streaming_response
   ; "asynchronous streaming response", `Quick, test_asynchronous_streaming_response

@@ -81,7 +81,14 @@ let yield_writer t k =
   then failwith "yield_writer on closed conn"
   else if Optional_thunk.is_some t.wakeup_writer
   then failwith "yield_writer: only one callback can be registered at a time"
-  else t.wakeup_writer <- Optional_thunk.some k
+  else if is_active t then
+    let respd = current_respd_exn t in
+    match Respd.output_state respd with
+    | Wait -> t.wakeup_writer <- Optional_thunk.some k
+    | Consume -> Respd.on_more_output_available respd k
+    | Complete -> k ()
+  else
+    t.wakeup_writer <- Optional_thunk.some k
 
 let wakeup_writer t =
   let f = t.wakeup_writer in
