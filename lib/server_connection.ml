@@ -103,11 +103,10 @@ let yield_writer t k =
   | No_error ->
     if is_active t then
       let reqd = current_reqd_exn t in
-      begin match Reqd.output_state reqd with
+      match Reqd.output_state reqd with
       | Wait -> t.wakeup_writer <- Optional_thunk.some k
       | Consume -> Reqd.on_more_output_available reqd k
       | Complete -> k ()
-      end
     else
       t.wakeup_writer <- Optional_thunk.some k
   | Error { response_state; _ } ->
