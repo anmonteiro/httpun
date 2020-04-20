@@ -93,8 +93,9 @@ let yield_reader t k =
        * incoming bytes) but the request handler hasn't scheduled a read
        * either. *)
       Reqd.on_more_input_available reqd k
-    | Provide -> t.wakeup_reader <- Optional_thunk.some k
-    | Complete -> k ()
+    | Provide
+    | Complete ->
+      t.wakeup_reader <- Optional_thunk.some k
     end
   else
     t.wakeup_reader <- Optional_thunk.some k
@@ -124,9 +125,12 @@ let yield_writer t k =
     if is_active t then
       let reqd = current_reqd_exn t in
       match Reqd.output_state reqd with
-      | Wait -> t.wakeup_writer <- Optional_thunk.some k
-      | Consume -> Reqd.on_more_output_available reqd k
-      | Complete -> k ()
+      | Wait | Consume -> Reqd.on_more_output_available reqd k
+      | Complete ->
+        (* We don't ever expect to be in this state. The write state machine
+         * will advance the request queue as soon as a request is finished
+         * *)
+        assert false
     else
       t.wakeup_writer <- Optional_thunk.some k
   | Error { response_state; _ } ->
@@ -365,6 +369,7 @@ let rec _next_write_operation t =
         flush_response_error_body t ?request response_state;
         Writer.next t.writer
       | Complete ->
+        (* XXX: the connection can technically be persistent? *)
         shutdown_writer t;
         Writer.next t.writer
   ) else (

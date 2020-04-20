@@ -659,6 +659,28 @@ module Server_connection = struct
     writer_yielded t;
   ;;
 
+  (* Writer doesn't get a chance to yield before incoming request. *)
+  let test_asynchronous_streaming_response_writer_doesnt_yield () =
+    let writer_woken_up = ref false in
+    let continue_response = ref (fun () -> ()) in
+    let request  = Request.create `GET "/" in
+    let response = Response.create `OK in
+    let request_handler reqd =
+      continue_response := (fun () ->
+        let body = Reqd.respond_with_streaming reqd response in
+        Body.write_string body "hello";
+        Body.close_writer body)
+    in
+    let t = create request_handler in
+    read_request   t request;
+    writer_yielded t;
+    yield_writer t (fun () -> writer_woken_up := true);
+    !continue_response ();
+    write_response t ~body:"hello" response;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    writer_yielded t;
+  ;;
+
   let test_synchronous_error () =
     let writer_woken_up = ref false in
     let t = create ~error_handler synchronous_raise in
@@ -1135,6 +1157,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     let response = Response.create `OK in
     let continue_response = ref (fun () -> ()) in
     let request_handler reqd =
+      Body.close_reader (Reqd.request_body reqd);
       continue_response := (fun () ->
         let resp_body = Reqd.respond_with_streaming reqd response in
         Body.close_writer resp_body)
@@ -1144,6 +1167,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_yielded t;
     read_request t (Request.create `GET "/");
     yield_reader t (fun () -> reader_woken_up := true);
+    Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
     yield_writer t ignore;
     !continue_response ();
     write_response t ~body:"" response;
@@ -1205,7 +1229,6 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_yielded t;
   ;;
 
-
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1214,6 +1237,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "multiple GETs"         , `Quick, test_multiple_get
     ; "asynchronous response" , `Quick, test_asynchronous_response
     ; "asynchronous response, asynchronous body", `Quick, test_asynchronous_streaming_response
+    ; "asynchronous response, asynchronous body, writer doesn't yield", `Quick, test_asynchronous_streaming_response_writer_doesnt_yield
     ; "echo POST"             , `Quick, test_echo_post
     ; "streaming response"    , `Quick, test_streaming_response
     ; "empty fixed streaming response", `Quick, test_empty_fixed_streaming_response
@@ -1782,13 +1806,19 @@ module Client_connection = struct
     Body.close_writer body;
     Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     write_string t "hi";
+    writer_yielded t;
+    writer_woken_up := false;
+    yield_writer t (fun () -> writer_woken_up := true);
+    Alcotest.(check bool) "Writer doesn't wake up immediately" false !writer_woken_up;
     reader_ready t;
     read_response t (Response.create ~headers:(Headers.of_list []) `OK);
     reader_ready t;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     writer_yielded t;
   ;;
 
   let test_client_upgrade () =
+    let reader_woken_up = ref false in
     let request' = Request.create
       ~headers:(Headers.of_list ["Content-Length", "0"])
       `GET "/"
@@ -1809,7 +1839,10 @@ module Client_connection = struct
     read_response t response;
     reader_yielded t;
     writer_yielded t;
+    yield_reader t (fun () -> reader_woken_up := true);
+    Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
     shutdown t;
+    Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
     reader_closed t;
     writer_closed t;
   ;;
