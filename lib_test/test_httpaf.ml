@@ -1151,18 +1151,18 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   ;;
 
-  let request_handler continue_reading reqd =
+  let backpressure_request_handler continue_reading reqd =
     let request_body  = Reqd.request_body reqd in
     let rec on_read _buffer ~off:_ ~len:_ =
       continue_reading := (fun () ->
         Body.schedule_read request_body ~on_eof ~on_read);
-    and on_eof () = print_endline "got eof" in
+    and on_eof () = print_endline ("got eof" ^ (string_of_bool (Body.is_closed request_body))) in
     Body.schedule_read request_body ~on_eof ~on_read
 
   let test_handling_backpressure_when_read_not_scheduled () =
     let reader_woken_up = ref false in
     let continue_reading = ref (fun () -> ()) in
-    let t = create ~error_handler (request_handler continue_reading) in
+    let t = create ~error_handler (backpressure_request_handler continue_reading) in
     reader_ready t;
     writer_yielded t;
     let request =
@@ -1185,7 +1185,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
   let test_handling_backpressure_when_read_not_scheduled_early_yield () =
     let reader_woken_up = ref false in
     let continue_reading = ref (fun () -> ()) in
-    let t = create ~error_handler (request_handler continue_reading) in
+    let t = create ~error_handler (backpressure_request_handler continue_reading) in
     reader_ready t;
     writer_yielded t;
     let request =
