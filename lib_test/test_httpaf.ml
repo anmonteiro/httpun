@@ -1151,6 +1151,61 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   ;;
 
+  let backpressure_request_handler continue_reading reqd =
+    let request_body  = Reqd.request_body reqd in
+    let rec on_read _buffer ~off:_ ~len:_ =
+      continue_reading := (fun () ->
+        Body.schedule_read request_body ~on_eof ~on_read);
+    and on_eof () = print_endline ("got eof" ^ (string_of_bool (Body.is_closed request_body))) in
+    Body.schedule_read request_body ~on_eof ~on_read
+
+  let test_handling_backpressure_when_read_not_scheduled () =
+    let reader_woken_up = ref false in
+    let continue_reading = ref (fun () -> ()) in
+    let t = create ~error_handler (backpressure_request_handler continue_reading) in
+    reader_ready t;
+    writer_yielded t;
+    let request =
+      Request.create
+        `GET
+        ~headers:(Headers.of_list ["content-length", "10"])
+        "/"
+    in
+    read_request t request;
+    yield_writer t ignore;
+    read_string t "five.";
+    reader_yielded t;
+    yield_reader t (fun () -> reader_woken_up := true);
+    !continue_reading ();
+    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+    Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+    writer_yielded t;
+  ;;
+
+  let test_handling_backpressure_when_read_not_scheduled_early_yield () =
+    let reader_woken_up = ref false in
+    let continue_reading = ref (fun () -> ()) in
+    let t = create ~error_handler (backpressure_request_handler continue_reading) in
+    reader_ready t;
+    writer_yielded t;
+    let request =
+      Request.create
+        `GET
+        ~headers:(Headers.of_list ["content-length", "10"])
+        "/"
+    in
+    read_request t request;
+    yield_reader t (fun () -> reader_woken_up := true);
+    yield_writer t ignore;
+    read_string t "five.";
+    reader_yielded t;
+    !continue_reading ();
+    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+    Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+    writer_yielded t;
+  ;;
+
+
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1183,6 +1238,8 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "`flush_headers_immediately` with empty body", `Quick, test_immediate_flush_empty_body
     ; "empty body with no immediate flush", `Quick, test_empty_body_no_immediate_flush
     ; "yield before starting a response", `Quick, test_yield_before_starting_a_response
+    ; "test yield when read isn't scheduled", `Quick, test_handling_backpressure_when_read_not_scheduled
+    ; "test yield when read isn't scheduled, reader yields early", `Quick, test_handling_backpressure_when_read_not_scheduled_early_yield
     ]
 end
 
@@ -1211,8 +1268,8 @@ module Client_connection = struct
     read_string t response_string
   ;;
 
-  let reader_ready t =
-    Alcotest.check read_operation "Reader is ready"
+  let reader_ready ?(msg="Reader is ready") t =
+    Alcotest.check read_operation msg
       `Read (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade]);
   ;;
 
@@ -1785,6 +1842,75 @@ module Client_connection = struct
       !error_message
   ;;
 
+  let backpressure_response_handler continue_reading expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let rec on_read _buffer ~off:_ ~len:_ =
+      continue_reading := (fun () ->
+        Body.schedule_read body ~on_eof ~on_read);
+    and on_eof () = print_endline "got eof" in
+    Body.schedule_read body ~on_eof ~on_read
+  ;;
+
+  let test_handling_backpressure_when_read_not_scheduled () =
+    let reader_woken_up = ref false in
+    let continue_reading = ref (fun () -> ()) in
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(backpressure_response_handler continue_reading response)
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    writer_yielded t;
+    Body.close_writer body;
+    reader_ready t;
+    read_response t response;
+    yield_writer t ignore;
+    read_string t "five.";
+    reader_yielded t;
+    yield_reader t (fun () -> reader_woken_up := true);
+    !continue_reading ();
+    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+    Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+    writer_yielded t;
+  ;;
+
+  let test_handling_backpressure_when_read_not_scheduled_early_yield () =
+    let reader_woken_up = ref false in
+    let continue_reading = ref (fun () -> ()) in
+    let request' = Request.create `GET "/" in
+    let response =
+      Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+    in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(backpressure_response_handler continue_reading response)
+        ~error_handler:no_error_handler
+    in
+    write_request t request';
+    writer_yielded t;
+    Body.close_writer body;
+    reader_ready t;
+    read_response t response;
+    yield_reader t (fun () -> reader_woken_up := true);
+    yield_writer t ignore;
+    read_string t "five.";
+    reader_yielded t;
+    !continue_reading ();
+    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+    Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+    writer_yielded t;
+  ;;
+
   let tests =
     [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
     ; "GET"         , `Quick, test_get
@@ -1800,6 +1926,8 @@ module Client_connection = struct
     ; "Fixed body shuts down writer if connection is not persistent", `Quick, test_fixed_body
     ; "Fixed body doesn't shut down the writer if connection is persistent",`Quick, test_fixed_body_persistent_connection
     ; "Client support for upgrading a connection", `Quick, test_client_upgrade
+    ; "test yield when read isn't scheduled", `Quick, test_handling_backpressure_when_read_not_scheduled
+    ; "test yield when read isn't scheduled, reader yields early", `Quick, test_handling_backpressure_when_read_not_scheduled_early_yield
     ]
 end
 

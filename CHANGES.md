@@ -64,6 +64,8 @@ Unreleased
   ([#45](https://github.com/anmonteiro/httpaf/pull/45))
 - httpaf: Fix sending streaming error responses; in particular, allow sending
   chunk-encoded responses ([#56](https://github.com/anmonteiro/httpaf/pull/56))
+- httpaf: handle read backpressure in server and client implementations
+  ([#59](https://github.com/anmonteiro/httpaf/pull/59))
 
 httpaf (upstream) 0.6.5
 --------------
