@@ -93,9 +93,7 @@ let yield_reader t k =
        * incoming bytes) but the request handler hasn't scheduled a read
        * either. *)
       Reqd.on_more_input_available reqd k
-    | Provide
-    | Complete ->
-      t.wakeup_reader <- Optional_thunk.some k
+    | Provide | Complete -> t.wakeup_reader <- Optional_thunk.some k
     end
   else
     t.wakeup_reader <- Optional_thunk.some k

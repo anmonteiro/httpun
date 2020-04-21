@@ -77,8 +77,7 @@ let yield_reader t k =
        * more incoming bytes) but the response handler hasn't scheduled a read
        * either. *)
       Respd.on_more_input_available respd k
-    | Provide
-    | Complete ->
+    | Provide | Complete ->
       (* `Complete` may happen when connection has been upgraded. *)
       t.wakeup_reader <- Optional_thunk.some k
     end
@@ -105,8 +104,7 @@ let yield_writer t k =
     let respd = current_respd_exn t in
     match Respd.output_state respd with
     | Consume -> Respd.on_more_output_available respd k
-    | Wait
-    | Complete ->
+    | Wait | Complete ->
       (* This can feel counter-intuitive. We don't immediately execute this
        * callback or we'd trigger an infinite loop in the case where we're done
        * sending the request body and are waiting for the response to arrive,
