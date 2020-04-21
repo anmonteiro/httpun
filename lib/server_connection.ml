@@ -397,7 +397,9 @@ and _final_write_operation_for t reqd =
       Writer.next t.writer;
     ) else (
       match Reqd.input_state reqd with
-      | Wait | Provide  -> assert false
+      | Wait | Provide ->
+        Reqd.close_request_body reqd;
+        _next_write_operation t
       | Complete ->
         advance_request_queue t;
         _next_write_operation t;

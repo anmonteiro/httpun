@@ -1175,6 +1175,29 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   ;;
 
+  let test_respond_before_reading_entire_body () =
+    let reader_woken_up = ref false in
+    let response = Response.create `OK in
+    let continue_response = ref (fun () -> ()) in
+    let request_handler reqd =
+      (* Important that we never close the request body for this test. *)
+      continue_response := (fun () ->
+        let resp_body = Reqd.respond_with_streaming reqd response in
+        Body.close_writer resp_body)
+    in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "2"]));
+    yield_reader t (fun () -> reader_woken_up := true);
+    Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+    yield_writer t ignore;
+    !continue_response ();
+    write_response t ~body:"" response;
+    writer_yielded t;
+    Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  ;;
+
   let backpressure_request_handler continue_reading reqd =
     let request_body  = Reqd.request_body reqd in
     let rec on_read _buffer ~off:_ ~len:_ =
@@ -1229,6 +1252,43 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_yielded t;
   ;;
 
+  let test_input_shrunk_chunked () =
+    let continue_response = ref (fun () -> ()) in
+    let error_handler ?request:_ _ = assert false in
+    let request_handler reqd =
+      Alcotest.(check (list (pair string string)))
+        "got expected headers"
+        [ "Host"           , "example.com"
+        ; "Transfer-Encoding", "chunked" ]
+        (Headers.to_list (Reqd.request reqd).headers);
+      Body.close_reader (Reqd.request_body reqd);
+      continue_response := (fun () ->
+        Reqd.respond_with_string reqd (Response.create `OK) "");
+    in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    yield_writer t (fun () -> write_response t (Response.create `OK));
+    let len = feed_string t "GET /v1/b HTTP/1.1\r\nH" in
+    Alcotest.(check int) "partial read" 20 len;
+    read_string t "Host: example.com\r\nTransfer-Encoding: chunked\r\n\r\n";
+
+    let str = "5\r\ninput\r\n" in
+    let len = String.length str in
+    let input = Bigstringaf.of_string str ~off:0 ~len in
+    let just_read = read t input ~off:0 ~len in
+    Alcotest.(check int) "partial read" (len - 2) just_read;
+
+    let just_read = read_eof t input ~off:(len - 2) ~len:2 in
+    Alcotest.(check int) "eof partial read, doesn't get terminating chunk" 2 just_read;
+
+    writer_yielded t;
+    (* TODO: test error handling. *)
+    (* reader_closed t;
+    !continue_response ();
+    writer_closed t; *)
+  ;;
+
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1262,8 +1322,10 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "`flush_headers_immediately` with empty body", `Quick, test_immediate_flush_empty_body
     ; "empty body with no immediate flush", `Quick, test_empty_body_no_immediate_flush
     ; "yield before starting a response", `Quick, test_yield_before_starting_a_response
+    ; "respond before body has been read", `Quick, test_respond_before_reading_entire_body
     ; "test yield when read isn't scheduled", `Quick, test_handling_backpressure_when_read_not_scheduled
     ; "test yield when read isn't scheduled, reader yields early", `Quick, test_handling_backpressure_when_read_not_scheduled_early_yield
+    ; "test partial input chunked body", `Quick, test_input_shrunk_chunked
     ]
 end
 
