@@ -1289,6 +1289,129 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_closed t; *)
   ;;
 
+  let test_respond_before_reading_entire_body_chunked_eof () =
+    let reader_woken_up = ref false in
+    let writer_woken_up = ref false in
+    let response = Response.create `OK in
+    let continue_response = ref (fun () -> ()) in
+    let request_handler reqd =
+      (* Important that we never close the request body for this test. *)
+      continue_response := (fun () ->
+        let resp_body = Reqd.respond_with_streaming reqd response in
+        Body.close_writer resp_body)
+    in
+    let error_handler ?request:_ _error _start_response =
+      Alcotest.fail "Expected error_handler not to be called because the response was already sent"
+    in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["transfer-encoding", "chunked"]));
+    yield_reader t (fun () -> reader_woken_up := true);
+    Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+    yield_writer t (fun () -> writer_woken_up := true);
+    !continue_response ();
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    write_response t ~body:"" response;
+    writer_yielded t;
+    Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+    writer_woken_up := false;
+    reader_ready t;
+    (* Yield writer before feeding eof.
+     *
+     * Note: writer here is done. It yields before we feed more to the reader
+     * to allow for it to complete. *)
+
+    let str = "5\r\ninput\r\n" in
+    let len = String.length str in
+    let input = Bigstringaf.of_string str ~off:0 ~len in
+    let just_read = read_eof t input ~off:0 ~len in
+    Alcotest.(check int) "malformed chunked encoding read completely" len just_read;
+
+    writer_yielded t;
+    yield_writer t (fun () -> writer_woken_up := true);
+    reader_errored t;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    writer_closed t
+  ;;
+
+  let test_finish_response_after_read_eof () =
+    let reader_woken_up = ref false in
+    let writer_woken_up = ref false in
+    let response = Response.create `OK in
+    let continue_response = ref (fun () -> ()) in
+    let request_handler reqd =
+      (* Important that we never close the request body for this test. *)
+        let resp_body = Reqd.respond_with_streaming reqd response in
+      continue_response := (fun () ->
+        Body.close_writer resp_body)
+    in
+    let error_handler ?request:_ _error _start_response =
+      Alcotest.fail "Expected error_handler not to be called because the response was already sent"
+    in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["transfer-encoding", "chunked"]));
+    yield_reader t (fun () -> reader_woken_up := true);
+    Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+    yield_writer t (fun () -> writer_woken_up := true);
+
+    let str = "5\r\ninput\r\n" in
+    let len = String.length str in
+    let input = Bigstringaf.of_string str ~off:0 ~len in
+    let just_read = read_eof t input ~off:0 ~len in
+    Alcotest.(check int) "malformed chunked encoding read completely" len just_read;
+
+    reader_errored t;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    write_response t ~body:"" response;
+    !continue_response ();
+    writer_closed t;
+    reader_closed t;
+  ;;
+
+  let test_respond_before_reading_entire_body_no_error () =
+    let reader_woken_up = ref false in
+    let writer_woken_up = ref false in
+    let response = Response.create `OK in
+    let continue_response = ref (fun () -> ()) in
+    let request_handler reqd =
+      (* Important that we never close the request body for this test. *)
+      continue_response := (fun () ->
+        let resp_body = Reqd.respond_with_streaming reqd response in
+        Body.close_writer resp_body)
+    in
+    let error_handler ?request:_ _error _start_response = assert false in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
+    yield_reader t (fun () -> reader_woken_up := true);
+    Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+    yield_writer t (fun () -> writer_woken_up := true);
+
+    read_string t "data.";
+    !continue_response ();
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    write_response t ~body:"" response;
+    writer_yielded t;
+    writer_woken_up := false;
+    reader_ready t;
+    (* Yield writer before feeding eof.
+     *
+     * Note: writer here is done. It yields before we feed more to the reader
+     * to allow for it to complete. *)
+    writer_yielded t;
+    yield_writer t (fun () -> writer_woken_up := true);
+    read_string t "final";
+
+    (* Ready for the next request *)
+    reader_ready t;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    writer_yielded t
+  ;;
+
   let tests =
     [ "initial reader state"  , `Quick, test_initial_reader_state
     ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1326,6 +1449,9 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "test yield when read isn't scheduled", `Quick, test_handling_backpressure_when_read_not_scheduled
     ; "test yield when read isn't scheduled, reader yields early", `Quick, test_handling_backpressure_when_read_not_scheduled_early_yield
     ; "test partial input chunked body", `Quick, test_input_shrunk_chunked
+    ; "respond before reading request body, then request body EOFs", `Quick, test_respond_before_reading_entire_body_chunked_eof
+    ; "request body EOFs before closing response body, request body not closed", `Quick, test_finish_response_after_read_eof
+    ; "respond before reading entire request body", `Quick, test_respond_before_reading_entire_body_no_error
     ]
 end
 

@@ -264,6 +264,7 @@ let next_read_operation t =
   | `Error (`Invalid_response_body_length _ as error) ->
     set_error_and_handle t error;
     `Close
+  | `Start -> `Read
   | (`Read | `Yield | `Close) as operation -> operation
 ;;
 

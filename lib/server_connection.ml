@@ -125,10 +125,15 @@ let yield_writer t k =
       match Reqd.output_state reqd with
       | Wait | Consume -> Reqd.on_more_output_available reqd k
       | Complete ->
-        (* We don't ever expect to be in this state. The write state machine
-         * will advance the request queue as soon as a request is finished
-         * *)
-        assert false
+        (* The write state machine will advance the request queue as soon as a
+         * request is finished, as long as we've consumed the entire request
+         * body.
+         *
+         * We hit this branch in the cases where we've finished sending out the
+         * complete response, but e.g. have throttled the request body and need
+         * to consume it before processing the next request in a persistent
+         * connection. *)
+        t.wakeup_writer <- Optional_thunk.some k
     else
       t.wakeup_writer <- Optional_thunk.some k
   | Error { response_state; _ } ->
@@ -278,8 +283,18 @@ let rec _next_read_operation t =
     let reqd = current_reqd_exn t in
     match Reqd.input_state reqd with
     | Wait ->
-      transfer_reader_callback t reqd;
-      `Yield
+      (* `Wait` signals that we should add backpressure to the read channel,
+       * meaning the reader should tell the runtime to yield.
+       *
+       * The exception here is if there has been an error in the parser; in
+       * that case, we need to return that exception and signal the runtime to
+       * close. *)
+      begin match Reader.next t.reader with
+      | `Error _ as operation -> operation
+      | _ ->
+       transfer_reader_callback t reqd;
+       `Yield
+      end
     | Provide  -> Reader.next t.reader
     | Complete -> _final_read_operation_for t reqd
   )
@@ -293,8 +308,23 @@ and _final_read_operation_for t reqd =
       match Reqd.output_state reqd with
       | Wait | Consume -> `Yield
       | Complete       ->
-        advance_request_queue t;
-        _next_read_operation t;
+        (* The "final read" operation for a request descriptor that is
+         * `Complete` from both input and output perspectives needs to account
+         * for the fact that the reader may not have finished reading the
+         * request body.
+         * It's important that we don't advance the request queue in this case
+         * for persistent connections, or we'd break the invariant that a
+         * non-empty `request_queue` has had the request handler called on its
+         * head element. *)
+         let next = Reader.next t.reader in
+         match next with
+         | `Error _ | `Read ->
+           (* Keep reading when in a "partial" state (`Read).
+            * Don't advance the request queue if in an error state. *)
+           next
+         | _ ->
+           advance_request_queue t;
+           _next_read_operation t;
     )
   in
   wakeup_writer t;
@@ -305,7 +335,8 @@ let next_read_operation t =
   match _next_read_operation t with
   | `Error (`Parse _)             -> set_error_and_handle          t `Bad_request; `Close
   | `Error (`Bad_request request) -> set_error_and_handle ~request t `Bad_request; `Close
-  | (`Read | `Yield | `Close) as operation ->
+  | `Start | `Read -> `Read
+  | `Yield as operation ->
     if is_active t then begin
       let reqd = current_reqd_exn t in
       match Reqd.upgrade_handler reqd with
@@ -313,6 +344,7 @@ let next_read_operation t =
       | None -> operation
     end else
       operation
+  | `Close -> `Close
 
 let read_with_more t bs ~off ~len more =
   let call_handler = Queue.is_empty t.request_queue in
@@ -370,7 +402,6 @@ let rec _next_write_operation t =
         flush_response_error_body t ?request response_state;
         Writer.next t.writer
       | Complete ->
-        (* XXX: the connection can technically be persistent? *)
         shutdown_writer t;
         Writer.next t.writer
   ) else (
@@ -399,11 +430,20 @@ and _final_write_operation_for t reqd =
     ) else (
       match Reqd.input_state reqd with
       | Wait | Provide ->
+        (* If we're done sending a response in a persistent connection, but the
+         * reader hasn't yet ingested the entire request body, we need to
+         * signal that the "input state" for this request descriptor has been
+         * completed by closing the request body (not interested in ingesting
+         * more request body data). *)
         Reqd.close_request_body reqd;
-        _next_write_operation t
+        Writer.next t.writer
       | Complete ->
-        advance_request_queue t;
-        _next_write_operation t;
+         match Reader.next t.reader with
+         | `Error _ | `Read  ->
+           Writer.next t.writer
+         | _ ->
+           advance_request_queue t;
+           _next_write_operation t
     )
   in
   wakeup_reader t;
