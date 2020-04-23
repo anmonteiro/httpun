@@ -263,14 +263,17 @@ let advance_request_queue t =
 
 let rec _next_read_operation t =
   if not (is_active t) then (
-    if Reader.is_failed t.reader then
+    let next = Reader.next t.reader in
+    begin match next with
+    | `Error _ ->
       (* Don't tear down the whole connection if we saw an unrecoverable
        * parsing error, as we might be in the process of streaming back the
        * error response body to the client. *)
       shutdown_reader t
-    else if Reader.is_closed t.reader
-    then shutdown t;
-    Reader.next t.reader
+    | `Close -> shutdown t
+    | _ -> ()
+    end;
+    next
   ) else (
     let reqd = current_reqd_exn t in
     match Reqd.input_state reqd with
