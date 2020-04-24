@@ -157,7 +157,8 @@ let requires_output t =
 
 let close_reader t =
   Faraday.close t.faraday;
-  execute_read t
+  execute_read t;
+  ready_to_read t;
 ;;
 
 let when_ready_to_read t callback =

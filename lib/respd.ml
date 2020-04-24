@@ -58,8 +58,7 @@ let request_body { request_body; _ } = request_body
 
 let write_request t =
   Writer.write_request t.writer t.request;
-  Writer.flush t.writer (fun () ->
-    t.state <- Awaiting_response)
+  t.state <- Awaiting_response
 
 let on_more_input_available t f =
   match t.state with
@@ -77,19 +76,19 @@ let on_more_input_available t f =
 let on_more_output_available { request_body; _ } f =
   Body.when_ready_to_write request_body f
 
-(* TODO: wondering if any of the `Received_response` changes here
- * apply to us: https://github.com/inhabitedtype/httpaf/pull/148 *)
 let report_error t error =
-  (* t.persistent <- false; *)
-  (* TODO: drain queue? *)
+  t.persistent <- false;
   match t.state, t.error_code with
-  | (Uninitialized | Awaiting_response | Received_response _ | Upgraded _), `Ok ->
+  | (Uninitialized | Awaiting_response | Upgraded _), `Ok ->
     t.state <- Closed;
     t.error_code <- (error :> [`Ok | error]);
     t.error_handler error
   | Uninitialized, `Exn _ ->
     (* TODO(anmonteiro): Not entirely sure this is possible in the client. *)
     failwith "httpaf.Reqd.report_exn: NYI"
+  | Received_response _, `Ok ->
+     t.error_code <- (error :> [`Ok | error]);
+     t.error_handler error
   | (Uninitialized | Awaiting_response | Received_response _ | Closed | Upgraded _), _ ->
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
@@ -117,6 +116,8 @@ let input_state t : Input_state.t =
     else if Body.is_read_scheduled response_body
     then Provide
     else Wait
+    (* Upgraded is "Complete" because the descriptor doesn't wish to receive
+     * any more input. *)
   | Upgraded _
   | Closed -> Complete
 
@@ -127,7 +128,7 @@ let output_state { request_body; state; _ } : Output_state.t =
      * forever, but outside the HTTP layer, meaning they're permanently
      * "yielding". For now they need to be explicitly shutdown in order to
      * transition the response descriptor to the `Closed` state. *)
-    Consume
+    Wait
   | state ->
     if state = Uninitialized || Body.requires_output request_body
     then Consume
