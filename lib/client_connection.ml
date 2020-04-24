@@ -174,15 +174,25 @@ let shutdown t =
 (* TODO: Need to check in the RFC if reporting an error, e.g. in a malformed
  * response causes the whole connection to shutdown. *)
 let set_error_and_handle t error =
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    shutdown t;
-    Respd.report_error respd error
-  end
+  Reader.force_close t.reader;
+  Queue.iter (fun respd ->
+   match Respd.input_state respd with
+   | Wait | Provide ->
+     Respd.report_error respd error
+   | Complete ->
+     match Reader.next t.reader with
+     | `Error _ | `Read ->
+       Respd.report_error respd error
+     | _ ->
+       (* Don't bother reporting errors to responses that have already
+        * completed. *)
+       ())
+  t.request_queue;
 ;;
 
 let unexpected_eof t =
   set_error_and_handle t (`Malformed_response "unexpected eof");
+  shutdown t;
 ;;
 
 let report_exn t exn =
@@ -219,8 +229,14 @@ let advance_request_queue t =
   ignore (Queue.take t.request_queue);
   if not (Queue.is_empty t.request_queue) then begin
     (* write request to the wire *)
-    Respd.write_request (current_respd_exn t);
-    wakeup_writer t;
+    let respd = current_respd_exn t in
+    match respd.state with
+    | Uninitialized ->
+      (* Only write request if it hasn't been written to the wire yet (e.g. via
+       * pipelining). *)
+      Respd.write_request respd;
+      wakeup_writer t
+    | _ -> ()
   end
 
 let rec _next_read_operation t =
@@ -247,8 +263,14 @@ and _final_read_operation_for t respd =
       match Respd.output_state respd with
       | Wait | Consume -> `Yield
       | Complete       ->
-        advance_request_queue t;
-        _next_read_operation t;
+         match Reader.next t.reader with
+         | `Error _ | `Read as operation->
+           (* Keep reading when in a "partial" state (`Read).
+            * Don't advance the request queue if in an error state. *)
+           operation
+         | _ ->
+           advance_request_queue t;
+           _next_read_operation t;
     )
   in
   wakeup_writer t;
@@ -280,12 +302,8 @@ let read t bs ~off ~len =
 
 let read_eof t bs ~off ~len =
   let bytes_read = read_with_more t bs ~off ~len Complete in
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    match Respd.input_state respd with
-    | Wait | Provide -> unexpected_eof t
-    | Complete -> ()
-  end;
+  if is_active t
+  then unexpected_eof t;
   bytes_read
 ;;
 
@@ -310,17 +328,20 @@ and _final_write_operation_for t respd =
       shutdown_writer t;
       Writer.next t.writer;
     ) else (
+      (* From RFC7230§6.3.2:
+       *   A client that supports persistent connections MAY "pipeline" its
+       *   requests (i.e., send multiple requests without waiting for each
+       *   response). *)
+      maybe_pipeline_queued_requests t;
       match Respd.input_state respd with
       | Wait | Provide ->
-        (* From RFC7230§6.3.2:
-         *   A client that supports persistent connections MAY "pipeline" its
-         *   requests (i.e., send multiple requests without waiting for each
-         *   response). *)
-        maybe_pipeline_queued_requests t;
         Writer.next t.writer;
       | Complete ->
-        advance_request_queue t;
-        _next_write_operation t;
+         match Reader.next t.reader with
+         | `Error _ | `Read  -> Writer.next t.writer
+         | _ ->
+           advance_request_queue t;
+           _next_write_operation t
     )
   in
   wakeup_reader t;

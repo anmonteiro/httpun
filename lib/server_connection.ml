@@ -316,12 +316,11 @@ and _final_read_operation_for t reqd =
          * for persistent connections, or we'd break the invariant that a
          * non-empty `request_queue` has had the request handler called on its
          * head element. *)
-         let next = Reader.next t.reader in
-         match next with
-         | `Error _ | `Read ->
+         match Reader.next t.reader with
+         | `Error _ | `Read as operation ->
            (* Keep reading when in a "partial" state (`Read).
             * Don't advance the request queue if in an error state. *)
-           next
+           operation
          | _ ->
            advance_request_queue t;
            _next_read_operation t;
