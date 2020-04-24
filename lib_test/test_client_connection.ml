@@ -596,13 +596,20 @@ let test_fixed_body_persistent_connection () =
   Body.close_writer body;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_string t "hi";
+  writer_yielded t;
+  writer_woken_up := false;
+  yield_writer t (fun () -> writer_woken_up := true);
+  Alcotest.(check bool) "Writer doesn't wake up immediately" false !writer_woken_up;
   reader_ready t;
   read_response t (Response.create ~headers:(Headers.of_list []) `OK);
   reader_ready t;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   writer_yielded t;
 ;;
 
 let test_client_upgrade () =
+  let writer_woken_up = ref false in
+  let reader_woken_up = ref false in
   let request' = Request.create
     ~headers:(Headers.of_list ["Content-Length", "0"])
     `GET "/"
@@ -622,10 +629,15 @@ let test_client_upgrade () =
   reader_ready t;
   read_response t response;
   reader_yielded t;
+  yield_reader t (fun () -> reader_woken_up := true);
   writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+  Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
   shutdown t;
-  reader_closed t;
-  writer_closed t;
+  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  connection_is_shutdown t;
 ;;
 
 let backpressure_response_handler continue_reading expected_response response body =
@@ -697,6 +709,162 @@ let test_handling_backpressure_when_read_not_scheduled_early_yield () =
   writer_yielded t;
 ;;
 
+let test_eof_with_another_pipelined_request () =
+  let reader_woken_up = ref false in
+  let continue_reading = ref (fun () -> ()) in
+  let request' = Request.create `GET "/" in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler continue_reading expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let on_read _buffer ~off:_ ~len:_ =
+      continue_reading := (fun () ->
+        Body.close_reader body);
+    and on_eof () = print_endline "got eof" in
+    Body.schedule_read body ~on_eof ~on_read
+  in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler continue_reading response)
+      ~error_handler:no_error_handler
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.close_writer body;
+  reader_ready t;
+  read_response t response;
+  yield_reader t (fun () -> reader_woken_up := true);
+  yield_writer t ignore;
+  read_string t "five.";
+  reader_yielded t;
+  !continue_reading ();
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  writer_yielded t;
+
+  (* Pipeline the 2nd request. *)
+  let expected_response = Response.create `OK in
+  let error_handler_called = ref false in
+  let body' =
+    request
+      t
+      request'
+      ~response_handler:(fun response _ ->
+        Alcotest.check (module Response) "expected response" expected_response response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  Body.close_writer body';
+  write_request t request';
+  writer_yielded t;
+
+  let str = "rest." in
+  let len = String.length str in
+  let input = Bigstringaf.of_string str ~off:0 ~len in
+  let just_read = read_eof t input ~off:0 ~len in
+  Alcotest.(check int) "Rest of the response read completely, server EOF" len just_read;
+  reader_closed t;
+
+  Alcotest.(check bool) "Error handler called on the 2nd request" true !error_handler_called;
+  connection_is_shutdown t;
+;;
+
+(* If we haven't finished receiving the full response, the error handler
+ * should be called. *)
+let test_eof_handler_response_body_not_closed () =
+  let reader_woken_up = ref false in
+  let continue_reading = ref (fun () -> ()) in
+  let request' = Request.create `GET "/" in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler continue_reading expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let on_read _buffer ~off:_ ~len:_ =
+      continue_reading := (fun () -> ());
+    and on_eof () = print_endline "got eof" in
+    Body.schedule_read body ~on_eof ~on_read
+  in
+  let error_handler_called = ref false in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler continue_reading response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.close_writer body;
+  reader_ready t;
+  read_response t response;
+  yield_reader t (fun () -> reader_woken_up := true);
+  yield_writer t ignore;
+
+  !continue_reading ();
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+
+  let str = "rest." in
+  let len = String.length str in
+  let input = Bigstringaf.of_string str ~off:0 ~len in
+  let just_read = read_eof t input ~off:0 ~len in
+  Alcotest.(check int) "server EOF after delivering the first part of the response" len just_read;
+  reader_closed t;
+
+  Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  connection_is_shutdown t;
+;;
+
+let test_eof_handler_closed_response_body () =
+  let reader_woken_up = ref false in
+  let continue_reading = ref (fun () -> ()) in
+  let request' = Request.create `GET "/" in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler continue_reading expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let on_read _buffer ~off:_ ~len:_ =
+      continue_reading := (fun () ->
+        Body.close_reader body);
+    and on_eof () = print_endline "got eof" in
+    Body.schedule_read body ~on_eof ~on_read
+  in
+  let error_handler_called = ref false in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler continue_reading response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.close_writer body;
+  reader_ready t;
+  read_response t response;
+  yield_reader t (fun () -> reader_woken_up := true);
+  yield_writer t ignore;
+
+  !continue_reading ();
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+
+  let str = "rest." in
+  let len = String.length str in
+  let input = Bigstringaf.of_string str ~off:0 ~len in
+  let just_read = read_eof t input ~off:0 ~len in
+  Alcotest.(check int) "Rest of the response read completely, server EOF" len just_read;
+  reader_closed t;
+
+  Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -716,4 +884,7 @@ let tests =
   ; "Client support for upgrading a connection", `Quick, test_client_upgrade
   ; "test yield when read isn't scheduled", `Quick, test_handling_backpressure_when_read_not_scheduled
   ; "test yield when read isn't scheduled, reader yields early", `Quick, test_handling_backpressure_when_read_not_scheduled_early_yield
+  ; "EOF while a request is in the pipeline", `Quick, test_eof_with_another_pipelined_request
+  ; "EOF after handler response body not closed", `Quick, test_eof_handler_response_body_not_closed
+  ; "EOF after handler closed response body", `Quick, test_eof_handler_closed_response_body
   ]

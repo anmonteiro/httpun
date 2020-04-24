@@ -286,11 +286,6 @@ module Reader = struct
   let is_closed t =
     t.closed
 
-  let is_failed t =
-    match t.parse_state with
-    | Fail _ -> true
-    | _ -> false
-
   let transition t state =
     match state with
     | AU.Done(consumed, Ok ())
@@ -341,7 +336,7 @@ module Reader = struct
     match t.parse_state with
     | Fail failure -> `Error failure
     | _ when t.closed -> `Close
-    | Done      -> `Read
+    | Done      -> `Start
     | Partial _ -> `Read
   ;;
 end
