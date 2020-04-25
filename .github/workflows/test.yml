@@ -18,5 +18,6 @@ jobs:
       with:
         name: anmonteiro
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+    - name: "Run nix-build"
       run: nix-build ./nix/ci/test.nix --argstr ocamlVersion ${{ matrix.ocamlVersion }}
 
