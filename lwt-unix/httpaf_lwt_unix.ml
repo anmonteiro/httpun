@@ -57,8 +57,9 @@ module Io
           | 0 -> `Eof
           | n -> `Ok n)
       (function
-      | Unix.Unix_error (Unix.EBADF, _, _) as exn ->
-        Lwt.fail exn
+      | Unix.Unix_error (Unix.EBADF, _, _) ->
+        (* If the socket is closed we need to feed EOF to the state machine. *)
+        Lwt.return `Eof
       | exn ->
         Lwt.async (fun () -> close socket);
         Lwt.fail exn)
