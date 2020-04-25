@@ -13,11 +13,10 @@ jobs:
         ocamlVersion: [4_07, 4_08, 4_09, 4_10]
     steps:
     - uses: actions/checkout@v2
-    - uses: cachix/install-nix-action@v7
-    - uses: cachix/cachix-action@v5
+    - uses: cachix/install-nix-action@v8
+    - uses: cachix/cachix-action@v6
       with:
         name: anmonteiro
-        file: ./nix/ci/test.nix
-        nixBuildArgs: --argstr ocamlVersion ${{ matrix.ocamlVersion }}
         signingKey: '${{ secrets.CACHIX_SIGNING_KEY }}'
+      run: nix-build ./nix/ci/test.nix --argstr ocamlVersion ${{ matrix.ocamlVersion }}
 
