@@ -36,7 +36,7 @@ module Reader = Parse.Reader
 module Writer = Serialize.Writer
 
 
-type ('fd, 'io) request_handler = ('fd, 'io) Reqd.t -> unit
+type request_handler = Reqd.t -> unit
 
 type error =
   [ `Bad_gateway | `Bad_request | `Internal_server_error | `Exn of exn]
@@ -44,20 +44,20 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
-type ('fd, 'io) error_code =
+type error_code =
   | No_error
   | Error of
     { request: Request.t option
-    ; mutable response_state: ('fd, 'io) Response_state.t
+    ; mutable response_state: Response_state.t
     }
 
-type ('fd, 'io) t =
+type t =
   { reader                 : Reader.request
   ; writer                 : Writer.t
   ; response_body_buffer   : Bigstringaf.t
-  ; request_handler        : ('fd, 'io) request_handler
+  ; request_handler        : request_handler
   ; error_handler          : error_handler
-  ; request_queue          : ('fd, 'io) Reqd.t Queue.t
+  ; request_queue          : Reqd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already had [request_handler] called on it. *)
   ; mutable wakeup_writer  : Optional_thunk.t
@@ -65,7 +65,7 @@ type ('fd, 'io) t =
     (* Represents an unrecoverable error that will cause the connection to
      * shutdown. Holds on to the response body created by the error handler
      * that might be streaming to the client. *)
-  ; mutable error_code : ('fd, 'io) error_code
+  ; mutable error_code : error_code
   }
 
 let is_closed t =
@@ -335,15 +335,8 @@ let next_read_operation t =
   | `Error (`Parse _)             -> set_error_and_handle          t `Bad_request; `Close
   | `Error (`Bad_request request) -> set_error_and_handle ~request t `Bad_request; `Close
   | `Start | `Read -> `Read
-  | `Yield as operation ->
-    if is_active t then begin
-      let reqd = current_reqd_exn t in
-      match Reqd.upgrade_handler reqd with
-      | Some _ -> `Upgrade
-      | None -> operation
-    end else
-      operation
-  | `Close -> `Close
+  | (`Yield | `Close) as operation ->
+    operation
 
 let read_with_more t bs ~off ~len more =
   let call_handler = Queue.is_empty t.request_queue in
@@ -409,15 +402,7 @@ let rec _next_write_operation t =
     | Wait -> `Yield
     | Consume ->
       Reqd.flush_response_body reqd;
-      begin match Writer.next t.writer with
-      | `Write iovecs as write_op ->
-        begin match Reqd.upgrade_handler reqd with
-        | Some upgrade ->
-          `Upgrade (iovecs, upgrade)
-        | None -> write_op
-        end
-      | operation -> operation
-      end
+      Writer.next t.writer
     | Complete -> _final_write_operation_for t reqd
   )
 

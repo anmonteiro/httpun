@@ -17,6 +17,7 @@ depends: [
   "httpaf"
   "dune"
   "lwt"
+  "gluten-lwt"
 ]
 pin-depends: [
   [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]

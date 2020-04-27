@@ -62,14 +62,14 @@ module Writer = Serialize.Writer
  *  ]}
  *
  * *)
-type ('handle, 'io) t =
+type t =
   { request                 : Request.t
   ; request_body            : [`read] Body.t
   ; writer                  : Writer.t
   ; response_body_buffer    : Bigstringaf.t
   ; error_handler           : error_handler
   ; mutable persistent      : bool
-  ; mutable response_state  : ('handle, 'io) Response_state.t
+  ; mutable response_state  : Response_state.t
   ; mutable error_code      : [`Ok | error ]
   }
 
@@ -172,6 +172,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Upgrade (response, upgrade_handler);
+    Writer.flush t.writer upgrade_handler;
     Body.close_reader t.request_body;
     done_waiting when_done_waiting
   | Streaming _ | Upgrade _ ->
@@ -238,11 +239,14 @@ let persistent_connection t =
   t.persistent
 
 let input_state t : Input_state.t =
-  if Body.is_closed t.request_body
-  then Complete
-  else if Body.is_read_scheduled t.request_body
-  then Provide
-  else Wait
+  match t.response_state with
+  | Upgrade _ -> Provide
+  | _ ->
+    if Body.is_closed t.request_body
+    then Complete
+    else if Body.is_read_scheduled t.request_body
+    then Provide
+    else Wait
 
 let output_state t = Response_state.output_state t.response_state
 

@@ -31,13 +31,14 @@ in
   httpaf-lwt = buildHttpaf {
     pname = "httpaf-lwt";
     doCheck = false;
-    propagatedBuildInputs = [ httpaf lwt4 ];
+    propagatedBuildInputs = [ gluten-lwt httpaf lwt4 ];
   };
 
   httpaf-lwt-unix = buildHttpaf {
     pname = "httpaf-lwt-unix";
     doCheck = false;
     propagatedBuildInputs = [
+      gluten-lwt-unix
       httpaf-lwt
       faraday-lwt-unix
       lwt_ssl
