@@ -4,8 +4,9 @@ module Arg = Caml.Arg
 
 open Httpaf_lwt_unix
 
-let request_handler (_ : Unix.sockaddr) = Httpaf_examples.Server.echo_post
 let error_handler (_ : Unix.sockaddr) = Httpaf_examples.Server.error_handler
+let request_handler (_ : Unix.sockaddr) { Gluten.Reqd.reqd; _ } =
+  Httpaf_examples.Server.echo_post reqd
 
 let main port =
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, port)) in

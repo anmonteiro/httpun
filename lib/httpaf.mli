@@ -460,8 +460,8 @@ module Body : sig
       consume, or when the input channel has been closed and no further bytes
       will be received by the application.
 
-      Once either of these callbacks have been called, they become inactive. 
-      The application is responsible for scheduling subsequent reads, either 
+      Once either of these callbacks have been called, they become inactive.
+      The application is responsible for scheduling subsequent reads, either
       within the [on_read] callback or by some other mechanism. *)
 
   val write_char : [`write] t -> char -> unit
@@ -482,7 +482,7 @@ module Body : sig
   val schedule_bigstring : [`write] t -> ?off:int -> ?len:int -> Bigstringaf.t -> unit
   (** [schedule_bigstring w ?off ?len bs] schedules [bs] to be transmitted at
       the next opportunity without performing a copy. [bs] should not be
-      modified until a subsequent call to {!flush} has successfully 
+      modified until a subsequent call to {!flush} has successfully
       completed. *)
 
   val flush : [`write] t -> (unit -> unit) -> unit
@@ -637,6 +637,7 @@ module Reqd : sig
   val respond_with_string    : t -> Response.t -> string -> unit
   val respond_with_bigstring : t -> Response.t -> Bigstringaf.t -> unit
   val respond_with_streaming : ?flush_headers_immediately:bool -> t -> Response.t -> [`write] Body.t
+  val respond_with_upgrade : t -> Headers.t -> (unit -> unit) -> unit
 
   (** {3 Exception Handling} *)
 
@@ -691,7 +692,7 @@ module Server_connection : sig
       connection to consume. *)
 
   val read_eof : t -> Bigstringaf.t -> off:int -> len:int -> int
-  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided 
+  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided
       range of [bigstring] and returns the number of bytes consumed by the
       connection.  {!read_eof} should be called after {!next_read_operation}
       returns a [`Read] and an EOF has been received from the communication
@@ -782,7 +783,7 @@ module Client_connection : sig
       connection to consume. *)
 
   val read_eof : t -> Bigstringaf.t -> off:int -> len:int -> int
-  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided 
+  (** [read_eof t bigstring ~off ~len] reads bytes of input from the provided
       range of [bigstring] and returns the number of bytes consumed by the
       connection.  {!read_eof} should be called after {!next_read_operation}
       returns a [`Read] and an EOF has been received from the communication

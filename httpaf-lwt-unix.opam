@@ -19,10 +19,7 @@ depends: [
   "dune" {>= "1.5.0"}
   "httpaf-lwt"
   "lwt"
-]
-depopts: [
-  "tls"
-  "lwt_ssl"
+  "gluten-lwt-unix"
 ]
 pin-depends: [
   [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]

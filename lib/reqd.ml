@@ -97,12 +97,14 @@ let response { response_state; _ } =
   | Waiting _ -> None
   | Streaming(response, _)
   | Complete (response) -> Some response
+  | Upgrade (response, _) -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
   | Waiting _            -> failwith "httpaf.Reqd.response_exn: response has not started"
   | Streaming(response, _)
   | Complete (response) -> response
+  | Upgrade (response, _) -> response
 
 let respond_with_string t response str =
   if t.error_code <> `Ok then
@@ -116,7 +118,7 @@ let respond_with_string t response str =
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Complete response;
     done_waiting when_done_waiting
-  | Streaming _ ->
+  | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_string: response already started"
   | Complete _ ->
     failwith "httpaf.Reqd.respond_with_string: response already complete"
@@ -133,7 +135,7 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Complete response;
     done_waiting when_done_waiting
-  | Streaming _ ->
+  | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_bigstring: response already started"
   | Complete _ ->
     failwith "httpaf.Reqd.respond_with_bigstring: response already complete"
@@ -149,7 +151,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
     t.response_state <- Streaming(response, response_body);
     done_waiting when_done_waiting;
     response_body
-  | Streaming _ ->
+  | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already started"
   | Complete _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already complete"
@@ -167,6 +169,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Upgrade (response, upgrade_handler);
+    Writer.flush t.writer upgrade_handler;
     Body.close_reader t.request_body;
     done_waiting when_done_waiting
   | Streaming _ | Upgrade _ ->
@@ -202,7 +205,7 @@ let report_error t error =
   | Streaming(_response, response_body), `Exn _ ->
     Body.close_writer response_body;
     Writer.close_and_drain t.writer
-  | (Complete _ | Streaming _ | Waiting _) , _ ->
+  | (Complete _ | Streaming _ | Upgrade _ | Waiting _) , _ ->
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
     ()
@@ -233,11 +236,14 @@ let persistent_connection t =
   t.persistent
 
 let input_state t : Input_state.t =
-  if Body.is_closed t.request_body
-  then Complete
-  else if Body.is_read_scheduled t.request_body
-  then Ready
-  else Wait
+  match t.response_state with
+  | Upgrade _ -> Ready
+  | _ ->
+    if Body.is_closed t.request_body
+    then Complete
+    else if Body.is_read_scheduled t.request_body
+    then Ready
+    else Wait
 
 let output_state t = Response_state.output_state t.response_state
 

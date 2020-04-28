@@ -604,6 +604,26 @@ let test_blocked_write_on_chunked_encoding () =
     (next_write_operation t |> Write_operation.to_write_as_string);
 ;;
 
+let test_respond_with_upgrade () =
+  let upgraded = ref false in
+  let upgrade_handler reqd =
+    Reqd.respond_with_upgrade reqd Headers.empty (fun () ->
+     upgraded := true)
+  in
+  let t = create ~error_handler upgrade_handler in
+  read_request t (Request.create `GET "/");
+  match next_write_operation t with
+  | `Write iovecs ->
+    let response_str = response_to_string (Response.create `Switching_protocols) in
+    Alcotest.(check string) "Switching protocols response"
+      (Write_operation.iovecs_to_string iovecs)
+      response_str;
+    let len = String.length response_str in
+    report_write_result t (`Ok len);
+    Alcotest.(check bool) "Callback was called" true !upgraded;
+    reader_ready t;
+  | _ -> Alcotest.fail "Expected Upgrade operation"
+
 let test_unexpected_eof () =
   let t = create default_request_handler in
   read_request   t (Request.create `GET "/");
@@ -1166,6 +1186,7 @@ let tests =
   ; "asynchronous error, asynchronous handling + asynchronous body", `Quick, test_asynchronous_error_asynchronous_response_body
   ; "chunked encoding", `Quick, test_chunked_encoding
   ; "blocked write on chunked encoding", `Quick, test_blocked_write_on_chunked_encoding
+  ; "respond with upgrade", `Quick, test_respond_with_upgrade
   ; "writer unexpected eof", `Quick, test_unexpected_eof
   ; "input shrunk", `Quick, test_input_shrunk
   ; "malformed request", `Quick, test_malformed_request

@@ -177,7 +177,7 @@ let set_error_and_handle t error =
   Reader.force_close t.reader;
   Queue.iter (fun respd ->
    match Respd.input_state respd with
-   | Wait | Provide ->
+   | Wait | Ready ->
      Respd.report_error respd error
    | Complete ->
      match Reader.next t.reader with
