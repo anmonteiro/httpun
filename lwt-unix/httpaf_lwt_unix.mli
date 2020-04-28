@@ -44,15 +44,15 @@ module Server : sig
      and type addr := Unix.sockaddr
 
   module TLS : sig
-  include Httpaf_lwt.Server
-    with type socket = Tls_io.descriptor
-     and type addr := Unix.sockaddr
+    include Httpaf_lwt.Server
+      with type socket = Gluten_lwt_unix.Server.TLS.socket
+       and type addr := Unix.sockaddr
 
     val create_connection_handler_with_default
       :  certfile       : string
       -> keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> (Tls_io.descriptor, unit Lwt.t) Server_connection.request_handler)
+      -> request_handler : (Unix.sockaddr -> Httpaf.Reqd.t Gluten.Reqd.t -> unit)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
@@ -60,15 +60,15 @@ module Server : sig
   end
 
   module SSL : sig
-  include Httpaf_lwt.Server
-    with type socket = Ssl_io.descriptor
-     and type addr := Unix.sockaddr
+    include Httpaf_lwt.Server
+      with type socket = Gluten_lwt_unix.Server.SSL.socket
+       and type addr := Unix.sockaddr
 
     val create_connection_handler_with_default
       :  certfile       : string
       -> keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> (Ssl_io.descriptor, unit Lwt.t) Server_connection.request_handler)
+      -> request_handler : (Unix.sockaddr -> Httpaf.Reqd.t Gluten.Reqd.t -> unit)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
@@ -78,10 +78,14 @@ end
 
 (* For an example, see [examples/lwt_get.ml]. *)
 module Client : sig
-  include Httpaf_lwt.Client with type socket = Lwt_unix.file_descr
+  include Httpaf_lwt.Client
+    with type socket = Lwt_unix.file_descr
+     and type runtime = Gluten_lwt_unix.Client.t
 
   module TLS : sig
-    include Httpaf_lwt.Client with type socket = Tls_io.descriptor
+    include Httpaf_lwt.Client
+      with type socket = Gluten_lwt_unix.Client.TLS.socket
+       and type runtime = Gluten_lwt_unix.Client.TLS.t
 
     val create_connection_with_default
       :  ?config : Config.t
@@ -90,7 +94,9 @@ module Client : sig
   end
 
   module SSL : sig
-    include Httpaf_lwt.Client with type socket = Ssl_io.descriptor
+    include Httpaf_lwt.Client
+      with type socket = Gluten_lwt_unix.Client.SSL.socket
+       and type runtime = Gluten_lwt_unix.Client.SSL.t
 
     val create_connection_with_default
       :  ?config : Config.t

@@ -1,8 +1,8 @@
-type ('handle, 'io) t =
+type t =
   | Waiting   of Optional_thunk.t ref
   | Complete  of Response.t
   | Streaming of Response.t * [`write] Body.t
-  | Upgrade of Response.t * ('handle -> 'io)
+  | Upgrade of Response.t * (unit -> unit)
 
 let upgrade_handler t =
   match t with

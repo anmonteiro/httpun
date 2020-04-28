@@ -289,7 +289,6 @@ end
 module Write_operation = struct
   type 'fd t = [
     | `Write of Bigstringaf.t IOVec.t list
-    | `Upgrade of Bigstringaf.t IOVec.t list * ('fd -> unit)
     | `Yield
     | `Close of int ]
 
@@ -343,10 +342,6 @@ module Server_connection = struct
   let reader_ready ?(msg="Reader is ready") t =
     Alcotest.check read_operation msg
       `Read (next_read_operation t);
-  ;;
-
-  let reader_upgraded ?(msg="Reader upgraded") t =
-    Alcotest.check read_operation msg `Upgrade (next_read_operation t)
   ;;
 
   let reader_yielded t =
@@ -1065,16 +1060,15 @@ module Server_connection = struct
     let t = create ~error_handler upgrade_handler in
     read_request t (Request.create `GET "/");
     match next_write_operation t with
-    | `Upgrade (iovecs, fn) ->
+    | `Write iovecs ->
       let response_str = response_to_string (Response.create `Switching_protocols) in
       Alcotest.(check string) "Switching protocols response"
         (Write_operation.iovecs_to_string iovecs)
         response_str;
-      reader_upgraded t;
-      fn ();
       let len = String.length response_str in
       report_write_result t (`Ok len);
-      Alcotest.(check bool) "Callback was called" true !upgraded
+      Alcotest.(check bool) "Callback was called" true !upgraded;
+      reader_ready t;
     | _ -> Alcotest.fail "Expected Upgrade operation"
 
   let test_unexpected_eof () =
@@ -1482,17 +1476,17 @@ module Client_connection = struct
 
   let reader_ready ?(msg="Reader is ready") t =
     Alcotest.check read_operation msg
-      `Read (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade]);
+      `Read (next_read_operation t);
   ;;
 
   let reader_yielded t =
     Alcotest.check read_operation "Reader is in a yield state"
-      `Yield (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade]);
+      `Yield (next_read_operation t);
   ;;
 
   let reader_closed t =
     Alcotest.check read_operation "Reader is closed"
-      `Close (next_read_operation t :> [`Close | `Read | `Yield | `Upgrade])
+      `Close (next_read_operation t)
 
   let write_string ?(msg="output written") t str =
     let len = String.length str in

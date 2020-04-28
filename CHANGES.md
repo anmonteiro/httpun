@@ -66,6 +66,9 @@ Unreleased
   chunk-encoded responses ([#56](https://github.com/anmonteiro/httpaf/pull/56))
 - httpaf: handle read backpressure in server and client implementations
   ([#59](https://github.com/anmonteiro/httpaf/pull/59))
+- httpaf-lwt, httpaf-lwt-unix: Use
+  [gluten](https://github.com/anmonteiro/gluten) to implement the Lwt-based
+  runtimes ([#63](https://github.com/anmonteiro/httpaf/pull/63))
 
 httpaf (upstream) 0.6.5
 --------------
