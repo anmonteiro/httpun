@@ -39,7 +39,7 @@ module type Server = sig
 
   val create_connection_handler
     :  ?config         : Config.t
-    -> request_handler : (addr -> Httpaf.Reqd.t Gluten.Reqd.t -> unit)
+    -> request_handler : (addr -> Httpaf.Reqd.t Gluten.reqd -> unit)
     -> error_handler   : (addr -> Server_connection.error_handler)
     -> addr
     -> socket

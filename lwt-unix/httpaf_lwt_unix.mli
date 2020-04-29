@@ -52,7 +52,7 @@ module Server : sig
       :  certfile       : string
       -> keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Httpaf.Reqd.t Gluten.Reqd.t -> unit)
+      -> request_handler : (Unix.sockaddr -> Httpaf.Reqd.t Gluten.reqd -> unit)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
@@ -68,7 +68,7 @@ module Server : sig
       :  certfile       : string
       -> keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : (Unix.sockaddr -> Httpaf.Reqd.t Gluten.Reqd.t -> unit)
+      -> request_handler : (Unix.sockaddr -> Httpaf.Reqd.t Gluten.reqd -> unit)
       -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
       -> Unix.sockaddr
       -> Lwt_unix.file_descr
