@@ -48,7 +48,7 @@ module Server (Server_runtime: Gluten_lwt.Server) = struct
           ~config
           ~error_handler:(error_handler client_addr)
       in
-      Server_runtime.create_connection_handler
+      Server_runtime.create_upgradable_connection_handler
         ~read_buffer_size:config.read_buffer_size
         ~protocol:(module Httpaf.Server_connection)
         ~create_protocol:create_connection
