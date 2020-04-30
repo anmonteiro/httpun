@@ -16,32 +16,43 @@ in
       src = lib.gitignoreSource ./..;
     } // args);
 
-# TODO: httpaf-async, httpaf-mirage
-  in rec {
-    httpaf = buildHttpaf {
-      pname = "httpaf";
-      buildInputs = [ alcotest hex yojson ];
-      propagatedBuildInputs = [
-        angstrom
-        faraday
-      ];
+    httpafPackages = rec {
+      httpaf = buildHttpaf {
+        pname = "httpaf";
+        buildInputs = [ alcotest hex yojson ];
+        propagatedBuildInputs = [
+          angstrom
+          faraday
+        ];
+      };
+
+    # These two don't have tests
+    httpaf-lwt = buildHttpaf {
+      pname = "httpaf-lwt";
+      doCheck = false;
+      propagatedBuildInputs = [ gluten-lwt httpaf lwt4 ];
     };
 
-  # These two don't have tests
-  httpaf-lwt = buildHttpaf {
-    pname = "httpaf-lwt";
-    doCheck = false;
-    propagatedBuildInputs = [ gluten-lwt httpaf lwt4 ];
+    httpaf-lwt-unix = buildHttpaf {
+      pname = "httpaf-lwt-unix";
+      doCheck = false;
+      propagatedBuildInputs = [
+        gluten-lwt-unix
+        httpaf-lwt
+        faraday-lwt-unix
+        lwt_ssl
+      ];
+    };
   };
-
-  httpaf-lwt-unix = buildHttpaf {
-    pname = "httpaf-lwt-unix";
-    doCheck = false;
-    propagatedBuildInputs = [
-      gluten-lwt-unix
-      httpaf-lwt
-      faraday-lwt-unix
-      lwt_ssl
-    ];
-  };
-}
+  # TODO: httpaf-async
+  in httpafPackages // (if (lib.versionOlder "4.08" ocaml.version) then {
+    h2-mirage = buildHttpaf {
+      pname = "h2-mirage";
+      doCheck = false;
+      propagatedBuildInputs = with httpafPackages; [
+        conduit-mirage
+        httpaf-lwt
+        gluten-mirage
+      ];
+    };
+    } else {})

@@ -11,7 +11,7 @@ module Dispatch (C: Mirage_console.S) (Http: HTTP) = struct
     log c "Replying: %s" path >|= fun () ->
     "Hello from the httpaf unikernel"
 
-  let dispatcher c reqd =
+  let dispatcher c { Gluten.reqd; _ } =
     let {Request.target; _} = Reqd.request reqd in
     Lwt.catch
       (fun () ->

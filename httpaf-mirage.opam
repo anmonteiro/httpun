@@ -14,7 +14,7 @@ depends: [
   "ocaml" {>= "4.03.0"}
   "faraday-lwt"
   "httpaf"
-  "httpaf-lwt"
+  "gluten-mirage"
   "conduit-mirage" {>= "2.0.2"}
   "mirage-flow" {>= "2.0.0"}
   "cstruct"
