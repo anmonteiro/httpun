@@ -32,87 +32,28 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-open Lwt.Infix
-
-module Make_IO (Flow: Mirage_flow.S) :
-  Httpaf_lwt.IO with type socket = Flow.flow and type addr = unit = struct
-  type socket = Flow.flow
-  type addr = unit
-
-  let shutdown flow =
-    Flow.close flow
-
-  let shutdown_receive flow =
-    Lwt.async (fun () -> shutdown flow)
-
-  let shutdown_send flow =
-    Lwt.async (fun () -> shutdown flow)
-
-  let close flow = shutdown flow
-
-  let read flow bigstring ~off ~len:_ =
-    Lwt.catch
-      (fun () ->
-        Flow.read flow >|= function
-        | Ok (`Data buf) ->
-          Bigstringaf.blit
-            buf.buffer
-            ~src_off:buf.off bigstring
-            ~dst_off:off
-            ~len:buf.len;
-          `Ok buf.len
-        | Ok `Eof -> `Eof
-        | Error error ->
-          raise (Failure (Format.asprintf "%a" Flow.pp_error error)))
-      (fun exn ->
-        shutdown flow >>= fun () ->
-        Lwt.fail exn)
-
-  let writev flow = fun iovecs ->
-      let cstruct_iovecs = List.map (fun {Faraday.buffer; off; len} ->
-        Cstruct.of_bigarray ~off ~len buffer)
-        iovecs
-      in
-
-      Lwt.catch
-        (fun () ->
-          Flow.writev flow cstruct_iovecs >|= fun x ->
-          match x with
-          | Ok () ->
-            `Ok (Cstruct.lenv cstruct_iovecs)
-          | Error `Closed ->
-            `Closed
-          | Error other_error ->
-            raise (Failure (Format.asprintf "%a" Flow.pp_write_error other_error)))
-        (fun exn ->
-          shutdown flow >>= fun () ->
-          Lwt.fail exn)
-
-  let state _flow = `Open
-end
-
 module Server (Flow : Mirage_flow.S) = struct
-  type flow = Flow.flow
+  type socket = Flow.flow
 
-  include Httpaf_lwt.Server (Make_IO (Flow))
+  module Server_runtime = Httpaf_lwt.Server (Gluten_mirage.Server (Flow))
 
   let create_connection_handler ?config ~request_handler ~error_handler =
     fun flow ->
-      let request_handler = fun () -> request_handler in
-      let error_handler = fun () -> error_handler in
-      create_connection_handler ?config ~request_handler ~error_handler () flow
+      let request_handler () = request_handler in
+      let error_handler () = error_handler in
+      Server_runtime.create_connection_handler ?config ~request_handler ~error_handler () flow
 end
 
 (* Almost like the `Httpaf_lwt.Server` module type but we don't need the client
  * address argument in Mirage. It's somewhere else. *)
 module type Server = sig
-  type flow
+  type socket
 
   val create_connection_handler
     :  ?config : Httpaf.Config.t
-    -> request_handler : Httpaf.Server_connection.request_handler
+    -> request_handler : (Httpaf.Reqd.t Gluten.reqd -> unit)
     -> error_handler : Httpaf.Server_connection.error_handler
-    -> (flow -> unit Lwt.t)
+    -> (socket -> unit Lwt.t)
 end
 
 module Server_with_conduit = struct
@@ -131,14 +72,7 @@ module Server_with_conduit = struct
     Lwt.return listen
 end
 
-module type Client = sig
-  type flow
+module type Client = Httpaf_lwt.Client
 
-  include Httpaf_lwt.Client with type socket := flow
-end
-
-module Client (Flow : Mirage_flow.S) = struct
-    type flow = Flow.flow
-
-    include Httpaf_lwt.Client (Make_IO (Flow))
-end
+module Client (Flow : Mirage_flow.S) =
+  Httpaf_lwt.Client (Gluten_mirage.Client (Flow))

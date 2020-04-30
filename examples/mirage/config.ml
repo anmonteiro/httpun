@@ -7,7 +7,13 @@ let stack = generic_stackv4 default_network
 (* Dependencies *)
 
 let server =
+ let packages =
+   [ package ~pin:"file://../../" "httpaf-lwt"
+   ; package ~pin:"file://../../" "httpaf-mirage"
+   ]
+  in
   foreign "Unikernel.Make"
+    ~packages
     (console @-> pclock @-> http @-> job)
 
 let app =
