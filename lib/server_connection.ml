@@ -60,7 +60,6 @@ type t =
   ; request_queue          : Reqd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already had [request_handler] called on it. *)
-  ; mutable wakeup_writer  : Optional_thunk.t
   ; mutable wakeup_reader  : Optional_thunk.t
     (* Represents an unrecoverable error that will cause the connection to
      * shutdown. Holds on to the response body created by the error handler
@@ -140,19 +139,13 @@ let yield_writer t k =
     Response_state.on_more_output_available response_state k
 ;;
 
-let wakeup_writer t =
-  let f = t.wakeup_writer in
-  t.wakeup_writer <- Optional_thunk.none;
-  Optional_thunk.call_if_some f
+let yield_writer t k =
+ if Writer.is_closed t.writer
+ then k ()
+ else Writer.on_wakeup t.writer k
 ;;
 
-let transfer_writer_callback t reqd =
-  if Optional_thunk.is_some t.wakeup_writer
-  then (
-    let f = t.wakeup_writer in
-    t.wakeup_writer <- Optional_thunk.none;
-    Reqd.on_more_output_available reqd (Optional_thunk.unchecked_value f))
-;;
+let wakeup_writer t = Writer.wakeup t.writer
 
 let default_error_handler ?request:_ error handle =
   let message =
@@ -187,7 +180,6 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   ; request_handler = request_handler
   ; error_handler   = error_handler
   ; request_queue
-  ; wakeup_writer   = Optional_thunk.none
   ; wakeup_reader   = Optional_thunk.none
   ; error_code = No_error
   }
@@ -345,10 +337,7 @@ let read_with_more t bs ~off ~len more =
   then (
     let reqd = current_reqd_exn t in
     if call_handler
-    then (
-      transfer_writer_callback t reqd;
-      t.request_handler reqd
-    );
+    then t.request_handler reqd;
     Reqd.flush_request_body reqd;
   );
   consumed
