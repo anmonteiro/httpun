@@ -48,7 +48,6 @@ type t =
   ; request_queue : Respd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already written the request headers to the wire. *)
-  ; mutable wakeup_writer  : Optional_thunk.t
   ; mutable wakeup_reader  : Optional_thunk.t
   }
 
@@ -96,28 +95,12 @@ let transfer_reader_callback t respd =
     Respd.on_more_input_available respd (Optional_thunk.unchecked_value f))
 
 let yield_writer t k =
-  if is_closed t
-  then failwith "yield_writer on closed conn"
-  else if Optional_thunk.is_some t.wakeup_writer
-  then failwith "yield_writer: only one callback can be registered at a time"
-  else if is_active t then
-    let respd = current_respd_exn t in
-    match Respd.output_state respd with
-    | Consume -> Respd.on_more_output_available respd k
-    | Wait | Complete ->
-      (* This can feel counter-intuitive. We don't immediately execute this
-       * callback or we'd trigger an infinite loop in the case where we're done
-       * sending the request body and are waiting for the response to arrive,
-       * in which case the "output state" for the descriptor is "Complete" and
-       * the state machine issues a `Yield` operation. *)
-      t.wakeup_writer <- Optional_thunk.some k
-  else
-    t.wakeup_writer <- Optional_thunk.some k
+ if Writer.is_closed t.writer
+ then k ()
+ else Writer.on_wakeup t.writer k
+;;
 
-let wakeup_writer t =
-  let f = t.wakeup_writer in
-  t.wakeup_writer <- Optional_thunk.none;
-  Optional_thunk.call_if_some f
+let wakeup_writer t = Writer.wakeup t.writer
 
 let[@ocaml.warning "-16"] create ?(config=Config.default) =
   let request_queue = Queue.create () in
@@ -125,13 +108,14 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   ; reader = Reader.response request_queue
   ; writer = Writer.create ()
   ; request_queue
-  ; wakeup_writer = Optional_thunk.none
   ; wakeup_reader = Optional_thunk.none
   }
 
 let request t request ~error_handler ~response_handler =
   let request_body =
-    Body.create (Bigstringaf.create t.config.request_body_buffer_size)
+    Body.create
+      (Bigstringaf.create t.config.request_body_buffer_size)
+      (Optional_thunk.some (fun () -> wakeup_writer t))
   in
   if not (Request.body_length request = `Chunked) then
     Body.set_non_chunked request_body;

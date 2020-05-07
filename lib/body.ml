@@ -45,22 +45,22 @@ type _ t =
 let default_on_eof         = Sys.opaque_identity (fun () -> ())
 let default_on_read        = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 
-let of_faraday faraday =
+let of_faraday faraday when_ready_to_write =
   { faraday
   ; read_scheduled         = false
   ; write_final_if_chunked = true
   ; on_eof                 = default_on_eof
   ; on_read                = default_on_read
   ; when_ready_to_read     = Optional_thunk.none
-  ; when_ready_to_write    = Optional_thunk.none
+  ; when_ready_to_write
   ; buffered_bytes         = ref 0
   }
 
-let create buffer =
-  of_faraday (Faraday.of_bigstring buffer)
+let create buffer ready_to_write =
+  of_faraday (Faraday.of_bigstring buffer) ready_to_write
 
 let create_empty () =
-  let t = create Bigstringaf.empty in
+  let t = create Bigstringaf.empty Optional_thunk.none in
   t.write_final_if_chunked <- false;
   Faraday.close t.faraday;
   t
@@ -88,9 +88,7 @@ let ready_to_read t =
   Optional_thunk.call_if_some callback
 
 let ready_to_write t =
-  let callback = t.when_ready_to_write in
-  t.when_ready_to_write <- Optional_thunk.none;
-  Optional_thunk.call_if_some callback
+  Optional_thunk.call_if_some t.when_ready_to_write
 
 let flush t kontinue =
   Faraday.flush t.faraday kontinue;
@@ -167,13 +165,6 @@ let when_ready_to_read t callback =
   else if Optional_thunk.is_some t.when_ready_to_read
   then failwith "Body.when_ready_to_read: only one callback can be registered at a time"
   else t.when_ready_to_read <- Optional_thunk.some callback
-
-let when_ready_to_write t callback =
-  if is_closed t
-  then callback ()
-  else if Optional_thunk.is_some t.when_ready_to_write
-  then failwith "Body.when_ready_to_write: only one callback can be registered at a time"
-  else t.when_ready_to_write <- Optional_thunk.some callback
 
 let transfer_to_writer_with_encoding t ~encoding writer =
   let faraday = t.faraday in

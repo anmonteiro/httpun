@@ -71,9 +71,6 @@ let on_more_input_available t f =
   | Closed ->
     failwith "httpaf.Respd.on_more_input_available: response already complete"
 
-let on_more_output_available { request_body; _ } f =
-  Body.when_ready_to_write request_body f
-
 let report_error t error =
   t.persistent <- false;
   match t.state, t.error_code with
