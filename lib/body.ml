@@ -88,9 +88,7 @@ let ready_to_read t =
   Optional_thunk.call_if_some callback
 
 let ready_to_write t =
-  let callback = t.when_ready_to_write in
-  t.when_ready_to_write <- Optional_thunk.none;
-  Optional_thunk.call_if_some callback
+  Optional_thunk.call_if_some t.when_ready_to_write
 
 let flush t kontinue =
   Faraday.flush t.faraday kontinue;

@@ -80,28 +80,23 @@ let create error_handler request request_body writer response_body_buffer =
   ; response_body_buffer
   ; error_handler
   ; persistent              = Request.persistent_connection request
-  ; response_state          = Waiting (ref Optional_thunk.none)
+  ; response_state          = Waiting
   ; error_code              = `Ok
   }
-
-let done_waiting when_done_waiting =
-  let f = !when_done_waiting in
-  when_done_waiting := Optional_thunk.none;
-  Optional_thunk.call_if_some f
 
 let request { request; _ } = request
 let request_body { request_body; _ } = request_body
 
 let response { response_state; _ } =
   match response_state with
-  | Waiting _ -> None
+  | Waiting -> None
   | Streaming(response, _)
   | Complete response
   | Upgrade (response, _) -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
-  | Waiting _            -> failwith "httpaf.Reqd.response_exn: response has not started"
+  | Waiting -> failwith "httpaf.Reqd.response_exn: response has not started"
   | Streaming(response, _)
   | Complete response
   | Upgrade (response, _) -> response
@@ -110,14 +105,14 @@ let respond_with_string t response str =
   if t.error_code <> `Ok then
     failwith "httpaf.Reqd.respond_with_string: invalid state, currently handling error";
   match t.response_state with
-  | Waiting when_done_waiting ->
+  | Waiting ->
     (* XXX(seliopou): check response body length *)
     Writer.write_response t.writer response;
     Writer.write_string t.writer str;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Complete response;
-    done_waiting when_done_waiting
+    Writer.wakeup t.writer;
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_string: response already started"
   | Complete _ ->
@@ -127,14 +122,14 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
   if t.error_code <> `Ok then
     failwith "httpaf.Reqd.respond_with_bigstring: invalid state, currently handling error";
   match t.response_state with
-  | Waiting when_done_waiting ->
+  | Waiting ->
     (* XXX(seliopou): check response body length *)
     Writer.write_response     t.writer response;
     Writer.schedule_bigstring t.writer bstr;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Complete response;
-    done_waiting when_done_waiting
+    Writer.wakeup t.writer;
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_bigstring: response already started"
   | Complete _ ->
@@ -142,14 +137,17 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
 
 let unsafe_respond_with_streaming ~flush_headers_immediately t response =
   match t.response_state with
-  | Waiting when_done_waiting ->
+  | Waiting ->
     let response_body = Body.create t.response_body_buffer in
     Writer.write_response t.writer response;
-    if not flush_headers_immediately then Writer.yield t.writer;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Streaming(response, response_body);
-    done_waiting when_done_waiting;
+    Body.when_ready_to_write response_body (fun () ->
+      Writer.wakeup t.writer);
+    if flush_headers_immediately
+    then Writer.wakeup t.writer
+    else Writer.yield t.writer;
     response_body
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already started"
@@ -189,7 +187,7 @@ let report_error t error =
   t.persistent <- false;
   Body.close_reader t.request_body;
   match t.response_state, t.error_code with
-  | Waiting _, `Ok ->
+  | Waiting, `Ok ->
     t.error_code <- (error :> [`Ok | error]);
     let status =
       match (error :> [error | Status.standard]) with
@@ -198,7 +196,7 @@ let report_error t error =
     in
     t.error_handler ~request:t.request error (fun headers ->
       unsafe_respond_with_streaming ~flush_headers_immediately:true t (Response.create ~headers status))
-  | Waiting _, `Exn _ ->
+  | Waiting, `Exn _ ->
     (* XXX(seliopou): Decide what to do in this unlikely case. There is an
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
@@ -208,7 +206,7 @@ let report_error t error =
   | Streaming(_response, response_body), `Exn _ ->
     Body.close_writer response_body;
     Writer.close_and_drain t.writer
-  | (Complete _ | Streaming _ | Upgrade _ | Waiting _) , _ ->
+  | (Complete _ | Streaming _ | Upgrade _ | Waiting) , _ ->
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
     ()

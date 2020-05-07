@@ -597,6 +597,47 @@ module Server_connection = struct
     writer_yielded t;
   ;;
 
+  let test_asynchronous_streaming_response () =
+    let request  = Request.create `GET "/" ~headers:(Headers.of_list ["connection", "close"]) in
+    let response = Response.create `OK in
+
+    let body = ref None in
+    let t = create (fun reqd ->
+      body := Some (Reqd.respond_with_streaming reqd response))
+    in
+    read_request   t request;
+    let body =
+      match !body with
+      | None -> failwith "no body found"
+      | Some body -> body
+    in
+
+    let writer_woken_up = ref false in
+    writer_yielded t;
+    yield_writer t (fun () ->
+      writer_woken_up := true;
+      write_response t
+        ~body:"Hello "
+        response);
+    Body.write_string body "Hello ";
+    Body.flush body ignore;
+    Alcotest.(check bool) "Writer woken up"
+      true !writer_woken_up;
+
+    let writer_woken_up = ref false in
+    writer_yielded t;
+    yield_writer t (fun () ->
+      writer_woken_up := true;
+      write_string t "world!";
+      writer_closed t);
+    Body.write_string body "world!";
+    Alcotest.(check bool) "Writer not woken up"
+      false !writer_woken_up;
+    Body.close_writer body;
+    Alcotest.(check bool) "Writer woken up"
+      true !writer_woken_up
+  ;;
+
   let test_empty_fixed_streaming_response () =
     let request  = Request.create `GET "/" in
     let response =
@@ -702,6 +743,8 @@ module Server_connection = struct
     read_request t (Request.create `GET "/");
     reader_errored t;
     writer_yielded t;
+    Alcotest.(check bool) "Writer not woken up"
+      false !writer_woken_up;
     !continue ();
     Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     write_response t
@@ -721,7 +764,8 @@ module Server_connection = struct
     writer_yielded t;
     yield_writer t (fun () -> writer_woken_up := true);
     read_request t (Request.create `GET "/");
-    writer_yielded t;
+    Alcotest.(check bool) "Writer not woken up"
+      false !writer_woken_up;
     reader_yielded t;
     !continue ();
     reader_errored t;
@@ -747,10 +791,12 @@ module Server_connection = struct
     writer_yielded t;
     yield_writer   t (fun () -> writer_woken_up := true);
     read_request   t (Request.create `GET "/");
-    writer_yielded t;
+    Alcotest.(check bool) "Writer not woken up"
+      false !writer_woken_up;
     reader_yielded t;
     !continue_request ();
-    writer_yielded t;
+    Alcotest.(check bool) "Writer not woken up"
+      false !writer_woken_up;
     !continue_error ();
     reader_errored t;
     Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
@@ -1095,8 +1141,12 @@ module Server_connection = struct
     in
     let t = create ~error_handler request_handler in
     reader_ready t;
+    let writer_woken_up = ref false in
     writer_yielded t;
-    yield_writer t (fun () -> write_response t (Response.create `OK));
+    yield_writer t (fun () ->
+      writer_woken_up := true;
+      write_response t (Response.create `OK);
+    );
     let len = feed_string t "GET /v1/b HTTP/1.1\r\nH" in
     Alcotest.(check int) "partial read" 20 len;
     read_string t "Host: example.com\r\n\
@@ -1104,10 +1154,13 @@ Connection: close\r\n\
 Accept: application/json, text/plain, */*\r\n\
 Accept-Language: en-US,en;q=0.5\r\n\r\n";
     writer_yielded t;
+    Alcotest.(check bool) "Writer not woken up"
+      false !writer_woken_up;
     reader_closed t;
     !continue_response ();
+    Alcotest.(check bool) "Writer woken up"
+      true !writer_woken_up;
     writer_closed t;
-  ;;
 
  let test_immediate_flush_empty_body () =
     let reader_woken_up = ref false in
@@ -1417,6 +1470,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "asynchronous response, asynchronous body, writer doesn't yield", `Quick, test_asynchronous_streaming_response_writer_doesnt_yield
     ; "echo POST"             , `Quick, test_echo_post
     ; "streaming response"    , `Quick, test_streaming_response
+    ; "asynchronous streaming response", `Quick, test_asynchronous_streaming_response
     ; "empty fixed streaming response", `Quick, test_empty_fixed_streaming_response
     ; "empty chunked streaming response", `Quick, test_empty_chunked_streaming_response
     ; "synchronous error, synchronous handling", `Quick, test_synchronous_error
