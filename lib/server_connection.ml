@@ -114,6 +114,8 @@ let transfer_reader_callback t reqd =
 
 let yield_writer t k =
  if Writer.is_closed t.writer
+ (* TODO: this should probably be an error. Why would the runtime call `yield`
+  * if we told it to close? *)
  then k ()
  else Writer.on_wakeup t.writer k
 ;;
