@@ -2172,6 +2172,7 @@ module Client_connection = struct
   ;;
 
   let test_handling_backpressure_when_read_not_scheduled () =
+    let writer_woken_up = ref false in
     let reader_woken_up = ref false in
     let continue_reading = ref (fun () -> ()) in
     let request' = Request.create `GET "/" in
@@ -2191,17 +2192,18 @@ module Client_connection = struct
     Body.close_writer body;
     reader_ready t;
     read_response t response;
-    yield_writer t ignore;
+    yield_writer t (fun () -> writer_woken_up := true);
     read_string t "five.";
     reader_yielded t;
     yield_reader t (fun () -> reader_woken_up := true);
     !continue_reading ();
     reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
     Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
-    writer_yielded t;
+    Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
   ;;
 
   let test_handling_backpressure_when_read_not_scheduled_early_yield () =
+    let writer_woken_up = ref false in
     let reader_woken_up = ref false in
     let continue_reading = ref (fun () -> ()) in
     let request' = Request.create `GET "/" in
@@ -2222,13 +2224,13 @@ module Client_connection = struct
     reader_ready t;
     read_response t response;
     yield_reader t (fun () -> reader_woken_up := true);
-    yield_writer t ignore;
+    yield_writer t (fun () -> writer_woken_up := true);
     read_string t "five.";
     reader_yielded t;
     !continue_reading ();
     reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
     Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
-    writer_yielded t;
+    Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
   ;;
 
   let test_eof_with_another_pipelined_request () =
