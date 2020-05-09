@@ -138,13 +138,14 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
 let unsafe_respond_with_streaming ~flush_headers_immediately t response =
   match t.response_state with
   | Waiting ->
-    let response_body = Body.create t.response_body_buffer in
+    let response_body =
+      Body.create t.response_body_buffer (Optional_thunk.some (fun () ->
+        Writer.wakeup t.writer))
+    in
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Streaming(response, response_body);
-    Body.when_ready_to_write response_body (fun () ->
-      Writer.wakeup t.writer);
     if flush_headers_immediately
     then Writer.wakeup t.writer
     else Writer.yield t.writer;
@@ -164,7 +165,7 @@ let upgrade_handler t =
 
 let unsafe_respond_with_upgrade t headers upgrade_handler =
   match t.response_state with
-  | Waiting when_done_waiting ->
+  | Waiting ->
     let response = Response.create ~headers `Switching_protocols in
     Writer.write_response t.writer response;
     if t.persistent then
@@ -172,7 +173,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     t.response_state <- Upgrade (response, upgrade_handler);
     Writer.flush t.writer upgrade_handler;
     Body.close_reader t.request_body;
-    done_waiting when_done_waiting
+    Writer.wakeup t.writer
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"
   | Complete _ ->
@@ -229,9 +230,6 @@ let error_code t =
 
 let on_more_input_available t f =
   Body.when_ready_to_read t.request_body f
-
-let on_more_output_available t f =
-  Response_state.on_more_output_available t.response_state f
 
 let persistent_connection t =
   t.persistent

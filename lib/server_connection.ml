@@ -113,33 +113,6 @@ let transfer_reader_callback t reqd =
 ;;
 
 let yield_writer t k =
-  if is_closed t
-  then failwith "yield_writer on closed conn"
-  else if Optional_thunk.is_some t.wakeup_writer
-  then failwith "on_wakeup_writer: only one callback can be registered at a time"
-  else match t.error_code with
-  | No_error ->
-    if is_active t then
-      let reqd = current_reqd_exn t in
-      match Reqd.output_state reqd with
-      | Wait | Consume -> Reqd.on_more_output_available reqd k
-      | Complete ->
-        (* The write state machine will advance the request queue as soon as a
-         * request is finished, as long as we've consumed the entire request
-         * body.
-         *
-         * We hit this branch in the cases where we've finished sending out the
-         * complete response, but e.g. have throttled the request body and need
-         * to consume it before processing the next request in a persistent
-         * connection. *)
-        t.wakeup_writer <- Optional_thunk.some k
-    else
-      t.wakeup_writer <- Optional_thunk.some k
-  | Error { response_state; _ } ->
-    Response_state.on_more_output_available response_state k
-;;
-
-let yield_writer t k =
  if Writer.is_closed t.writer
  then k ()
  else Writer.on_wakeup t.writer k
@@ -227,8 +200,11 @@ let set_error_and_handle ?request t error =
        * this conditional branch we're not sending a response
        * (is_active t == false), and are therefore not making use of that
        * buffer. *)
-      let response_body = Body.create t.response_body_buffer in
-      t.error_code <- Error { request; response_state = Waiting (ref Optional_thunk.none) };
+      let response_body =
+        Body.create t.response_body_buffer (Optional_thunk.some (fun () ->
+          wakeup_writer t))
+      in
+      t.error_code <- Error { request; response_state = Waiting };
       t.error_handler ?request error (fun headers ->
           let response = Response.create ~headers status in
           Writer.write_response writer response;
@@ -292,34 +268,29 @@ let rec _next_read_operation t =
   )
 
 and _final_read_operation_for t reqd =
-  let next =
-    if not (Reqd.persistent_connection reqd) then (
-      shutdown_reader t;
-      Reader.next t.reader;
-    ) else (
-      match Reqd.output_state reqd with
-      | Wait | Consume -> `Yield
-      | Complete       ->
-        (* The "final read" operation for a request descriptor that is
-         * `Complete` from both input and output perspectives needs to account
-         * for the fact that the reader may not have finished reading the
-         * request body.
-         * It's important that we don't advance the request queue in this case
-         * for persistent connections, or we'd break the invariant that a
-         * non-empty `request_queue` has had the request handler called on its
-         * head element. *)
-         match Reader.next t.reader with
-         | `Error _ | `Read as operation ->
-           (* Keep reading when in a "partial" state (`Read).
-            * Don't advance the request queue if in an error state. *)
-           operation
-         | _ ->
-           advance_request_queue t;
-           _next_read_operation t;
-    )
-  in
-  wakeup_writer t;
-  next
+  if not (Reqd.persistent_connection reqd) then (
+    shutdown_reader t;
+    Reader.next t.reader;
+  ) else
+    match Reqd.output_state reqd with
+    | Wait | Consume -> `Yield
+    | Complete       ->
+      (* The "final read" operation for a request descriptor that is
+       * `Complete` from both input and output perspectives needs to account
+       * for the fact that the reader may not have finished reading the
+       * request body.
+       * It's important that we don't advance the request queue in this case
+       * for persistent connections, or we'd break the invariant that a
+       * non-empty `request_queue` has had the request handler called on its
+       * head element. *)
+       match Reader.next t.reader with
+       | `Error _ | `Read as operation ->
+         (* Keep reading when in a "partial" state (`Read).
+          * Don't advance the request queue if in an error state. *)
+         operation
+       | _ ->
+         advance_request_queue t;
+         _next_read_operation t
 ;;
 
 let next_read_operation t =

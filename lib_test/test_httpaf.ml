@@ -673,7 +673,7 @@ module Server_connection = struct
     write_response t (Response.create `OK);
   ;;
 
-  let test_asynchronous_streaming_response () =
+  let test_asynchronous_streaming_response_flush_headers_immediately () =
     let writer_woken_up = ref false in
     let continue_response = ref (fun () -> ()) in
     let request  = Request.create `GET "/" in
@@ -1022,11 +1022,13 @@ module Server_connection = struct
       start_response (Headers.of_list ["transfer-encoding", "chunked"])
     in
     Body.write_string resp_body "chunk 1\n";
-    continue_error := (fun () ->
-      Body.write_string resp_body "chunk 2\n";
+    Body.flush resp_body (fun () ->
       continue_error := (fun () ->
-        Body.write_string resp_body "chunk 3\n";
-        Body.close_writer resp_body))
+        Body.write_string resp_body "chunk 2\n";
+        Body.flush resp_body (fun () ->
+          continue_error := (fun () ->
+            Body.write_string resp_body "chunk 3\n";
+            Body.close_writer resp_body))))
   ;;
 
   let test_malformed_request_chunked_error_response () =
@@ -1160,7 +1162,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     !continue_response ();
     Alcotest.(check bool) "Writer woken up"
       true !writer_woken_up;
-    writer_closed t;
+    writer_closed t
 
  let test_immediate_flush_empty_body () =
     let reader_woken_up = ref false in
@@ -1443,20 +1445,65 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
     write_response t ~body:"" response;
     writer_yielded t;
-    writer_woken_up := false;
     reader_ready t;
     (* Yield writer before feeding eof.
      *
      * Note: writer here is done. It yields before we feed more to the reader
      * to allow for it to complete. *)
     writer_yielded t;
-    yield_writer t (fun () -> writer_woken_up := true);
     read_string t "final";
 
     (* Ready for the next request *)
     reader_ready t;
+  ;;
+
+  let test_streaming_response_before_reading_entire_body_no_error () =
+    let reader_woken_up = ref false in
+    let writer_woken_up = ref false in
+    let response = Response.create `OK in
+    let continue_response = ref (fun () -> ()) in
+    let request_handler reqd =
+      (* Important that we never close the request body for this test. *)
+      continue_response := (fun () ->
+        let resp_body = Reqd.respond_with_streaming reqd response in
+        continue_response := (fun () ->
+          Body.write_string resp_body "hello";
+          Body.flush resp_body (fun () ->
+            continue_response := (fun () ->
+              Body.close_writer resp_body))))
+    in
+    let error_handler ?request:_ _error _start_response = assert false in
+    let t = create ~error_handler request_handler in
+    reader_ready t;
+    writer_yielded t;
+    read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
+    yield_reader t (fun () -> reader_woken_up := true);
+    Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+    yield_writer t (fun () -> writer_woken_up := true);
+
+    read_string t "data.";
+    !continue_response ();
+    Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
+
+    !continue_response ();
     Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-    writer_yielded t
+    write_response t ~body:"hello" response;
+
+    writer_woken_up := false;
+    writer_yielded t;
+    yield_writer t (fun () -> writer_woken_up := true);
+    !continue_response ();
+    (* Important that the writer wakes up after closing it, so that it gets a
+     * chance to close the request body, and thus advance the remaining request
+     * body bytes to prepare the parser for the next request. *)
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    writer_yielded t;
+
+    reader_ready t;
+    read_string t "final";
+
+    (* Ready for the next request *)
+    reader_ready t;
   ;;
 
   let tests =
@@ -1466,7 +1513,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "single GET"            , `Quick, test_single_get
     ; "multiple GETs"         , `Quick, test_multiple_get
     ; "asynchronous response" , `Quick, test_asynchronous_response
-    ; "asynchronous response, asynchronous body", `Quick, test_asynchronous_streaming_response
+    ; "asynchronous response, asynchronous body", `Quick, test_asynchronous_streaming_response_flush_headers_immediately
     ; "asynchronous response, asynchronous body, writer doesn't yield", `Quick, test_asynchronous_streaming_response_writer_doesnt_yield
     ; "echo POST"             , `Quick, test_echo_post
     ; "streaming response"    , `Quick, test_streaming_response
@@ -1500,6 +1547,7 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     ; "respond before reading request body, then request body EOFs", `Quick, test_respond_before_reading_entire_body_chunked_eof
     ; "request body EOFs before closing response body, request body not closed", `Quick, test_finish_response_after_read_eof
     ; "respond before reading entire request body", `Quick, test_respond_before_reading_entire_body_no_error
+    ; "respond before reading entire request body, streaming response", `Quick, test_streaming_response_before_reading_entire_body_no_error
     ]
 end
 
