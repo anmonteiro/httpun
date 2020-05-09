@@ -54,8 +54,6 @@ let create error_handler request request_body writer response_handler =
 
 let request { request; _ } = request
 
-let request_body { request_body; _ } = request_body
-
 let write_request t =
   Writer.write_request t.writer t.request;
   t.state <- Awaiting_response
