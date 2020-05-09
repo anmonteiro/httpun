@@ -257,7 +257,7 @@ module Reader = struct
     Optional_thunk.call_if_some f
 
   let request handler =
-    let parser t =
+    let parser t handler =
       request <* commit >>= fun request ->
         match Request.body_length request with
       | `Error `Bad_request -> return (Error (`Bad_request request))
@@ -272,11 +272,11 @@ module Reader = struct
         handler request request_body;
         body ~encoding request_body *> ok
     in
-    let rec t = lazy (create (parser t)) in
+    let rec t = lazy (create (parser t handler)) in
     Lazy.force t
 
   let response request_queue =
-    let parser t =
+    let parser t request_queue =
       response <* commit >>= fun response ->
       assert (not (Queue.is_empty request_queue));
       let exception Local of Respd.t in
@@ -304,7 +304,7 @@ module Reader = struct
         respd.response_handler response response_body;
         body ~encoding response_body *> ok
     in
-    let rec t = lazy (create (parser t)) in
+    let rec t = lazy (create (parser t request_queue)) in
     Lazy.force t
   ;;
 
