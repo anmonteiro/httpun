@@ -46,8 +46,8 @@ in
   };
   # TODO: httpaf-async
   in httpafPackages // (if (lib.versionOlder "4.08" ocaml.version) then {
-    h2-mirage = buildHttpaf {
-      pname = "h2-mirage";
+    httpaf-mirage = buildHttpaf {
+      pname = "httpaf-mirage";
       doCheck = false;
       propagatedBuildInputs = with httpafPackages; [
         conduit-mirage
