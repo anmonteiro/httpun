@@ -226,6 +226,7 @@ module Reader = struct
     ; mutable closed      : bool
       (* Whether the input source has left the building, indicating that no
        * further input will be received. *)
+    ; mutable wakeup      : Optional_thunk.t
     }
 
   type request  = request_error t
@@ -235,27 +236,47 @@ module Reader = struct
     { parser
     ; parse_state = Done
     ; closed      = false
+    ; wakeup      = Optional_thunk.none
     }
 
   let ok = return (Ok ())
 
+  let is_closed t =
+    t.closed
+
+  let on_wakeup t k =
+    if is_closed t
+    then failwith "on_wakup on closed reader"
+    else if Optional_thunk.is_some t.wakeup
+    then failwith "on_wakeup: only one callback can be registered at a time"
+    else t.wakeup <- Optional_thunk.some k
+
+  let wakeup t =
+    let f = t.wakeup in
+    t.wakeup <- Optional_thunk.none;
+    Optional_thunk.call_if_some f
+
   let request handler =
-    let parser =
+    let parser t =
       request <* commit >>= fun request ->
-      match Request.body_length request with
+        match Request.body_length request with
       | `Error `Bad_request -> return (Error (`Bad_request request))
       | `Fixed 0L  ->
-        handler request Body.empty;
+          handler request Body.empty;
         ok
       | `Fixed _ | `Chunked | `Close_delimited as encoding ->
-        let request_body = Body.create Bigstringaf.empty Optional_thunk.none in
+          let request_body =
+            Body.create Bigstringaf.empty (Optional_thunk.some (fun () ->
+              wakeup (Lazy.force t)))
+    in
         handler request request_body;
         body ~encoding request_body *> ok
     in
-    create parser
+    let rec t = lazy (create (parser t)) in
+    Lazy.force t
 
   let response request_queue =
-    let parser =
+    let parser t =
       response <* commit >>= fun response ->
       assert (not (Queue.is_empty request_queue));
       let exception Local of Respd.t in
@@ -276,16 +297,17 @@ module Reader = struct
         respd.response_handler response Body.empty;
         ok
       | `Fixed _ | `Chunked | `Close_delimited as encoding ->
-        let response_body = Body.create Bigstringaf.empty Optional_thunk.none in
+        let response_body =
+          Body.create Bigstringaf.empty (Optional_thunk.some (fun () ->
+            wakeup (Lazy.force t)))
+        in
         respd.response_handler response response_body;
         body ~encoding response_body *> ok
     in
-    create parser
+    let rec t = lazy (create (parser t)) in
+    Lazy.force t
   ;;
 
-
-  let is_closed t =
-    t.closed
 
   let transition t state =
     match state with

@@ -37,27 +37,25 @@ type _ t =
   ; mutable write_final_if_chunked : bool
   ; mutable on_eof                 : unit -> unit
   ; mutable on_read                : Bigstringaf.t -> off:int -> len:int -> unit
-  ; mutable when_ready_to_read     : Optional_thunk.t
-  ; mutable when_ready_to_write    : Optional_thunk.t
+  ; mutable when_ready             : Optional_thunk.t
   ; buffered_bytes                 : int ref
   }
 
 let default_on_eof         = Sys.opaque_identity (fun () -> ())
 let default_on_read        = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 
-let of_faraday faraday when_ready_to_write =
+let of_faraday faraday when_ready =
   { faraday
   ; read_scheduled         = false
   ; write_final_if_chunked = true
   ; on_eof                 = default_on_eof
   ; on_read                = default_on_read
-  ; when_ready_to_read     = Optional_thunk.none
-  ; when_ready_to_write
+  ; when_ready
   ; buffered_bytes         = ref 0
   }
 
-let create buffer ready_to_write =
-  of_faraday (Faraday.of_bigstring buffer) ready_to_write
+let create buffer when_ready =
+  of_faraday (Faraday.of_bigstring buffer) when_ready
 
 let create_empty () =
   let t = create Bigstringaf.empty Optional_thunk.none in
@@ -82,24 +80,19 @@ let write_bigstring t ?off ?len b =
 let schedule_bigstring t ?off ?len (b:Bigstringaf.t) =
   Faraday.schedule_bigstring ?off ?len t.faraday b
 
-let ready_to_read t =
-  let callback = t.when_ready_to_read in
-  t.when_ready_to_read <- Optional_thunk.none;
-  Optional_thunk.call_if_some callback
-
-let ready_to_write t =
-  Optional_thunk.call_if_some t.when_ready_to_write
+let ready t =
+  Optional_thunk.call_if_some t.when_ready
 
 let flush t kontinue =
   Faraday.flush t.faraday kontinue;
-  ready_to_write t
+  ready t
 
 let is_closed t =
   Faraday.is_closed t.faraday
 
 let close_writer t =
   Faraday.close t.faraday;
-  ready_to_write t;
+  ready t;
 ;;
 
 let unsafe_faraday t =
@@ -134,7 +127,7 @@ let schedule_read t ~on_eof ~on_read =
     t.read_scheduled <- true;
     t.on_eof         <- on_eof;
     t.on_read        <- on_read;
-    ready_to_read t;
+    ready t;
   end
 
 let is_read_scheduled t = t.read_scheduled
@@ -156,15 +149,8 @@ let requires_output t =
 let close_reader t =
   Faraday.close t.faraday;
   execute_read t;
-  ready_to_read t;
+  ready t;
 ;;
-
-let when_ready_to_read t callback =
-  if is_closed t
-  then callback ()
-  else if Optional_thunk.is_some t.when_ready_to_read
-  then failwith "Body.when_ready_to_read: only one callback can be registered at a time"
-  else t.when_ready_to_read <- Optional_thunk.some callback
 
 let transfer_to_writer_with_encoding t ~encoding writer =
   let faraday = t.faraday in

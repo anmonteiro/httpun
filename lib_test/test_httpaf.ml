@@ -1273,8 +1273,8 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     reader_yielded t;
     yield_reader t (fun () -> reader_woken_up := true);
     !continue_reading ();
-    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
     Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
     writer_yielded t;
   ;;
 
@@ -1296,8 +1296,8 @@ Accept-Language: en-US,en;q=0.5\r\n\r\n";
     read_string t "five.";
     reader_yielded t;
     !continue_reading ();
-    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
     Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+    reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
     writer_yielded t;
   ;;
 
