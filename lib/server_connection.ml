@@ -60,11 +60,10 @@ type t =
   ; request_queue          : Reqd.t Queue.t
     (* invariant: If [request_queue] is not empty, then the head of the queue
        has already had [request_handler] called on it. *)
-  ; mutable wakeup_reader  : Optional_thunk.t
+  ; mutable error_code : error_code
     (* Represents an unrecoverable error that will cause the connection to
      * shutdown. Holds on to the response body created by the error handler
      * that might be streaming to the client. *)
-  ; mutable error_code : error_code
   }
 
 let is_closed t =
@@ -80,43 +79,17 @@ let current_reqd_exn t =
   Queue.peek t.request_queue
 
 let yield_reader t k =
-  if is_closed t
-  then failwith "on_wakeup_reader on closed conn"
-  else if Optional_thunk.is_some t.wakeup_reader
-  then failwith "yield_reader: only one callback can be registered at a time"
-  else if is_active t then
-    let reqd = current_reqd_exn t in
-    begin match Reqd.input_state reqd with
-    | Wait ->
-      (* `Wait` means that the request body isn't closed yet (there may be more
-       * incoming bytes) but the request handler hasn't scheduled a read
-       * either. *)
-      Reqd.on_more_input_available reqd k
-    | Ready | Complete -> t.wakeup_reader <- Optional_thunk.some k
-    end
-  else
-    t.wakeup_reader <- Optional_thunk.some k
-;;
+  if Reader.is_closed t.reader
+  then k ()
+  else Reader.on_wakeup t.reader k
 
-let wakeup_reader t =
-  let f = t.wakeup_reader in
-  t.wakeup_reader <- Optional_thunk.none;
-  Optional_thunk.call_if_some f
-;;
-
-let transfer_reader_callback t reqd =
-  if Optional_thunk.is_some t.wakeup_reader
-  then (
-    let f = t.wakeup_reader in
-    t.wakeup_reader <- Optional_thunk.none;
-    Reqd.on_more_input_available reqd (Optional_thunk.unchecked_value f))
-;;
+let wakeup_reader t = Reader.wakeup t.reader
 
 let yield_writer t k =
  if Writer.is_closed t.writer
  (* TODO: this should probably be an error. Why would the runtime call `yield`
   * if we told it to close? *)
- then k ()
+ then assert false
  else Writer.on_wakeup t.writer k
 ;;
 
@@ -155,7 +128,6 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   ; request_handler = request_handler
   ; error_handler   = error_handler
   ; request_queue
-  ; wakeup_reader   = Optional_thunk.none
   ; error_code = No_error
   }
 
@@ -261,9 +233,7 @@ let rec _next_read_operation t =
        * close. *)
       begin match Reader.next t.reader with
       | `Error _ as operation -> operation
-      | _ ->
-       transfer_reader_callback t reqd;
-       `Yield
+      | _ -> `Yield
       end
     | Ready  -> Reader.next t.reader
     | Complete -> _final_read_operation_for t reqd

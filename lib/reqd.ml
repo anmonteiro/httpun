@@ -225,9 +225,6 @@ let error_code t =
   | #error as error -> Some error
   | `Ok             -> None
 
-let on_more_input_available t f =
-  Body.when_ready_to_read t.request_body f
-
 let persistent_connection t =
   t.persistent
 

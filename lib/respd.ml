@@ -58,19 +58,6 @@ let write_request t =
   Writer.write_request t.writer t.request;
   t.state <- Awaiting_response
 
-let on_more_input_available t f =
-  match t.state with
-  | Received_response (_, response_body) ->
-    Body.when_ready_to_read response_body f
-
-  (* Don't expect to be called in these states. *)
-  | Uninitialized
-  | Awaiting_response ->
-    failwith "httpaf.Respd.on_more_input_available: response hasn't started"
-  | Upgraded _
-  | Closed ->
-    failwith "httpaf.Respd.on_more_input_available: response already complete"
-
 let report_error t error =
   t.persistent <- false;
   match t.state, t.error_code with

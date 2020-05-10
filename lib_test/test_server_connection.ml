@@ -986,8 +986,8 @@ let test_handling_backpressure_when_read_not_scheduled () =
   reader_yielded t;
   yield_reader t (fun () -> reader_woken_up := true);
   !continue_reading ();
-  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
   writer_yielded t;
 ;;
 
@@ -1009,8 +1009,8 @@ let test_handling_backpressure_when_read_not_scheduled_early_yield () =
   read_string t "five.";
   reader_yielded t;
   !continue_reading ();
-  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
   writer_yielded t;
 ;;
 
