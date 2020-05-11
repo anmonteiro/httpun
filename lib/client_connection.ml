@@ -129,8 +129,6 @@ let shutdown t =
   wakeup_writer t;
 ;;
 
-(* TODO: Need to check in the RFC if reporting an error, e.g. in a malformed
- * response causes the whole connection to shutdown. *)
 let set_error_and_handle t error =
   Reader.force_close t.reader;
   Queue.iter (fun respd ->

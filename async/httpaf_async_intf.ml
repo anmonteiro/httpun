@@ -33,32 +33,6 @@
 open Async
 open Httpaf
 
-module type IO = sig
-  type socket
-  type addr
-
-  (** The region [[off, off + len)] is where read bytes can be written to *)
-  val read
-    :  socket
-    -> Bigstringaf.t
-    -> off:int
-    -> len:int
-    -> [ `Eof | `Ok of int ] Deferred.t
-
-  val writev
-    : socket
-    -> Faraday.bigstring Faraday.iovec list
-    -> [ `Closed | `Ok of int ] Deferred.t
-
-  val shutdown_send : socket -> unit
-
-  val shutdown_receive : socket -> unit
-
-  val close : socket -> unit Deferred.t
-
-  val state : socket -> [ `Open | `Error | `Closed ]
-end
-
 module type Server = sig
   type socket
 
@@ -66,7 +40,7 @@ module type Server = sig
 
   val create_connection_handler
     :  ?config         : Config.t
-    -> request_handler : (addr -> Server_connection.request_handler)
+    -> request_handler : (addr -> Httpaf.Reqd.t Gluten.Server.request_handler)
     -> error_handler   : (addr -> Server_connection.error_handler)
     -> addr
     -> socket
@@ -74,12 +48,17 @@ module type Server = sig
 end
 
 module type Client = sig
-  type t
-
   type socket
 
+  type runtime
+
+  type t =
+    { connection: Httpaf.Client_connection.t
+    ; runtime: runtime
+    }
+
   val create_connection
-    : ?config          : Config.t
+    : ?config: Config.t
     -> socket
     -> t Deferred.t
 
@@ -90,8 +69,10 @@ module type Client = sig
     -> response_handler : Client_connection.response_handler
     -> [`write] Body.t
 
-  val shutdown: t -> unit
+  val shutdown: t -> unit Deferred.t
 
   val is_closed : t -> bool
+
+  val upgrade : t -> Gluten.impl -> unit
 end
 

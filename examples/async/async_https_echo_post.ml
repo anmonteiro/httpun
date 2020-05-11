@@ -17,7 +17,7 @@ let error_handler _ ?request:_ error start_response =
   Body.close_writer response_body
 ;;
 
-let request_handler _ reqd =
+let request_handler _ { Gluten.reqd; _ } =
   match Reqd.request reqd  with
   | { Request.meth = `POST; headers } ->
     let response =
