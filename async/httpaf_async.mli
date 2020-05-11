@@ -32,33 +32,27 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-module type IO = Httpaf_async_intf.IO
-
-module type Server = Httpaf_async_intf.Server
-
-module type Client = Httpaf_async_intf.Client
-
 open Async
 
 open Httpaf
 
 module Server : sig
   include Httpaf_async_intf.Server
-    with type socket = ([`Active], Socket.Address.Inet.t) Socket.t
+    with type socket := ([`Active], Socket.Address.Inet.t) Socket.t
     and type addr := Socket.Address.Inet.t
 
   module SSL : sig
     include Httpaf_async_intf.Server
-      with type socket = Ssl_io.descriptor
-      and type addr := Socket.Address.t
+      with type socket := Gluten_async.Server.SSL.socket
+      and type addr := Socket.Address.Inet.t
 
     val create_connection_handler_with_default
       :  certfile       : string
       -> keyfile        : string
       -> ?config         : Config.t
-      -> request_handler : ('a -> Server_connection.request_handler)
+      -> request_handler : ('a -> Httpaf.Reqd.t Gluten.Server.request_handler)
       -> error_handler   : ('a -> Server_connection.error_handler)
-      -> ([< Socket.Address.t] as 'a)
+      -> (Socket.Address.Inet.t as 'a)
       -> ([`Active], 'a) Socket.t
       -> unit Deferred.t
   end
@@ -69,11 +63,12 @@ module Client : sig
     with type socket = ([`Active], Socket.Address.Inet.t) Socket.t
 
   module SSL : sig
-    include Httpaf_async_intf.Client with type socket = Ssl_io.descriptor
+    include Httpaf_async_intf.Client
+      with type socket = Gluten_async.Client.SSL.socket
 
     val create_connection_with_default
       :  ?config : Config.t
-      -> ([`Active], [< Socket.Address.t]) Socket.t
+      -> ([`Active], [< Socket.Address.Inet.t]) Socket.t
       -> t Deferred.t
   end
 end

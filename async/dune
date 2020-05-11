@@ -1,16 +1,6 @@
 (library
  (name httpaf_async)
  (public_name httpaf-async)
- (libraries
-  async
-  core
-  faraday-async
-  httpaf
-  (select
-   ssl_io.ml
-   from
-   (async_ssl -> ssl_io_real.ml)
-   (!async_ssl -> ssl_io_dummy.ml)))
- (modules httpaf_async httpaf_async_intf ssl_io)
+ (libraries async core httpaf gluten-async)
  (flags
   (:standard -safe-string)))

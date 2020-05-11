@@ -25,7 +25,7 @@ module Client = struct
 end
 
 module Server = struct
-  let echo_post reqd =
+  let echo_post { Gluten.reqd; _ } =
     match Reqd.request reqd  with
     | { Request.meth = `POST; headers; _ } ->
       let response =
