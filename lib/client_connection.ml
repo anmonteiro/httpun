@@ -146,6 +146,14 @@ let set_error_and_handle t error =
         * completed. *)
        ())
   t.request_queue;
+  (* From RFC7230§6.5:
+   *   A client sending a message body SHOULD monitor the network connection
+   *   for an error response while it is transmitting the request.  If the
+   *   client sees a response that indicates the server does not wish to
+   *   receive the message body and is closing the connection, the client
+   *   SHOULD immediately cease transmitting the body and close its side of the
+   *   connection. *)
+  shutdown t;
 ;;
 
 let unexpected_eof t =

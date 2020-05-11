@@ -29,9 +29,9 @@ let reader_ready ?(msg="Reader is ready") t =
     `Read (next_read_operation t :> [`Close | `Read | `Yield]);
 ;;
 
-let reader_yielded t =
-  Alcotest.check read_operation "Reader is in a yield state"
-    `Yield (next_read_operation t :> [`Close | `Read | `Yield]);
+let reader_yielded ?(msg="Reader is in a yield state") t =
+  Alcotest.check read_operation msg
+    `Yield (next_read_operation t);
 ;;
 
 let reader_closed t =
@@ -62,8 +62,7 @@ let writer_closed t =
 ;;
 
 let connection_is_shutdown t =
-  reader_closed t;
-  writer_closed t;
+  Alcotest.(check bool) "connection is shutdown" true (is_closed t)
 ;;
 
 let default_response_handler expected_response response body =
@@ -777,7 +776,6 @@ let test_eof_with_another_pipelined_request () =
 (* If we haven't finished receiving the full response, the error handler
  * should be called. *)
 let test_eof_handler_response_body_not_closed () =
-  let reader_woken_up = ref false in
   let continue_reading = ref (fun () -> ()) in
   let request' = Request.create `GET "/" in
   let response =
@@ -804,7 +802,6 @@ let test_eof_handler_response_body_not_closed () =
   Body.close_writer body;
   reader_ready t;
   read_response t response;
-  yield_reader t (fun () -> reader_woken_up := true);
   yield_writer t ignore;
 
   !continue_reading ();
@@ -822,7 +819,6 @@ let test_eof_handler_response_body_not_closed () =
 ;;
 
 let test_eof_handler_closed_response_body () =
-  let reader_woken_up = ref false in
   let continue_reading = ref (fun () -> ()) in
   let request' = Request.create `GET "/" in
   let response =
@@ -850,7 +846,6 @@ let test_eof_handler_closed_response_body () =
   Body.close_writer body;
   reader_ready t;
   read_response t response;
-  yield_reader t (fun () -> reader_woken_up := true);
   yield_writer t ignore;
 
   !continue_reading ();
@@ -864,6 +859,67 @@ let test_eof_handler_closed_response_body () =
   reader_closed t;
 
   Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  connection_is_shutdown t;
+;;
+
+let test_exception_closes_reader () =
+  let reader_woken_up = ref false in
+  let request' = Request.create `GET "/" in
+  let error_handler_called = ref false in
+  let response =
+    Response.create
+      ~headers:(Headers.of_list [ "connection", "close"; "content-length", "10" ])
+      `OK
+  in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  Body.close_writer body;
+  write_request t request';
+  read_response t response;
+  writer_closed t;
+  read_string t "hello";
+  reader_yielded t ~msg:"Reader yields if no read scheduled";
+  yield_reader t (fun () -> reader_woken_up := true);
+  report_exn t (Failure "something went wrong");
+  Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  connection_is_shutdown t;
+;;
+
+let test_exception_closes_reader_persistent_connection () =
+  let reader_woken_up = ref false in
+  let writer_woken_up = ref false in
+  let request' = Request.create `GET "/" in
+  let error_handler_called = ref false in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
+  in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  Body.close_writer body;
+  write_request t request';
+  read_response t response;
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  read_string t "hello";
+  reader_yielded t ~msg:"Reader yields if no read scheduled";
+  yield_reader t (fun () -> reader_woken_up := true);
+  report_exn t (Failure "something went wrong");
+  Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   connection_is_shutdown t;
 ;;
 
@@ -889,4 +945,6 @@ let tests =
   ; "EOF while a request is in the pipeline", `Quick, test_eof_with_another_pipelined_request
   ; "EOF after handler response body not closed", `Quick, test_eof_handler_response_body_not_closed
   ; "EOF after handler closed response body", `Quick, test_eof_handler_closed_response_body
+  ; "Exception closes the reader (on a non-persistent connection)", `Quick, test_exception_closes_reader
+  ; "Exception closes the reader (on a persistent connection)", `Quick, test_exception_closes_reader_persistent_connection
   ]

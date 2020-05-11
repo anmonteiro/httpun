@@ -287,8 +287,7 @@ let test_asynchronous_streaming_response () =
   writer_yielded t;
   yield_writer t (fun () ->
     writer_woken_up := true;
-    writer_yielded t);
-  Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
+    write_response t ~body:"Hello " response);
 
   read_request t request;
   let body =
@@ -296,15 +295,6 @@ let test_asynchronous_streaming_response () =
     | None -> failwith "no body found"
     | Some body -> body
   in
-  (* XXX(dpatti): This is an observation of a current behavior where the writer
-     is awoken only to find that it was asked to yield again. It is cleaned up
-     in another branch where we move the continuation off of the reqd/body. *)
-  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  let writer_woken_up = ref false in
-  yield_writer t (fun () ->
-    writer_woken_up := true;
-    write_response t ~body:"Hello " response);
-
   Body.write_string body "Hello ";
   Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
   Body.flush body ignore;
