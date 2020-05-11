@@ -69,6 +69,8 @@ Unreleased
 - httpaf-lwt, httpaf-lwt-unix: Use
   [gluten](https://github.com/anmonteiro/gluten) to implement the Lwt-based
   runtimes ([#63](https://github.com/anmonteiro/httpaf/pull/63))
+- httpaf-async: Use [gluten](https://github.com/anmonteiro/gluten) to implement
+  the Async runtimes ([#69](https://github.com/anmonteiro/httpaf/pull/69))
 
 httpaf (upstream) 0.6.5
 --------------
