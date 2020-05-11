@@ -46,12 +46,12 @@ in
   };
   in httpafPackages // (if (lib.versionOlder "4.08" ocaml.version) then {
     httpaf-async = buildHttpaf {
-      pname = "httpaf-mirage";
+      pname = "httpaf-async";
       doCheck = false;
       propagatedBuildInputs = with httpafPackages; [
         httpaf
         async
-        # gluten-async
+        gluten-async
         faraday-async
         async_ssl
       ];
@@ -61,6 +61,7 @@ in
       pname = "httpaf-mirage";
       doCheck = false;
       propagatedBuildInputs = with httpafPackages; [
+        faraday-lwt
         conduit-mirage
         httpaf-lwt
         gluten-mirage
