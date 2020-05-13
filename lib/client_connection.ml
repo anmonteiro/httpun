@@ -130,7 +130,6 @@ let shutdown t =
 ;;
 
 let set_error_and_handle t error =
-  Reader.force_close t.reader;
   Queue.iter (fun respd ->
    match Respd.input_state respd with
    | Wait | Ready ->

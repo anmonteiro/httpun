@@ -68,7 +68,8 @@ let report_error t error =
   | Uninitialized, `Exn _ ->
     (* TODO(anmonteiro): Not entirely sure this is possible in the client. *)
     failwith "httpaf.Reqd.report_exn: NYI"
-  | Received_response _, `Ok ->
+  | Received_response (_, response_body), `Ok ->
+     Body.close_reader response_body;
      t.error_code <- (error :> [`Ok | error]);
      t.error_handler error
   | (Uninitialized | Awaiting_response | Received_response _ | Closed | Upgraded _), _ ->
@@ -130,8 +131,6 @@ let flush_response_body t =
   match t.state with
   | Uninitialized | Awaiting_response | Closed | Upgraded _ -> ()
   | Received_response(_, response_body) ->
-    try Body.execute_read response_body
-    (* TODO: report_exn *)
-    with exn ->
-      Format.eprintf "EXN %S@." (Printexc.to_string exn)
-    (* report_exn t exn *)
+    if Body.has_pending_output response_body
+    then try Body.execute_read response_body
+    with exn -> report_error t (`Exn exn)
