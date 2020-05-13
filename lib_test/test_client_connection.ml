@@ -923,6 +923,119 @@ let test_exception_closes_reader_persistent_connection () =
   connection_is_shutdown t;
 ;;
 
+let test_exception_reading_response_body () =
+  let request' = Request.create `GET "/" in
+  let error_handler_called = ref false in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let on_read _ ~off:_ ~len:_ = failwith "something went wrong" in
+    let on_eof () = () in
+    Body.schedule_read body ~on_read ~on_eof;
+  in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  Body.close_writer body;
+  write_request t request';
+  read_response t response;
+  read_string t "hello";
+  Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  writer_closed t;
+  reader_closed t;
+  connection_is_shutdown t;
+;;
+
+let test_exception_reading_response_body_last_chunk () =
+  let writer_woken_up = ref false in
+  let request' = Request.create `GET "/" in
+  let error_handler_called = ref false in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let on_eof () = () in
+    let on_read _ ~off:_ ~len:_ =
+      Body.schedule_read
+        body
+        ~on_read:(fun _ ~off:_ ~len:_ ->
+          report_exn t (Failure "something went wrong"))
+        ~on_eof
+    in
+    Body.schedule_read body ~on_read ~on_eof;
+  in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  Body.close_writer body;
+  write_request t request';
+  read_response t response;
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  read_string t "hello";
+  reader_ready t;
+  read_string t "hello";
+  Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  writer_closed t;
+  reader_closed t;
+  connection_is_shutdown t;
+;;
+
+let test_async_exception_reading_response_body () =
+  let reader_woken_up = ref false in
+  let writer_woken_up = ref false in
+  let continue_reading = ref (fun () -> ()) in
+  let request' = Request.create `GET "/" in
+  let error_handler_called = ref false in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let on_read _ ~off:_ ~len:_ =
+      continue_reading := (fun () -> report_exn t (Failure "something went wrong")) in
+    let on_eof () = () in
+    Body.schedule_read body ~on_read ~on_eof;
+  in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  Body.close_writer body;
+  write_request t request';
+  read_response t response;
+  read_string t "hello";
+  reader_yielded t;
+  yield_reader t (fun () -> reader_woken_up := true);
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  !continue_reading ();
+  Alcotest.(check bool) "Error handler called" true !error_handler_called;
+  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  writer_closed t;
+  reader_closed t;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -947,4 +1060,7 @@ let tests =
   ; "EOF after handler closed response body", `Quick, test_eof_handler_closed_response_body
   ; "Exception closes the reader (on a non-persistent connection)", `Quick, test_exception_closes_reader
   ; "Exception closes the reader (on a persistent connection)", `Quick, test_exception_closes_reader_persistent_connection
+  ; "Exception while reading the response body", `Quick, test_exception_reading_response_body
+  ; "Exception while reading the response body", `Quick, test_exception_reading_response_body_last_chunk
+  ; "Aynchronous exception while reading the response body", `Quick, test_async_exception_reading_response_body
   ]
