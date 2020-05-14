@@ -72,8 +72,8 @@ Unreleased
 - httpaf-async: Use [gluten](https://github.com/anmonteiro/gluten) to implement
   the Async runtimes ([#69](https://github.com/anmonteiro/httpaf/pull/69))
 
-httpaf (upstream) 0.6.5
+httpaf (upstream) 0.6.6
 --------------
 
 - Initial fork point
-  [7de2d4ea](https://github.com/anmonteiro/httpaf/commit/7de2d4ea3bd09984d398854460a2d4c8a8e42127)
+  [7de2d4ea](https://github.com/anmonteiro/httpaf/commit/6aefc835552010ce8f8466c8695a7b106b49ec35)
