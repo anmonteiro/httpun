@@ -245,7 +245,7 @@ and _final_read_operation_for t reqd =
     Reader.next t.reader;
   ) else
     match Reqd.output_state reqd with
-    | Wait | Consume -> `Yield
+    | Waiting | Ready -> `Yield
     | Complete       ->
       (* The "final read" operation for a request descriptor that is
        * `Complete` from both input and output perspectives needs to account
@@ -320,8 +320,8 @@ let rec _next_write_operation t =
       Writer.next t.writer
     | Error { request; response_state } ->
       match Response_state.output_state response_state with
-      | Wait -> `Yield
-      | Consume ->
+      | Waiting -> `Yield
+      | Ready ->
         flush_response_error_body t ?request response_state;
         Writer.next t.writer
       | Complete ->
@@ -330,8 +330,8 @@ let rec _next_write_operation t =
   ) else (
     let reqd = current_reqd_exn t in
     match Reqd.output_state reqd with
-    | Wait -> `Yield
-    | Consume ->
+    | Waiting -> `Yield
+    | Ready ->
       Reqd.flush_response_body reqd;
       Writer.next t.writer
     | Complete -> _final_write_operation_for t reqd

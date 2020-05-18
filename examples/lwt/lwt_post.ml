@@ -5,8 +5,6 @@ module Arg = Caml.Arg
 open Httpaf
 open Httpaf_lwt_unix
 
-let error_handler _ = assert false
-
 let main port host =
   Lwt_io.(read stdin)
   >>= fun body ->
@@ -30,8 +28,8 @@ let main port host =
   let request_body =
     Client.request
       connection
+      ~error_handler:Httpaf_examples.Client.error_handler
       ~response_handler
-      ~error_handler
       (Request.create ~headers `POST "/")
   in
   Body.write_string request_body body;

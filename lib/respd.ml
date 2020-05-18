@@ -111,10 +111,10 @@ let output_state { request_body; state; _ } : Output_state.t =
      * forever, but outside the HTTP layer, meaning they're permanently
      * "yielding". For now they need to be explicitly shutdown in order to
      * transition the response descriptor to the `Closed` state. *)
-    Wait
+    Waiting
   | state ->
     if state = Uninitialized || Body.requires_output request_body
-    then Consume
+    then Ready
     else Complete
 
 let flush_request_body { request; request_body; writer; _ } =

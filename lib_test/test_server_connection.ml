@@ -2,6 +2,23 @@ open Httpaf
 open Helpers
 open Server_connection
 
+let request_error_pp_hum fmt = function
+  | `Bad_request           -> Format.fprintf fmt "Bad_request"
+  | `Bad_gateway           -> Format.fprintf fmt "Bad_gateway"
+  | `Internal_server_error -> Format.fprintf fmt "Internal_server_error"
+  | `Exn exn               -> Format.fprintf fmt "Exn (%s)" (Printexc.to_string exn)
+;;
+
+module Alcotest = struct
+  include Alcotest
+
+  let request_error = Alcotest.of_pp request_error_pp_hum
+
+  let request = Alcotest.of_pp (fun fmt req ->
+    Format.fprintf fmt "%s" (request_to_string req))
+  ;;
+end
+
 let feed_string t str =
   let len = String.length str in
   let input = Bigstringaf.of_string str ~off:0 ~len in
@@ -421,6 +438,19 @@ let test_asynchronous_streaming_response_writer_doesnt_yield () =
   write_response t ~body:"hello" response;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   writer_yielded t;
+;;
+
+let test_connection_error () =
+  let writer_woken_up = ref false in
+  let t = create ~error_handler (fun _ -> assert false) in
+  yield_writer t (fun () -> writer_woken_up := true);
+  Server_connection.report_exn t (Failure "connection failure");
+  Alcotest.(check bool) "Writer woken up"
+    true !writer_woken_up;
+  write_response t
+    ~msg:"Error response written"
+    (Response.create `Internal_server_error)
+    ~body:"got an error"
 ;;
 
 let test_synchronous_error () =
@@ -1211,6 +1241,72 @@ let test_streaming_response_before_reading_entire_body_no_error () =
   reader_ready t;
 ;;
 
+let test_failed_request_parse () =
+  let error_handler_fired = ref false in
+  let error_handler ?request error start_response =
+    error_handler_fired := true;
+    Alcotest.(check (option request)) "No parsed request"
+      None request;
+    Alcotest.(check request_error) "Request error"
+      `Bad_request error;
+    start_response Headers.empty |> Body.close_writer;
+  in
+  let request_handler _reqd = assert false in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  let writer_woken_up = ref false in
+  writer_yielded t;
+  yield_writer t (fun () ->
+    writer_woken_up := true);
+  let len = feed_string t "GET /v1/b HTTP/1.1\r\nHost : example.com\r\n\r\n" in
+  (* Reads through the end of "Host" *)
+  Alcotest.(check int) "partial read" 24 len;
+  Alcotest.(check bool) "Writer not woken up"
+    false !writer_woken_up;
+  Alcotest.check read_operation "reader closed"
+    `Close (next_read_operation t);
+  Alcotest.(check bool) "Error handler fired"
+    true !error_handler_fired;
+  Alcotest.(check bool) "Writer woken up"
+    true !writer_woken_up;
+  write_response t (Response.create `Bad_request);
+;;
+
+let test_bad_request () =
+  (* A `Bad_request is returned in a number of cases surrounding
+     transfer-encoding or content-length headers. *)
+  let request =
+    Request.create `GET "/"
+      ~headers:(Headers.of_list ["content-length", "-1"])
+  in
+  let error_handler_fired = ref false in
+  let error_handler ?request:request' error start_response =
+    error_handler_fired := true;
+    Alcotest.(check (option request)) "Parsed request"
+      (Some request) request';
+    Alcotest.(check request_error) "Request error"
+      `Bad_request error;
+    start_response Headers.empty |> Body.close_writer;
+  in
+  let request_handler _reqd = assert false in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  let writer_woken_up = ref false in
+  writer_yielded t;
+  yield_writer t (fun () ->
+    writer_woken_up := true);
+  read_request t request;
+  Alcotest.(check bool) "Writer not woken up"
+    false !writer_woken_up;
+  Alcotest.check read_operation "reader closed"
+    `Close (next_read_operation t);
+  Alcotest.(check bool) "Error handler fired"
+    true !error_handler_fired;
+  Alcotest.(check bool) "Writer woken up"
+    true !writer_woken_up;
+  write_response t (Response.create `Bad_request);
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1226,6 +1322,7 @@ let tests =
   ; "asynchronous streaming response, immediate flush", `Quick, test_asynchronous_streaming_response_with_immediate_flush
   ; "empty fixed streaming response", `Quick, test_empty_fixed_streaming_response
   ; "empty chunked streaming response", `Quick, test_empty_chunked_streaming_response
+  ; "connection error", `Quick, test_connection_error
   ; "synchronous error, synchronous handling", `Quick, test_synchronous_error
   ; "synchronous error, asynchronous handling", `Quick, test_synchronous_error_asynchronous_handling
   ; "asynchronous error, synchronous handling", `Quick, test_asynchronous_error
@@ -1254,4 +1351,6 @@ let tests =
   ; "request body EOFs before closing response body, request body not closed", `Quick, test_finish_response_after_read_eof
   ; "respond before reading entire request body", `Quick, test_respond_before_reading_entire_body_no_error
   ; "respond before reading entire request body, streaming response", `Quick, test_streaming_response_before_reading_entire_body_no_error
+  ; "failed request parse", `Quick, test_failed_request_parse
+  ; "bad request", `Quick, test_bad_request
   ]

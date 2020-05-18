@@ -1,18 +1,18 @@
 type t =
   | Waiting
-  | Complete  of Response.t
+  | Fixed  of Response.t
   | Streaming of Response.t * [`write] Body.t
   | Upgrade of Response.t * (unit -> unit)
 
 let output_state t : Output_state.t =
   match t with
-  | Complete _ -> Complete
-  | Waiting -> Wait
+  | Fixed _ -> Complete
+  | Waiting -> Waiting
   | Streaming(_, response_body) ->
     if Body.requires_output response_body
-    then Consume
+    then Ready
     else Complete
-  | Upgrade _ -> Consume
+  | Upgrade _ -> Ready
 
 let flush_response_body t ~request_method writer =
   match t with

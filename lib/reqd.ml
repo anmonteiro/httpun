@@ -90,15 +90,15 @@ let request_body { request_body; _ } = request_body
 let response { response_state; _ } =
   match response_state with
   | Waiting -> None
-  | Streaming(response, _)
-  | Complete (response) -> Some response
+  | Streaming (response, _)
+  | Fixed response
   | Upgrade (response, _) -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
   | Waiting -> failwith "httpaf.Reqd.response_exn: response has not started"
   | Streaming(response, _)
-  | Complete (response) -> response
+  | Fixed response
   | Upgrade (response, _) -> response
 
 let respond_with_string t response str =
@@ -111,11 +111,11 @@ let respond_with_string t response str =
     Writer.write_string t.writer str;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    t.response_state <- Complete response;
+    t.response_state <- Fixed response;
     Writer.wakeup t.writer;
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_string: response already started"
-  | Complete _ ->
+  | Fixed _ ->
     failwith "httpaf.Reqd.respond_with_string: response already complete"
 
 let respond_with_bigstring t response (bstr:Bigstringaf.t) =
@@ -128,11 +128,11 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
     Writer.schedule_bigstring t.writer bstr;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    t.response_state <- Complete response;
+    t.response_state <- Fixed response;
     Writer.wakeup t.writer;
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_bigstring: response already started"
-  | Complete _ ->
+  | Fixed _ ->
     failwith "httpaf.Reqd.respond_with_bigstring: response already complete"
 
 let unsafe_respond_with_streaming ~flush_headers_immediately t response =
@@ -145,14 +145,14 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    t.response_state <- Streaming(response, response_body);
+    t.response_state <- Streaming (response, response_body);
     if flush_headers_immediately
     then Writer.wakeup t.writer
     else Writer.yield t.writer;
     response_body
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already started"
-  | Complete _ ->
+  | Fixed _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already complete"
 
 let respond_with_streaming ?(flush_headers_immediately=false) t response =
@@ -173,7 +173,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     Writer.wakeup t.writer
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"
-  | Complete _ ->
+  | Fixed _ ->
     failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already complete"
 
 let respond_with_upgrade t response upgrade_handler =
@@ -199,12 +199,12 @@ let report_error t error =
      * outstanding call to the [error_handler], but an intervening exception
      * has been reported as well. *)
     failwith "httpaf.Reqd.report_exn: NYI"
-  | Streaming(_response, response_body), `Ok ->
+  | Streaming (_response, response_body), `Ok ->
     Body.close_writer response_body
-  | Streaming(_response, response_body), `Exn _ ->
+  | Streaming (_response, response_body), `Exn _ ->
     Body.close_writer response_body;
     Writer.close_and_drain t.writer
-  | (Complete _ | Streaming _ | Upgrade _ | Waiting) , _ ->
+  | (Fixed _ | Streaming _ | Upgrade _ | Waiting) , _ ->
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
     ()

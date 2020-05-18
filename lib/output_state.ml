@@ -1,4 +1,4 @@
 type t =
-  | Consume
-  | Wait
+  | Waiting
+  | Ready
   | Complete

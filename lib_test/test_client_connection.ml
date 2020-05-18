@@ -2,11 +2,26 @@ open Httpaf
 open Helpers
 open Client_connection
 
+let response_error_pp_hum fmt = function
+  | `Malformed_response str ->
+    Format.fprintf fmt "Malformed_response: %s" str
+  | `Invalid_response_body_length resp ->
+    Format.fprintf fmt "Invalid_response_body_length: %s" (response_to_string resp)
+  | `Exn exn ->
+    Format.fprintf fmt "Exn (%s)" (Printexc.to_string exn)
+;;
+
 module Response = struct
   include Response
 
   let pp = pp_hum
   let equal x y = x = y
+end
+
+module Alcotest = struct
+  include Alcotest
+
+  let response_error = of_pp response_error_pp_hum
 end
 
 let feed_string t str =
@@ -1066,6 +1081,42 @@ let test_async_exception_reading_response_body () =
   connection_is_shutdown t;
 ;;
 
+let test_failed_response_parse () =
+  let writer_woken_up = ref false in
+  let request' = Request.create `GET "/" in
+
+  let test response bytes_read expected_error =
+    let error = ref None in
+    let t = create ?config:None in
+    let body =
+      request
+        t
+        request'
+        ~response_handler:(fun _ _ -> assert false)
+        ~error_handler:(fun e -> error := Some e)
+    in
+    Body.close_writer body;
+    write_request t request';
+    writer_yielded t;
+    yield_writer t (fun () -> writer_woken_up := true);
+    reader_ready t;
+    let len = feed_string t response in
+    Alcotest.(check int) "bytes read" len bytes_read;
+    reader_closed t;
+    Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+    connection_is_shutdown t;
+    Alcotest.(check (option response_error)) "Response error"
+      (Some expected_error) !error;
+  in
+
+  test "HTTP/1.1 200\r\n\r\n" 12 (`Malformed_response ": char ' '");
+
+  let response =
+    Response.create `OK ~headers:(Headers.of_list ["Content-length", "-1"])
+  in
+  test (response_to_string response) 39 (`Invalid_response_body_length response);
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1094,4 +1145,5 @@ let tests =
   ; "Exception while reading the response body", `Quick, test_exception_reading_response_body
   ; "Exception while reading the response body", `Quick, test_exception_reading_response_body_last_chunk
   ; "Aynchronous exception while reading the response body", `Quick, test_async_exception_reading_response_body
+  ; "failed response parse", `Quick, test_failed_response_parse
   ]
