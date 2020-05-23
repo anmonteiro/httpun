@@ -9,7 +9,7 @@ in
 
   (mkShell {
     inputsFrom = lib.attrValues httpafDrvs;
-    buildInputs = with ocamlPackages; [ merlin ];
+    buildInputs = with ocamlPackages; [ merlin utop ];
   }).overrideAttrs (o : {
     propagatedBuildInputs = lib.filter
     (drv:

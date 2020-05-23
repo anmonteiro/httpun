@@ -1307,6 +1307,38 @@ let test_bad_request () =
   write_response t (Response.create `Bad_request);
 ;;
 
+let test_shutdown_hangs_request_body_read () =
+  let reader_woken_up = ref false in
+  let got_eof = ref false in
+  let request_handler reqd =
+    let request_body  = Reqd.request_body reqd in
+    let rec on_read _buffer ~off:_ ~len:_ =
+      Body.schedule_read request_body ~on_eof ~on_read;
+    and on_eof () = got_eof := true in
+  Body.schedule_read request_body ~on_eof ~on_read
+  in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  let request =
+    Request.create
+      `GET
+      ~headers:(Headers.of_list ["content-length", "10"])
+      "/"
+  in
+  read_request t request;
+  yield_reader t (fun () -> reader_woken_up := true);
+  yield_writer t ignore;
+  read_string t "five.";
+  reader_ready t;
+  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+  shutdown t;
+  Alcotest.(check bool) "EOF delivered to the request body if the connection shuts down" true !got_eof;
+  writer_closed t;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1353,4 +1385,5 @@ let tests =
   ; "respond before reading entire request body, streaming response", `Quick, test_streaming_response_before_reading_entire_body_no_error
   ; "failed request parse", `Quick, test_failed_request_parse
   ; "bad request", `Quick, test_bad_request
+  ; "shutdown delivers eof to request bodies", `Quick, test_shutdown_hangs_request_body_read
   ]
