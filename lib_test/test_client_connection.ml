@@ -1117,6 +1117,40 @@ let test_failed_response_parse () =
   test (response_to_string response) 39 (`Invalid_response_body_length response);
 ;;
 
+let test_shutdown_hangs_response_body_read () =
+  let got_eof = ref false in
+  let request' = Request.create `GET "/" in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let response_handler expected_response response response_body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let rec on_read _buffer ~off:_ ~len:_ =
+      Body.schedule_read response_body ~on_eof ~on_read;
+    and on_eof () = got_eof := true in
+  Body.schedule_read response_body ~on_eof ~on_read
+  in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler response)
+      ~error_handler:no_error_handler
+  in
+  reader_ready t;
+  write_request t request';
+  writer_yielded t;
+  Body.close_writer body;
+  reader_ready t;
+  read_response t response;
+  read_string t "five.";
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+  shutdown t;
+  Alcotest.(check bool) "EOF delivered to the request body if the connection shuts down" true !got_eof;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1146,4 +1180,5 @@ let tests =
   ; "Exception while reading the response body", `Quick, test_exception_reading_response_body_last_chunk
   ; "Aynchronous exception while reading the response body", `Quick, test_async_exception_reading_response_body
   ; "failed response parse", `Quick, test_failed_response_parse
+  ; "shutdown delivers eof to response bodies", `Quick, test_shutdown_hangs_response_body_read
   ]
