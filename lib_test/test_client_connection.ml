@@ -821,17 +821,15 @@ let test_eof_with_another_pipelined_request () =
 (* If we haven't finished receiving the full response, the error handler
  * should be called. *)
 let test_eof_handler_response_body_not_closed () =
-  let continue_reading = ref (fun () -> ()) in
   let request' = Request.create `GET "/" in
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
   let t = create ?config:None in
-  let response_handler continue_reading expected_response response body =
+  let response_handler expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
-    let on_read _buffer ~off:_ ~len:_ =
-      continue_reading := (fun () -> ());
-    and on_eof () = print_endline "got eof" in
+    let on_read _buffer ~off:_ ~len:_ = () in
+    let on_eof () = print_endline "got eof" in
     Body.schedule_read body ~on_eof ~on_read
   in
   let error_handler_called = ref false in
@@ -839,7 +837,7 @@ let test_eof_handler_response_body_not_closed () =
     request
       t
       request'
-      ~response_handler:(response_handler continue_reading response)
+      ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
   write_request t request';
@@ -849,7 +847,6 @@ let test_eof_handler_response_body_not_closed () =
   read_response t response;
   yield_writer t ignore;
 
-  !continue_reading ();
   reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
 
   let str = "rest." in
@@ -1151,6 +1148,89 @@ let test_shutdown_hangs_response_body_read () =
   connection_is_shutdown t;
 ;;
 
+let test_response_arrives_before_body_uploaded () =
+  let reader_woken_up = ref false in
+  let eof_delivered = ref false in
+  let continue_response = ref (fun () -> ()) in
+  let request' =
+   Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"])
+  in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler continue_response expected_response response body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+    let on_read _buffer ~off:_ ~len:_ = ()
+    and on_eof () = eof_delivered := true;
+    in
+    Body.schedule_read body ~on_eof ~on_read;
+    continue_response := (fun () ->
+     Body.schedule_read body ~on_eof ~on_read;
+     continue_response := (fun () ->
+       Body.schedule_read body ~on_eof ~on_read))
+  in
+  let error_handler_called = ref false in
+  let second_error_handler_called = ref false in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler continue_response response)
+      ~error_handler:(fun _ -> error_handler_called := true;)
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.write_string body "hello";
+  write_string t "hello";
+  writer_yielded t;
+  (* Never close the request body. *)
+  reader_ready t;
+  read_response t response;
+  yield_writer t ignore;
+
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+  let str = "hello" in
+  let len = String.length str in
+  let input = Bigstringaf.of_string str ~off:0 ~len in
+  let just_read = read t input ~off:0 ~len in
+  Alcotest.(check int) "reads the first chunk" len just_read;
+  reader_yielded t;
+  yield_reader t (fun () -> reader_woken_up := true);
+
+  (* Sneak in a 2nd request. *)
+  let expected_response = Response.create `OK in
+  let body' =
+    request
+      t
+      request'
+      ~response_handler:(fun response _ ->
+        Alcotest.check (module Response) "expected response" expected_response response)
+      ~error_handler:(fun _ -> second_error_handler_called := true;)
+  in
+  Body.close_writer body';
+  writer_yielded t;
+
+  !continue_response ();
+  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  reader_ready t;
+  reader_woken_up := false;
+
+  let str = "hello" in
+  let len = String.length str in
+  let input = Bigstringaf.of_string str ~off:0 ~len in
+  let just_read = read_eof t input ~off:0 ~len in
+  Alcotest.(check int) "server EOF after delivering the entire response" len just_read;
+  reader_closed t;
+
+  !continue_response ();
+  Alcotest.(check bool) "EOF delivered to the response body" true !eof_delivered;
+
+  Alcotest.(check bool) "First error handler not called" false !error_handler_called;
+  Alcotest.(check bool) "2nd Error handler called" true !second_error_handler_called;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1181,4 +1261,5 @@ let tests =
   ; "Aynchronous exception while reading the response body", `Quick, test_async_exception_reading_response_body
   ; "failed response parse", `Quick, test_failed_response_parse
   ; "shutdown delivers eof to response bodies", `Quick, test_shutdown_hangs_response_body_read
+  ; "full response arrives before uploading the entire request body, 2nd request in the pipeline", `Quick, test_response_arrives_before_body_uploaded
   ]
