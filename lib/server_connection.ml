@@ -79,16 +79,12 @@ let current_reqd_exn t =
   Queue.peek t.request_queue
 
 let yield_reader t k =
-  if is_closed t
-  then failwith "yield_reader on closed conn"
-  else Reader.on_wakeup t.reader k
+  Reader.on_wakeup t.reader k
 
 let wakeup_reader t = Reader.wakeup t.reader
 
 let yield_writer t k =
- if is_closed t
- then failwith "yield_writer on closed conn"
- else Writer.on_wakeup t.writer k
+ Writer.on_wakeup t.writer k
 ;;
 
 let wakeup_writer t = Writer.wakeup t.writer
