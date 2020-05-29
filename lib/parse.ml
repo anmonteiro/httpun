@@ -245,7 +245,7 @@ module Reader = struct
 
   let on_wakeup t k =
     if is_closed t
-    then failwith "on_wakup on closed reader"
+    then failwith "on_wakeup on closed reader"
     else if Optional_thunk.is_some t.wakeup
     then failwith "on_wakeup: only one callback can be registered at a time"
     else t.wakeup <- Optional_thunk.some k

@@ -79,17 +79,15 @@ let current_reqd_exn t =
   Queue.peek t.request_queue
 
 let yield_reader t k =
-  if Reader.is_closed t.reader
-  then k ()
+  if is_closed t
+  then failwith "yield_reader on closed conn"
   else Reader.on_wakeup t.reader k
 
 let wakeup_reader t = Reader.wakeup t.reader
 
 let yield_writer t k =
- if Writer.is_closed t.writer
- (* TODO: this should probably be an error. Why would the runtime call `yield`
-  * if we told it to close? *)
- then assert false
+ if is_closed t
+ then failwith "yield_writer on closed conn"
  else Writer.on_wakeup t.writer k
 ;;
 
@@ -241,7 +239,7 @@ let rec _next_read_operation t =
   )
 
 and _final_read_operation_for t reqd =
-  if not (Reqd.persistent_connection reqd) then (
+  if Reader.is_closed t.reader || not (Reqd.persistent_connection reqd) then (
     shutdown_reader t;
     Reader.next t.reader;
   ) else

@@ -1339,6 +1339,90 @@ let test_shutdown_hangs_request_body_read () =
   connection_is_shutdown t;
 ;;
 
+let test_finish_response_after_read_eof_well_formed () =
+  let reader_woken_up = ref false in
+  let writer_woken_up = ref false in
+  let response = Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK in
+  let request_handler reqd =
+    let request_body = Reqd.request_body reqd in
+    let rec on_read _buffer ~off:_ ~len:_ =
+     Body.schedule_read request_body ~on_eof ~on_read;
+    and on_eof = fun  () ->
+      Reqd.respond_with_string reqd response "hello"
+    in
+    Body.schedule_read request_body ~on_eof ~on_read
+  in
+  let error_handler ?request:_ _error _start_response =
+   Format.eprintf "E: %a@." request_error_pp_hum _error;
+    Alcotest.fail "Expected error_handler not to be called because the response was already sent"
+  in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
+  yield_reader t (fun () -> reader_woken_up := true);
+  Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+  yield_writer t (fun () -> writer_woken_up := true);
+
+  let str = "hello" in
+  let bs = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+  let just_read = read_eof t bs ~off:0 ~len:(String.length str) in
+  Alcotest.(check int) "EOF read" (String.length str) just_read;
+  Alcotest.(check bool) "Reader wakes up" true !reader_woken_up;
+  reader_closed t;
+
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  write_response t ~body:"hello" response;
+  writer_closed t;
+  reader_closed t;
+;;
+
+let test_finish_response_after_read_eof_malformed () =
+  let reader_woken_up = ref false in
+  let writer_woken_up = ref false in
+  let error_handler_called = ref false in
+  let response = Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK in
+  let continue_response = ref (fun () -> ()) in
+  let request_handler reqd =
+    let request_body = Reqd.request_body reqd in
+    let rec on_read _buffer ~off:_ ~len:_ =
+     Body.schedule_read request_body ~on_eof ~on_read;
+    and on_eof = (fun  () ->
+     continue_response := (fun() ->
+      try Reqd.respond_with_string reqd response "hello"
+      with | exn -> Reqd.report_exn reqd exn))
+    in
+    Body.schedule_read request_body ~on_eof ~on_read
+  in
+  let error_handler ?request:_ _error start_response =
+   error_handler_called := true;
+   let body = start_response Headers.empty in
+   Body.close_writer body
+  in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
+  yield_reader t (fun () -> reader_woken_up := true);
+  Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+  yield_writer t (fun () -> writer_woken_up := true);
+
+  let str = "hello" in
+  let bs = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+  let just_read = read_eof t bs ~off:0 ~len:(String.length str) in
+  Alcotest.(check int) "EOF read" (String.length str) just_read;
+  Alcotest.(check bool) "Reader wakes up" true !reader_woken_up;
+  reader_closed t;
+  Alcotest.(check bool) "Error handler was called" true !error_handler_called;
+
+  !continue_response ();
+
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  write_response t ~body:"" (Response.create `Bad_request);
+  writer_closed t;
+  reader_closed t;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1386,4 +1470,6 @@ let tests =
   ; "failed request parse", `Quick, test_failed_request_parse
   ; "bad request", `Quick, test_bad_request
   ; "shutdown delivers eof to request bodies", `Quick, test_shutdown_hangs_request_body_read
+  ; "request body eof, finish response immediately", `Quick, test_finish_response_after_read_eof_well_formed
+  ; "request body eof, async response triggers error handler", `Quick, test_finish_response_after_read_eof_malformed
   ]
