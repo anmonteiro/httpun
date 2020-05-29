@@ -62,18 +62,11 @@ let is_active t =
 let current_respd_exn t =
   Queue.peek t.request_queue
 
-let yield_reader t k =
-  if Reader.is_closed t.reader
-  then k ()
-  else Reader.on_wakeup t.reader k
+let yield_reader t k = Reader.on_wakeup t.reader k
 
 let wakeup_reader t = Reader.wakeup t.reader
 
-let yield_writer t k =
- if Writer.is_closed t.writer
- then k ()
- else Writer.on_wakeup t.writer k
-;;
+let yield_writer t k = Writer.on_wakeup t.writer k
 
 let wakeup_writer t = Writer.wakeup t.writer
 
