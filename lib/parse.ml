@@ -165,8 +165,7 @@ let body ~encoding writer =
     else
       at_end_of_input
       >>= function
-        | true  ->
-          finish writer *> fail unexpected
+        | true -> commit *> fail unexpected
         | false ->
           available >>= fun m ->
           let m' = Int64.(min (of_int m) n) in
@@ -220,6 +219,7 @@ module Reader = struct
 
   type 'error t =
     { parser              : (unit, 'error) result Angstrom.t
+    ; mutable consumed    : int
     ; mutable parse_state : 'error parse_state
       (* The state of the parse for the current request *)
     ; mutable closed      : bool
@@ -234,6 +234,7 @@ module Reader = struct
   let create parser =
     { parser
     ; parse_state = Done
+    ; consumed    = 0
     ; closed      = false
     ; wakeup      = Optional_thunk.none
     }
@@ -310,8 +311,11 @@ module Reader = struct
 
   let transition t state =
     match state with
-    | AU.Done(consumed, Ok ())
-    | AU.Fail(0 as consumed, _, _) ->
+    | AU.Done(consumed, Ok ()) ->
+      t.parse_state <- Done;
+      t.consumed <- 0;
+      consumed
+    | AU.Fail(0 as consumed, _, _) when t.consumed = 0 ->
       t.parse_state <- Done;
       consumed
     | AU.Done(consumed, Error error) ->
@@ -322,6 +326,7 @@ module Reader = struct
       consumed
     | AU.Partial { committed; continue } ->
       t.parse_state <- Partial continue;
+      t.consumed <- t.consumed + committed;
       committed
   and start t state =
       match state with
