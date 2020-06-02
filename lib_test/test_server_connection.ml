@@ -443,6 +443,7 @@ let test_asynchronous_streaming_response_writer_doesnt_yield () =
 let test_connection_error () =
   let writer_woken_up = ref false in
   let t = create ~error_handler (fun _ -> assert false) in
+  writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
   Server_connection.report_exn t (Failure "connection failure");
   Alcotest.(check bool) "Writer woken up"
@@ -456,6 +457,7 @@ let test_connection_error () =
 let test_synchronous_error () =
   let writer_woken_up = ref false in
   let t = create ~error_handler synchronous_raise in
+  writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
   read_request t (Request.create `GET "/");
   reader_errored t;
@@ -570,6 +572,7 @@ let test_asynchronous_error_asynchronous_response_body () =
   write_response t
     ~msg:"Error response written"
     (Response.create `Internal_server_error);
+  writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
   !continue_error ();
   write_string t "got an error";
@@ -908,6 +911,7 @@ let test_immediate_flush_empty_body () =
   in
   let t = create ~error_handler request_handler in
   reader_ready t;
+  writer_yielded t;
   yield_writer t (fun () -> write_response t ~body:"" response);
   read_request t (Request.create `GET "/");
   yield_reader t (fun () -> reader_woken_up := true);
@@ -928,6 +932,7 @@ let test_empty_body_no_immediate_flush () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/");
+  reader_yielded t;
   yield_reader t (fun () -> reader_woken_up := true);
   write_response t ~body:"" response;
   writer_yielded t;
@@ -948,6 +953,7 @@ let test_yield_before_starting_a_response () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/");
+  reader_yielded t;
   yield_reader t (fun () -> reader_woken_up := true);
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
   yield_writer t ignore;
@@ -971,6 +977,7 @@ let test_respond_before_reading_entire_body () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "2"]));
+  reader_yielded t;
   yield_reader t (fun () -> reader_woken_up := true);
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
   yield_writer t ignore;
