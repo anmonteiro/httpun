@@ -165,8 +165,7 @@ let body ~encoding writer =
     else
       at_end_of_input
       >>= function
-        | true  ->
-          finish writer *> fail unexpected
+        | true -> commit *> fail unexpected
         | false ->
           available >>= fun m ->
           let m' = Int64.(min (of_int m) n) in
@@ -310,8 +309,7 @@ module Reader = struct
 
   let transition t state =
     match state with
-    | AU.Done(consumed, Ok ())
-    | AU.Fail(0 as consumed, _, _) ->
+    | AU.Done(consumed, Ok ()) ->
       t.parse_state <- Done;
       consumed
     | AU.Done(consumed, Error error) ->
@@ -334,6 +332,7 @@ module Reader = struct
   ;;
 
   let rec read_with_more t bs ~off ~len more =
+    let initial = match t.parse_state with Done -> true | _ -> false in
     let consumed =
       match t.parse_state with
       | Fail _ -> 0
@@ -343,6 +342,10 @@ module Reader = struct
       | Partial continue ->
         transition t (continue bs more ~off ~len)
     in
+    (* Special case where the parser just started and was fed a zero-length
+     * bigstring. Avoid putting them parser in an error state in this scenario.
+     * If we were already in a `Partial` state, return the error. *)
+    if initial && len = 0 then t.parse_state <- Done;
     begin match more with
     | Complete -> t.closed <- true;
     | Incomplete -> ()

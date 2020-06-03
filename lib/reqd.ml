@@ -183,7 +183,6 @@ let respond_with_upgrade t response upgrade_handler =
 
 let report_error t error =
   t.persistent <- false;
-  Body.close_reader t.request_body;
   match t.response_state, t.error_code with
   | Waiting, `Ok ->
     t.error_code <- (error :> [`Ok | error]);
@@ -193,21 +192,36 @@ let report_error t error =
       | #Status.standard as status -> status
     in
     t.error_handler ~request:t.request error (fun headers ->
-      unsafe_respond_with_streaming ~flush_headers_immediately:true t (Response.create ~headers status))
-  | Waiting, `Exn _ ->
-    (* XXX(seliopou): Decide what to do in this unlikely case. There is an
-     * outstanding call to the [error_handler], but an intervening exception
-     * has been reported as well. *)
-    failwith "httpaf.Reqd.report_exn: NYI"
-  | Streaming (_response, response_body), `Ok ->
-    Body.close_writer response_body
-  | Streaming (_response, response_body), `Exn _ ->
-    Body.close_writer response_body;
-    Writer.close_and_drain t.writer
-  | (Fixed _ | Streaming _ | Upgrade _ | Waiting) , _ ->
-    (* XXX(seliopou): Once additional logging support is added, log the error
-     * in case it is not spurious. *)
-    ()
+      let response_body =
+        unsafe_respond_with_streaming
+          t
+          ~flush_headers_immediately:true
+          (Response.create ~headers status)
+      in
+      (* NOTE(anmonteiro): When reporting an error that calls the error
+         handler, we can only deliver an EOF to the request body once the error
+         response has started. Otherwise, the request body `on_eof` handler
+         could erroneously send a successful response instead of letting us
+         handle the error. *)
+      Body.close_reader t.request_body;
+      response_body)
+  | other ->
+    Body.close_reader t.request_body;
+    match other with
+    | Waiting, `Exn _ ->
+      (* XXX(seliopou): Decide what to do in this unlikely case. There is an
+       * outstanding call to the [error_handler], but an intervening exception
+       * has been reported as well. *)
+      failwith "httpaf.Reqd.report_exn: NYI"
+    | Streaming (_response, response_body), `Ok ->
+      Body.close_writer response_body
+    | Streaming (_response, response_body), `Exn _ ->
+      Body.close_writer response_body;
+      Writer.close_and_drain t.writer
+    | (Fixed _ | Streaming _ | Upgrade _ | Waiting) , _ ->
+      (* XXX(seliopou): Once additional logging support is added, log the error
+       * in case it is not spurious. *)
+      ()
 
 let report_exn t exn =
   report_error t (`Exn exn)

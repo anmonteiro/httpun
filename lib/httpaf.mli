@@ -618,6 +618,9 @@ end
 module Reqd : sig
   type t
 
+  type error =
+    [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
+
   val request : t -> Request.t
   val request_body : t -> [`read] Body.t
 
@@ -641,6 +644,7 @@ module Reqd : sig
 
   (** {3 Exception Handling} *)
 
+  val error_code : t -> error option
   val report_exn : t -> exn -> unit
   val try_with : t -> (unit -> unit) -> (unit, exn) result
 end
@@ -664,8 +668,7 @@ end
 module Server_connection : sig
   type t
 
-  type error =
-    [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
+  type error = Reqd.error
 
   type request_handler = Reqd.t -> unit
 

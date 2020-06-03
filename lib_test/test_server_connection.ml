@@ -443,6 +443,7 @@ let test_asynchronous_streaming_response_writer_doesnt_yield () =
 let test_connection_error () =
   let writer_woken_up = ref false in
   let t = create ~error_handler (fun _ -> assert false) in
+  writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
   Server_connection.report_exn t (Failure "connection failure");
   Alcotest.(check bool) "Writer woken up"
@@ -456,6 +457,7 @@ let test_connection_error () =
 let test_synchronous_error () =
   let writer_woken_up = ref false in
   let t = create ~error_handler synchronous_raise in
+  writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
   read_request t (Request.create `GET "/");
   reader_errored t;
@@ -570,6 +572,7 @@ let test_asynchronous_error_asynchronous_response_body () =
   write_response t
     ~msg:"Error response written"
     (Response.create `Internal_server_error);
+  writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
   !continue_error ();
   write_string t "got an error";
@@ -908,6 +911,7 @@ let test_immediate_flush_empty_body () =
   in
   let t = create ~error_handler request_handler in
   reader_ready t;
+  writer_yielded t;
   yield_writer t (fun () -> write_response t ~body:"" response);
   read_request t (Request.create `GET "/");
   yield_reader t (fun () -> reader_woken_up := true);
@@ -928,6 +932,7 @@ let test_empty_body_no_immediate_flush () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/");
+  reader_yielded t;
   yield_reader t (fun () -> reader_woken_up := true);
   write_response t ~body:"" response;
   writer_yielded t;
@@ -948,6 +953,7 @@ let test_yield_before_starting_a_response () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/");
+  reader_yielded t;
   yield_reader t (fun () -> reader_woken_up := true);
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
   yield_writer t ignore;
@@ -971,6 +977,7 @@ let test_respond_before_reading_entire_body () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "2"]));
+  reader_yielded t;
   yield_reader t (fun () -> reader_woken_up := true);
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
   yield_writer t ignore;
@@ -1353,13 +1360,12 @@ let test_finish_response_after_read_eof_well_formed () =
     Body.schedule_read request_body ~on_eof ~on_read
   in
   let error_handler ?request:_ _error _start_response =
-   Format.eprintf "E: %a@." request_error_pp_hum _error;
     Alcotest.fail "Expected error_handler not to be called because the response was already sent"
   in
   let t = create ~error_handler request_handler in
   reader_ready t;
   writer_yielded t;
-  read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
+  read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "5"]));
   yield_reader t (fun () -> reader_woken_up := true);
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
   yield_writer t (fun () -> writer_woken_up := true);
@@ -1423,6 +1429,75 @@ let test_finish_response_after_read_eof_malformed () =
   reader_closed t;
 ;;
 
+let test_request_body_eof_response_not_sent () =
+  let error_handler_called = ref false in
+  let response = Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK in
+  let request_handler reqd =
+    let request_body = Reqd.request_body reqd in
+    let rec on_read _buffer ~off:_ ~len:_ =
+     Body.schedule_read request_body ~on_eof ~on_read;
+    and on_eof = fun  () ->
+      try Reqd.respond_with_string reqd response "hello"
+      with | exn -> Reqd.report_exn reqd exn
+    in
+    Body.schedule_read request_body ~on_eof ~on_read
+  in
+  let error_handler ?request:_ _error start_response =
+   error_handler_called := true;
+   let body = start_response Headers.empty in
+   Body.close_writer body
+  in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
+
+  let str = "hello" in
+  let bs = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
+  let just_read = read_eof t bs ~off:0 ~len:(String.length str) in
+  Alcotest.(check int) "EOF read" (String.length str) just_read;
+  reader_closed t;
+  Alcotest.(check bool) "Error handler was called" true !error_handler_called;
+
+  write_response t ~body:"" (Response.create `Bad_request);
+  writer_closed t;
+  reader_closed t;
+;;
+
+let test_request_body_eof_response_not_sent_empty_eof () =
+  let error_handler_called = ref false in
+  let response = Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK in
+  let request_handler reqd =
+    let request_body = Reqd.request_body reqd in
+    let rec on_read _buffer ~off:_ ~len:_ =
+     Body.schedule_read request_body ~on_eof ~on_read;
+    and on_eof = fun  () ->
+      try Reqd.respond_with_string reqd response "hello"
+      with | exn -> Reqd.report_exn reqd exn
+    in
+    Body.schedule_read request_body ~on_eof ~on_read
+  in
+  let error_handler ?request:_ _error start_response =
+   error_handler_called := true;
+   let body = start_response Headers.empty in
+   Body.close_writer body
+  in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
+
+  read_string t "hello";
+  let just_read = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+  Alcotest.(check int) "EOF read" 0 just_read;
+  reader_closed t;
+  Alcotest.(check bool) "Error handler was called" true !error_handler_called;
+
+  write_response t ~body:"" (Response.create `Bad_request);
+  writer_closed t;
+  reader_closed t;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1472,4 +1547,6 @@ let tests =
   ; "shutdown delivers eof to request bodies", `Quick, test_shutdown_hangs_request_body_read
   ; "request body eof, finish response immediately", `Quick, test_finish_response_after_read_eof_well_formed
   ; "request body eof, async response triggers error handler", `Quick, test_finish_response_after_read_eof_malformed
+  ; "request body response not sent", `Quick, test_request_body_eof_response_not_sent
+  ; "request body response not sent empty eof", `Quick, test_request_body_eof_response_not_sent_empty_eof
   ]
