@@ -219,7 +219,6 @@ module Reader = struct
 
   type 'error t =
     { parser              : (unit, 'error) result Angstrom.t
-    ; mutable consumed    : int
     ; mutable parse_state : 'error parse_state
       (* The state of the parse for the current request *)
     ; mutable closed      : bool
@@ -234,7 +233,6 @@ module Reader = struct
   let create parser =
     { parser
     ; parse_state = Done
-    ; consumed    = 0
     ; closed      = false
     ; wakeup      = Optional_thunk.none
     }
@@ -313,10 +311,6 @@ module Reader = struct
     match state with
     | AU.Done(consumed, Ok ()) ->
       t.parse_state <- Done;
-      t.consumed <- 0;
-      consumed
-    | AU.Fail(0 as consumed, _, _) when t.consumed = 0 ->
-      t.parse_state <- Done;
       consumed
     | AU.Done(consumed, Error error) ->
       t.parse_state <- Fail error;
@@ -326,7 +320,6 @@ module Reader = struct
       consumed
     | AU.Partial { committed; continue } ->
       t.parse_state <- Partial continue;
-      t.consumed <- t.consumed + committed;
       committed
   and start t state =
       match state with
@@ -339,6 +332,7 @@ module Reader = struct
   ;;
 
   let rec read_with_more t bs ~off ~len more =
+    let initial = match t.parse_state with Done -> true | _ -> false in
     let consumed =
       match t.parse_state with
       | Fail _ -> 0
@@ -348,6 +342,10 @@ module Reader = struct
       | Partial continue ->
         transition t (continue bs more ~off ~len)
     in
+    (* Special case where the parser just started and was fed a zero-length
+     * bigstring. Avoid putting them parser in an error state in this scenario.
+     * If we were already in a `Partial` state, return the error. *)
+    if initial && len = 0 then t.parse_state <- Done;
     begin match more with
     | Complete -> t.closed <- true;
     | Incomplete -> ()
