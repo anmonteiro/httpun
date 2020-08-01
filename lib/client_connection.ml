@@ -289,16 +289,17 @@ and _final_write_operation_for t respd =
       maybe_pipeline_queued_requests t;
       match Respd.input_state respd with
       | Wait | Ready ->
+        wakeup_reader t;
         Writer.next t.writer;
       | Complete ->
          match Reader.next t.reader with
          | `Error _ | `Read  -> Writer.next t.writer
          | _ ->
            advance_request_queue t;
+           wakeup_reader t;
            _next_write_operation t
     )
   in
-  wakeup_reader t;
   next
 ;;
 

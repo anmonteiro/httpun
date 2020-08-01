@@ -1232,7 +1232,7 @@ let test_response_arrives_before_body_uploaded () =
 ;;
 
 let test_race_condition_writer_issues_yield_after_reader_eof () =
-  let writer_woken_up = ref false in
+  let reader_woken_up = ref false in
   let request' =
    Request.create ~headers:(Headers.of_list [ "content-length", "5" ]) `GET "/"
   in
@@ -1256,14 +1256,16 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
   write_string t "hello";
   reader_ready t;
   read_response t response;
-  read_string t "hello";
+  read_string t (String.make 5 'a');
   Body.close_writer body;
   reader_yielded t;
   yield_reader t (fun () ->
+    reader_woken_up := true;
     ignore @@ read_eof t Bigstringaf.empty ~off:0 ~len:0;
     reader_closed t);
-  writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  writer_closed t;
+  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  connection_is_shutdown t;
 ;;
 
 let tests =
