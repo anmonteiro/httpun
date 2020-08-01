@@ -1498,6 +1498,51 @@ let test_request_body_eof_response_not_sent_empty_eof () =
   reader_closed t;
 ;;
 
+let test_race_condition_writer_issues_yield_after_reader_eof () =
+  let writer_woken_up = ref false in
+  let continue_response = ref (fun () -> ()) in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let response_handler reqd =
+   let request_body = Reqd.request_body reqd in
+   Body.schedule_read request_body
+     ~on_eof:ignore
+     ~on_read:(fun _ ~off:_ ~len:_ ->
+       Body.schedule_read request_body
+         ~on_read:(fun _ ~off:_ ~len:_ -> ())
+         ~on_eof:(fun () ->
+           let resp_body = Reqd.respond_with_streaming reqd response in
+           Body.write_string resp_body (String.make 10 'a');
+           Body.flush resp_body (fun () ->
+             continue_response := (fun () ->
+                 Body.close_writer resp_body))))
+  in
+  let t = create ~error_handler response_handler in
+  let request =
+   Request.create ~headers:(Headers.of_list [ "content-length", "5" ]) `GET "/"
+  in
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  read_request t request;
+  reader_ready t;
+  read_string t "hello";
+  write_response t ~body:(String.make 10 'a') response;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  writer_woken_up := false;
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  reader_yielded t;
+  yield_reader t (fun () ->
+    ignore @@ read_eof t Bigstringaf.empty ~off:0 ~len:0;
+    reader_closed t);
+  !continue_response ();
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  writer_yielded t;
+  (* This triggers the error. *)
+  yield_writer t ignore;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1549,4 +1594,5 @@ let tests =
   ; "request body eof, async response triggers error handler", `Quick, test_finish_response_after_read_eof_malformed
   ; "request body response not sent", `Quick, test_request_body_eof_response_not_sent
   ; "request body response not sent empty eof", `Quick, test_request_body_eof_response_not_sent_empty_eof
+  ; "reader EOF race condition causes state machine to issue writer yield", `Quick, test_race_condition_writer_issues_yield_after_reader_eof
   ]
