@@ -30,7 +30,7 @@ in
     httpaf-lwt = buildHttpaf {
       pname = "httpaf-lwt";
       doCheck = false;
-      propagatedBuildInputs = [ gluten-lwt httpaf lwt4 ];
+      propagatedBuildInputs = [ gluten-lwt httpaf lwt ];
     };
 
     httpaf-lwt-unix = buildHttpaf {

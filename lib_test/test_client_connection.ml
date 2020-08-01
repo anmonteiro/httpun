@@ -650,7 +650,6 @@ let test_empty_fixed_body_persistent_connection () =
   writer_yielded t;
 ;;
 
-
 let test_client_upgrade () =
   let writer_woken_up = ref false in
   let reader_woken_up = ref false in
@@ -1231,6 +1230,43 @@ let test_response_arrives_before_body_uploaded () =
   connection_is_shutdown t;
 ;;
 
+let test_race_condition_writer_issues_yield_after_reader_eof () =
+  let reader_woken_up = ref false in
+  let request' =
+   Request.create ~headers:(Headers.of_list [ "content-length", "5" ]) `GET "/"
+  in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler expected_response response _body =
+    Alcotest.check (module Response) "expected response" expected_response response;
+  in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(response_handler response)
+      ~error_handler:(fun _ -> ())
+  in
+  write_request t request';
+  Body.write_string body "hello";
+  Body.flush body ignore;
+  write_string t "hello";
+  reader_ready t;
+  read_response t response;
+  read_string t (String.make 5 'a');
+  Body.close_writer body;
+  reader_yielded t;
+  yield_reader t (fun () ->
+    reader_woken_up := true;
+    ignore @@ read_eof t Bigstringaf.empty ~off:0 ~len:0;
+    reader_closed t);
+  writer_closed t;
+  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1262,4 +1298,5 @@ let tests =
   ; "failed response parse", `Quick, test_failed_response_parse
   ; "shutdown delivers eof to response bodies", `Quick, test_shutdown_hangs_response_body_read
   ; "full response arrives before uploading the entire request body, 2nd request in the pipeline", `Quick, test_response_arrives_before_body_uploaded
+  ; "reader EOF race condition causes state machine to issue writer yield", `Quick, test_race_condition_writer_issues_yield_after_reader_eof
   ]

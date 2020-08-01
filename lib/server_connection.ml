@@ -333,31 +333,28 @@ let rec _next_write_operation t =
   )
 
 and _final_write_operation_for t reqd =
-  let next =
-    if not (Reqd.persistent_connection reqd) then (
-      shutdown_writer t;
-      Writer.next t.writer;
-    ) else (
-      match Reqd.input_state reqd with
-      | Wait | Ready ->
-        (* If we're done sending a response in a persistent connection, but the
-         * reader hasn't yet ingested the entire request body, we need to
-         * signal that the "input state" for this request descriptor has been
-         * completed by closing the request body (not interested in ingesting
-         * more request body data). *)
-        Reqd.close_request_body reqd;
-        Writer.next t.writer
-      | Complete ->
-         match Reader.next t.reader with
-         | `Error _ | `Read  ->
-           Writer.next t.writer
-         | _ ->
-           advance_request_queue t;
-           _next_write_operation t
-    )
-  in
-  wakeup_reader t;
-  next
+  if not (Reqd.persistent_connection reqd) then (
+    shutdown_writer t;
+    Writer.next t.writer;
+  ) else (
+    match Reqd.input_state reqd with
+    | Wait | Ready ->
+      (* If we're done sending a response in a persistent connection, but the
+       * reader hasn't yet ingested the entire request body, we need to
+       * signal that the "input state" for this request descriptor has been
+       * completed by closing the request body (not interested in ingesting
+       * more request body data). *)
+      Reqd.close_request_body reqd;
+      Writer.next t.writer
+    | Complete ->
+       match Reader.next t.reader with
+       | `Error _ | `Read  ->
+         Writer.next t.writer
+       | _ ->
+         advance_request_queue t;
+         wakeup_reader t;
+         _next_write_operation t
+  )
 ;;
 
 let next_write_operation t = _next_write_operation t
