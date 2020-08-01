@@ -650,7 +650,6 @@ let test_empty_fixed_body_persistent_connection () =
   writer_yielded t;
 ;;
 
-
 let test_client_upgrade () =
   let writer_woken_up = ref false in
   let reader_woken_up = ref false in

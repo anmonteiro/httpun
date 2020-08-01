@@ -277,30 +277,27 @@ let rec _next_write_operation t =
   )
 
 and _final_write_operation_for t respd =
-  let next =
-    if not (Respd.persistent_connection respd) then (
-      shutdown_writer t;
+  if not (Respd.persistent_connection respd) then (
+    shutdown_writer t;
+    Writer.next t.writer;
+  ) else (
+    (* From RFC7230§6.3.2:
+     *   A client that supports persistent connections MAY "pipeline" its
+     *   requests (i.e., send multiple requests without waiting for each
+     *   response). *)
+    maybe_pipeline_queued_requests t;
+    match Respd.input_state respd with
+    | Wait | Ready ->
+      wakeup_reader t;
       Writer.next t.writer;
-    ) else (
-      (* From RFC7230§6.3.2:
-       *   A client that supports persistent connections MAY "pipeline" its
-       *   requests (i.e., send multiple requests without waiting for each
-       *   response). *)
-      maybe_pipeline_queued_requests t;
-      match Respd.input_state respd with
-      | Wait | Ready ->
-        wakeup_reader t;
-        Writer.next t.writer;
-      | Complete ->
-         match Reader.next t.reader with
-         | `Error _ | `Read  -> Writer.next t.writer
-         | _ ->
-           advance_request_queue t;
-           wakeup_reader t;
-           _next_write_operation t
-    )
-  in
-  next
+    | Complete ->
+       match Reader.next t.reader with
+       | `Error _ | `Read  -> Writer.next t.writer
+       | _ ->
+         advance_request_queue t;
+         wakeup_reader t;
+         _next_write_operation t
+  )
 ;;
 
 let next_write_operation t = _next_write_operation t
