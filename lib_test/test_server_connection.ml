@@ -1106,10 +1106,6 @@ let test_respond_before_reading_entire_body_chunked_eof () =
   Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   writer_woken_up := false;
   reader_ready t;
-  (* Yield writer before feeding eof.
-   *
-   * Note: writer here is done. It yields before we feed more to the reader
-   * to allow for it to complete. *)
 
   let str = "5\r\ninput\r\n" in
   let len = String.length str in
@@ -1185,18 +1181,18 @@ let test_respond_before_reading_entire_body_no_error () =
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t ~body:"" response;
   writer_yielded t;
+  writer_woken_up := false;
+  yield_writer t (fun () -> writer_woken_up := true);
   reader_ready t;
   (* Yield writer before feeding eof.
    *
    * Note: writer here is done. It yields before we feed more to the reader
    * to allow for it to complete. *)
-  writer_yielded t;
   read_string t "final";
 
   (* Ready for the next request *)
   reader_ready t;
-  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  writer_yielded t
+  Alcotest.(check bool) "Writer hasn't woken up yet, still yielding" false !writer_woken_up;
 ;;
 
 let test_streaming_response_before_reading_entire_body_no_error () =
@@ -1500,6 +1496,8 @@ let test_request_body_eof_response_not_sent_empty_eof () =
 
 let test_race_condition_writer_issues_yield_after_reader_eof () =
   let continue_response = ref (fun () -> ()) in
+  let reader_woken_up = ref false in
+  let writer_woken_up = ref false in
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
@@ -1527,12 +1525,17 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
   write_response t ~body:(String.make 10 'a') response;
   reader_yielded t;
   yield_reader t (fun () ->
+    reader_woken_up := true;
     ignore @@ read_eof t Bigstringaf.empty ~off:0 ~len:0;
     reader_closed t);
-  !continue_response ();
   writer_yielded t;
-  (* This triggers the error. *)
-  yield_writer t ignore;
+  yield_writer t (fun () -> writer_woken_up := true);
+  !continue_response ();
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  writer_closed t;
+  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  (* Also wakes up the reader *)
+  connection_is_shutdown t;
 ;;
 
 let tests =
