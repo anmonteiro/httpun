@@ -1499,7 +1499,6 @@ let test_request_body_eof_response_not_sent_empty_eof () =
 ;;
 
 let test_race_condition_writer_issues_yield_after_reader_eof () =
-  let writer_woken_up = ref false in
   let continue_response = ref (fun () -> ()) in
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
@@ -1522,22 +1521,15 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
   let request =
    Request.create ~headers:(Headers.of_list [ "content-length", "5" ]) `GET "/"
   in
-  writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
   read_request t request;
   reader_ready t;
   read_string t "hello";
   write_response t ~body:(String.make 10 'a') response;
-  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  writer_woken_up := false;
-  writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
   reader_yielded t;
   yield_reader t (fun () ->
     ignore @@ read_eof t Bigstringaf.empty ~off:0 ~len:0;
     reader_closed t);
   !continue_response ();
-  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   writer_yielded t;
   (* This triggers the error. *)
   yield_writer t ignore;
