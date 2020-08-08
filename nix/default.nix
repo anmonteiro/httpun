@@ -10,15 +10,23 @@ in
   with ocamlPackages;
 
   let
+    genSrc = { dirs, files }: lib.filterGitSource {
+      src = ./..;
+      inherit dirs;
+      files = files ++ [ "dune-project" ];
+    };
     buildHttpaf = args: buildDunePackage ({
       version = "0.6.5-dev";
       doCheck = doCheck;
-      src = lib.gitignoreSource ./..;
     } // args);
 
     httpafPackages = rec {
       httpaf = buildHttpaf {
         pname = "httpaf";
+        src = genSrc {
+          dirs = [ "lib" "lib_test" ];
+          files = [ "httpaf.opam" ];
+        };
         buildInputs = [ alcotest hex yojson ];
         propagatedBuildInputs = [
           angstrom
@@ -26,27 +34,39 @@ in
         ];
       };
 
-    # These two don't have tests
-    httpaf-lwt = buildHttpaf {
-      pname = "httpaf-lwt";
-      doCheck = false;
-      propagatedBuildInputs = [ gluten-lwt httpaf lwt ];
-    };
+      # These two don't have tests
+      httpaf-lwt = buildHttpaf {
+        pname = "httpaf-lwt";
+        src = genSrc {
+          dirs = [ "lwt" ];
+          files = [ "httpaf-lwt.opam" ];
+        };
+        doCheck = false;
+        propagatedBuildInputs = [ gluten-lwt httpaf lwt ];
+      };
 
-    httpaf-lwt-unix = buildHttpaf {
-      pname = "httpaf-lwt-unix";
-      doCheck = false;
-      propagatedBuildInputs = [
-        gluten-lwt-unix
-        httpaf-lwt
-        faraday-lwt-unix
-        lwt_ssl
-      ];
-    };
+      httpaf-lwt-unix = buildHttpaf {
+        pname = "httpaf-lwt-unix";
+        src = genSrc {
+          dirs = [ "lwt-unix" ];
+          files = [ "httpaf-lwt-unix.opam" ];
+        };
+        doCheck = false;
+        propagatedBuildInputs = [
+          gluten-lwt-unix
+          httpaf-lwt
+          faraday-lwt-unix
+          lwt_ssl
+        ];
+      };
   };
   in httpafPackages // (if (lib.versionOlder "4.08" ocaml.version) then {
     httpaf-async = buildHttpaf {
       pname = "httpaf-async";
+      src = genSrc {
+        dirs = [ "async" ];
+        files = [ "httpaf-async.opam" ];
+      };
       doCheck = false;
       propagatedBuildInputs = with httpafPackages; [
         httpaf
@@ -59,6 +79,10 @@ in
 
     httpaf-mirage = buildHttpaf {
       pname = "httpaf-mirage";
+      src = genSrc {
+        dirs = [ "mirage" ];
+        files = [ "httpaf-mirage.opam" ];
+      };
       doCheck = false;
       propagatedBuildInputs = with httpafPackages; [
         faraday-lwt
