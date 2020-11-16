@@ -190,7 +190,7 @@ module Writer = struct
     | `Ok len -> shift t.encoder len
 
   let next t =
-    assert (Optional_thunk.is_none t.wakeup);
+    (* assert (Optional_thunk.is_none t.wakeup); *)
     match Faraday.operation t.encoder with
     | `Close         -> `Close (drained_bytes t)
     | `Yield         -> `Yield

@@ -346,11 +346,17 @@ module Reader = struct
      * bigstring. Avoid putting them parser in an error state in this scenario.
      * If we were already in a `Partial` state, return the error. *)
     if initial && len = 0 then t.parse_state <- Done;
-    begin match more with
-    | Complete -> t.closed <- true;
-    | Incomplete -> ()
-    end;
-    consumed;
+    match more with
+    | Complete ->
+      t.closed <- true;
+      consumed
+    | Incomplete ->
+      (match t.parse_state with
+       | Done when consumed < len ->
+         let off = off + consumed
+         and len = len - consumed in
+         consumed + read_with_more t bs ~off ~len more
+       | _ -> consumed)
   ;;
 
   let force_close t =
