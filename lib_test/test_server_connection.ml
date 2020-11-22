@@ -1550,7 +1550,7 @@ let test_multiple_requests_in_single_read () =
     request_to_string (Request.create `GET "/")
   in
   read_string t reqs;
-  reader_yielded t;
+  reader_ready t;
   Alcotest.(check int) "fired handler of both requests" 2 !reqs_handled
 ;;
 

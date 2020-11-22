@@ -1267,6 +1267,42 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
   connection_is_shutdown t;
 ;;
 
+let test_multiple_responses_in_single_read () =
+  let res_handled = ref 0 in
+  let request' =
+   Request.create ~headers:(Headers.of_list [ "content-length", "0" ]) `GET "/"
+  in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "0"]) `OK
+  in
+  let t = create ?config:None in
+  let response_handler _response _body =
+    res_handled := !res_handled + 1;
+  in
+  let body =
+    request t request' ~response_handler ~error_handler:no_error_handler
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.close_writer body;
+  reader_ready t;
+  let body =
+    request t request' ~response_handler ~error_handler:no_error_handler
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.close_writer body;
+  reader_ready t;
+
+  let responses =
+    response_to_string response ^
+    response_to_string response
+  in
+  read_string t responses;
+  reader_ready t;
+  Alcotest.(check int) "fired handler of both requests" 2 !res_handled
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1299,4 +1335,5 @@ let tests =
   ; "shutdown delivers eof to response bodies", `Quick, test_shutdown_hangs_response_body_read
   ; "full response arrives before uploading the entire request body, 2nd request in the pipeline", `Quick, test_response_arrives_before_body_uploaded
   ; "reader EOF race condition causes state machine to issue writer yield", `Quick, test_race_condition_writer_issues_yield_after_reader_eof
+  ; "multiple responses in single read", `Quick, test_multiple_responses_in_single_read
   ]
