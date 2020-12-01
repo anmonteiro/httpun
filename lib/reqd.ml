@@ -214,6 +214,7 @@ let report_error t error =
        * has been reported as well. *)
       failwith "httpaf.Reqd.report_exn: NYI"
     | Streaming (_response, response_body), `Ok ->
+      Body.set_non_chunked response_body;
       Body.close_writer response_body
     | Streaming (_response, response_body), `Exn _ ->
       Body.close_writer response_body;

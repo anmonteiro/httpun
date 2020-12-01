@@ -103,14 +103,16 @@ let echo_handler response reqd =
   Body.schedule_read request_body ~on_eof ~on_read;
 ;;
 
-let streaming_handler ?(flush=false) response writes reqd =
+let streaming_handler ?(flush=false) ?(error=false) response writes reqd =
   let writes = ref writes in
   let request_body = Reqd.request_body reqd in
   Body.close_reader request_body;
   let body = Reqd.respond_with_streaming ~flush_headers_immediately:flush reqd response in
   let rec write () =
     match !writes with
-    | [] -> Body.close_writer body
+    | [] -> (match error with
+      | false -> Body.close_writer body
+      | true -> Reqd.report_exn reqd (Failure "exn"))
     | w :: ws ->
       Body.write_string body w;
       writes := ws;
@@ -1580,6 +1582,32 @@ let test_multiple_async_requests_in_single_read () =
   reader_ready t;
 ;;
 
+let test_errored_chunked_streaming_response () =
+  let request  = Request.create `GET "/" in
+  let response =
+    Response.create `OK
+      ~headers:(Headers.of_list ["Transfer-encoding", "chunked"])
+  in
+
+  let t = create (streaming_handler ~error:true response []) in
+  read_request   t request;
+  write_response t response;
+  connection_is_shutdown t;
+;;
+
+let test_errored_content_length_streaming_response () =
+  let request  = Request.create `GET "/" in
+  let response =
+    Response.create `OK
+      ~headers:(Headers.of_list ["Content-Length", "10"])
+  in
+
+  let t = create (streaming_handler ~error:true response ["hello"]) in
+  read_request   t request;
+  write_response t response ~body:"hello";
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1634,4 +1662,6 @@ let tests =
   ; "reader EOF race condition causes state machine to issue writer yield", `Quick, test_race_condition_writer_issues_yield_after_reader_eof
   ; "multiple requests in single read", `Quick, test_multiple_requests_in_single_read
   ; "multiple async requests in single read", `Quick, test_multiple_async_requests_in_single_read
+  ; "chunked-encoding streaming error test", `Quick, test_errored_chunked_streaming_response
+  ; "content-length streaming error test", `Quick, test_errored_content_length_streaming_response
   ]
