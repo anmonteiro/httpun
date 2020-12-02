@@ -37,6 +37,7 @@ type error =
 type error_handler =
   ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
 
+module Reader = Parse.Reader
 module Writer = Serialize.Writer
 
 (* XXX(seliopou): The current design assumes that a new [Reqd.t] will be
@@ -65,6 +66,7 @@ module Writer = Serialize.Writer
 type t =
   { request                 : Request.t
   ; request_body            : [`read] Body.t
+  ; reader                  : Reader.request
   ; writer                  : Writer.t
   ; response_body_buffer    : Bigstringaf.t
   ; error_handler           : error_handler
@@ -73,9 +75,10 @@ type t =
   ; mutable error_code      : [`Ok | error ]
   }
 
-let create error_handler request request_body writer response_body_buffer =
+let create error_handler request request_body reader writer response_body_buffer =
   { request
   ; request_body
+  ; reader
   ; writer
   ; response_body_buffer
   ; error_handler
@@ -215,10 +218,12 @@ let report_error t error =
       failwith "httpaf.Reqd.report_exn: NYI"
     | Streaming (_response, response_body), `Ok ->
       Body.set_non_chunked response_body;
-      Body.close_writer response_body
+      Body.close_writer response_body;
+      Reader.wakeup t.reader;
     | Streaming (_response, response_body), `Exn _ ->
       Body.close_writer response_body;
-      Writer.close_and_drain t.writer
+      Writer.close_and_drain t.writer;
+      Reader.wakeup t.reader;
     | (Fixed _ | Streaming _ | Upgrade _ | Waiting) , _ ->
       (* XXX(seliopou): Once additional logging support is added, log the error
        * in case it is not spurious. *)

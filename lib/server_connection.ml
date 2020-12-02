@@ -110,13 +110,14 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   let writer = Writer.create ~buffer_size:response_buffer_size () in
   let request_queue = Queue.create () in
   let response_body_buffer = Bigstringaf.create response_body_buffer_size in
-  let handler request request_body =
+  let rec reader = lazy (Reader.request handler)
+  and handler request request_body =
     let reqd =
-      Reqd.create error_handler request request_body writer response_body_buffer
+      Reqd.create error_handler request request_body (Lazy.force reader) writer response_body_buffer
     in
     Queue.push reqd request_queue;
   in
-  { reader          = Reader.request handler
+  { reader = Lazy.force reader
   ; writer
   ; response_body_buffer
   ; request_handler = request_handler

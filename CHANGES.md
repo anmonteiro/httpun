@@ -73,6 +73,9 @@ Unreleased
   the Async runtimes ([#69](https://github.com/anmonteiro/httpaf/pull/69))
 - httpaf: call error handler on read EOF if the entire body hasn't been
   received ([#75](https://github.com/anmonteiro/httpaf/pull/75))
+- httpaf: Abort (chunked) responses correctly if an error is reported
+  ([#84](https://github.com/anmonteiro/httpaf/pull/84)),
+  ([#86](https://github.com/anmonteiro/httpaf/pull/86))
 
 httpaf (upstream) 0.6.6
 --------------
