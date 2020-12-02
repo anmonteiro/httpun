@@ -1624,7 +1624,6 @@ let test_errored_chunked_streaming_response_async () =
     let body = Reqd.respond_with_streaming reqd response in
     Body.write_string body "hello";
     continue := (fun () ->
-      Format.eprintf "flushin'@.";
       Reqd.report_exn reqd (Failure "heh"));
   in
 
