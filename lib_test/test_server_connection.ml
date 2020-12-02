@@ -1608,6 +1608,34 @@ let test_errored_content_length_streaming_response () =
   connection_is_shutdown t;
 ;;
 
+let test_errored_chunked_streaming_response_async () =
+  let reader_woken_up = ref false in
+  let continue = ref (fun () -> ()) in
+  let request  = Request.create `GET "/" in
+  let response =
+    Response.create `OK
+      ~headers:(Headers.of_list ["Transfer-encoding", "chunked"])
+  in
+
+  let request_handler reqd =
+    let request_body = Reqd.request_body reqd in
+    Body.close_reader request_body;
+    let body = Reqd.respond_with_streaming reqd response in
+    Body.write_string body "hello";
+    continue := (fun () ->
+      Format.eprintf "flushin'@.";
+      Reqd.report_exn reqd (Failure "heh"));
+  in
+
+  let t = create request_handler in
+  read_request   t request;
+  write_response t response ~body:"5\r\nhello\r\n";
+  yield_reader t (fun () -> reader_woken_up := true);
+  !continue ();
+  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1662,6 +1690,7 @@ let tests =
   ; "reader EOF race condition causes state machine to issue writer yield", `Quick, test_race_condition_writer_issues_yield_after_reader_eof
   ; "multiple requests in single read", `Quick, test_multiple_requests_in_single_read
   ; "multiple async requests in single read", `Quick, test_multiple_async_requests_in_single_read
-  ; "chunked-encoding streaming error test", `Quick, test_errored_chunked_streaming_response
-  ; "content-length streaming error test", `Quick, test_errored_content_length_streaming_response
+  ; "chunked-encoding streaming error", `Quick, test_errored_chunked_streaming_response
+  ; "content-length streaming error", `Quick, test_errored_content_length_streaming_response
+  ; "chunked-encoding async streaming error", `Quick, test_errored_chunked_streaming_response_async
   ]
