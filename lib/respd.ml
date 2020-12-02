@@ -60,6 +60,8 @@ let write_request t =
 
 let report_error t error =
   t.persistent <- false;
+  Body.set_non_chunked t.request_body;
+  Body.close_writer t.request_body;
   match t.state, t.error_code with
   | (Uninitialized | Awaiting_response | Upgraded _), `Ok ->
     t.state <- Closed;
@@ -67,7 +69,7 @@ let report_error t error =
     t.error_handler error
   | Uninitialized, `Exn _ ->
     (* TODO(anmonteiro): Not entirely sure this is possible in the client. *)
-    failwith "httpaf.Reqd.report_exn: NYI"
+    assert false
   | Received_response (_, response_body), `Ok ->
      Body.close_reader response_body;
      t.error_code <- (error :> [`Ok | error]);

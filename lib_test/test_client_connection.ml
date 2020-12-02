@@ -1303,6 +1303,55 @@ let test_multiple_responses_in_single_read () =
   Alcotest.(check int) "fired handler of both requests" 2 !res_handled
 ;;
 
+let test_chunked_error () =
+  let error_handler_called = ref false in
+  let request' =
+   Request.create ~headers:(Headers.of_list [ "transfer-encoding", "chunked" ]) `GET "/"
+  in
+  let t = create ?config:None in
+  let response_handler _response _body =
+    assert false
+  in
+  let body =
+    request
+      t
+      request'
+      ~response_handler
+      ~error_handler:(fun _ -> error_handler_called := true)
+  in
+  write_request t request';
+  Body.write_string body "hello";
+  write_string t "5\r\nhello\r\n";
+  report_exn t (Failure "something went wrong");
+  Alcotest.(check bool) "First error handler called" true !error_handler_called;
+  Alcotest.(check bool) "request body is closed" true (Body.is_closed body);
+  writer_closed t;
+  connection_is_shutdown t;
+
+  error_handler_called := false;
+  let t = create ?config:None in
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
+  in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true)
+  in
+  write_request t request';
+  Body.write_string body "hello";
+  Body.flush body ignore;
+  write_string t "5\r\nhello\r\n";
+  read_response t response;
+  report_exn t (Failure "something went wrong");
+  Alcotest.(check bool) "First error handler called" true !error_handler_called;
+  Alcotest.(check bool) "request body is closed" true (Body.is_closed body);
+  writer_closed t;
+  connection_is_shutdown t;
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1336,4 +1385,5 @@ let tests =
   ; "full response arrives before uploading the entire request body, 2nd request in the pipeline", `Quick, test_response_arrives_before_body_uploaded
   ; "reader EOF race condition causes state machine to issue writer yield", `Quick, test_race_condition_writer_issues_yield_after_reader_eof
   ; "multiple responses in single read", `Quick, test_multiple_responses_in_single_read
+  ; "test chunked error", `Quick, test_chunked_error
   ]

@@ -148,7 +148,6 @@ let set_error_and_handle t error =
 
 let unexpected_eof t =
   set_error_and_handle t (`Malformed_response "unexpected eof");
-  shutdown t;
 ;;
 
 let report_exn t exn =
