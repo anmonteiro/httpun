@@ -1610,6 +1610,7 @@ let test_errored_content_length_streaming_response () =
 
 let test_errored_chunked_streaming_response_async () =
   let reader_woken_up = ref false in
+  let writer_woken_up = ref false in
   let continue = ref (fun () -> ()) in
   let request  = Request.create `GET "/" in
   let response =
@@ -1631,8 +1632,10 @@ let test_errored_chunked_streaming_response_async () =
   read_request   t request;
   write_response t response ~body:"5\r\nhello\r\n";
   yield_reader t (fun () -> reader_woken_up := true);
+  yield_writer t (fun () -> writer_woken_up := true);
   !continue ();
   Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   connection_is_shutdown t;
 ;;
 
