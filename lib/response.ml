@@ -52,11 +52,18 @@ let create ?reason ?(version=Version.v1_1) ?(headers=Headers.empty) status =
 let persistent_connection ?proxy { version; headers; _ } =
   Message.persistent_connection ?proxy version headers
 
+let is_head meth =
+  begin match meth with
+  | `HEAD -> true
+  | _ -> false
+  end
+
 let proxy_error  = `Error `Bad_gateway
 let server_error = `Error `Internal_server_error
 let body_length ?(proxy=false) ~request_method { status; headers; _ } =
   match status, request_method with
   | (`No_content | `Not_modified), _           -> `Fixed 0L
+  | _, `HEAD                                   -> `Fixed 0L
   | s, _        when Status.is_informational s -> `Fixed 0L
   | s, `CONNECT when Status.is_successful s    -> `Close_delimited
   | _, _                                       ->
