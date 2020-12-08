@@ -57,6 +57,14 @@ let server_error = `Error `Internal_server_error
 let body_length ?(proxy=false) ~request_method { status; headers; _ } =
   match status, request_method with
   | (`No_content | `Not_modified), _           -> `Fixed 0L
+  | _, `HEAD                                   ->
+    (* From RFC7230§3.3.2:
+         A server MAY send a Content-Length header field in a response to a
+         HEAD request (Section 4.3.2 of [RFC7231]); a server MUST NOT send
+         Content-Length in such a response unless its field-value equals the
+         decimal number of octets that would have been sent in the payload body
+         of a response if the same request had used the GET method. *)
+    `Fixed 0L
   | s, _        when Status.is_informational s -> `Fixed 0L
   | s, `CONNECT when Status.is_successful s    -> `Close_delimited
   | _, _                                       ->

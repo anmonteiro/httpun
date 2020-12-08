@@ -207,6 +207,31 @@ let test_get () =
   read_string t "d\r\nHello, world!\r\n0\r\n\r\n";
 ;;
 
+let test_head () =
+  let error_handler_called = ref false in
+  let request' = Request.create `HEAD "/" in
+  let response = Response.create
+      ~headers:(Headers.of_list ["content-length", "5"])
+      `OK
+  in
+
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true)
+  in
+  Body.close_writer body;
+  write_request t request';
+  read_response t response;
+  let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+  Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+  connection_is_shutdown t;
+  Alcotest.(check bool) "error handler not called" false !error_handler_called;
+;;
+
 let test_get_last_close () =
   (* Multiple GET requests, the last one closes the connection *)
   let request' = Request.create `GET "/" in
@@ -1355,6 +1380,7 @@ let test_chunked_error () =
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
+  ; "HEAD"        , `Quick, test_head
   ; "Response EOF", `Quick, test_response_eof
   ; "Response header order preserved", `Quick, test_response_header_order
   ; "report_exn"  , `Quick, test_report_exn
