@@ -1377,6 +1377,31 @@ let test_chunked_error () =
   connection_is_shutdown t;
 ;;
 
+let test_304_not_modified () =
+  let error_handler_called = ref false in
+  let request' = Request.create `GET "/" in
+  let response = Response.create
+      ~headers:(Headers.of_list ["content-length", "5"])
+      `Not_modified
+  in
+
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:(fun _ -> error_handler_called := true)
+  in
+  Body.close_writer body;
+  write_request t request';
+  read_response t response;
+  let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+  Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+  connection_is_shutdown t;
+  Alcotest.(check bool) "error handler not called" false !error_handler_called;
+;;
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1412,4 +1437,5 @@ let tests =
   ; "reader EOF race condition causes state machine to issue writer yield", `Quick, test_race_condition_writer_issues_yield_after_reader_eof
   ; "multiple responses in single read", `Quick, test_multiple_responses_in_single_read
   ; "test chunked error", `Quick, test_chunked_error
+  ; "304 Not Modified with Content-Length", `Quick, test_304_not_modified
   ]

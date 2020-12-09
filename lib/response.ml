@@ -56,7 +56,15 @@ let proxy_error  = `Error `Bad_gateway
 let server_error = `Error `Internal_server_error
 let body_length ?(proxy=false) ~request_method { status; headers; _ } =
   match status, request_method with
-  | (`No_content | `Not_modified), _           -> `Fixed 0L
+  | (`No_content | `Not_modified), _           ->
+    (* From RFC7230§3.3.2:
+         A server MAY send a Content-Length header field in a 304 (Not
+         Modified) response to a conditional GET request (Section 4.1 of
+         [RFC7232]); a server MUST NOT send Content-Length in such a response
+         unless its field-value equals the decimal number of octets that would
+         have been sent in the payload body of a 200 (OK) response to the same
+         request. *)
+    `Fixed 0L
   | _, `HEAD                                   ->
     (* From RFC7230§3.3.2:
          A server MAY send a Content-Length header field in a response to a
