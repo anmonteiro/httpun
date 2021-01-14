@@ -1,5 +1,5 @@
 { pkgs ? import ./sources.nix { inherit ocamlVersion; }
-, ocamlVersion ? "4_10"
+, ocamlVersion ? "4_11"
 , doCheck ? true }:
 
 let
@@ -60,7 +60,24 @@ in
         ];
       };
   };
-  in httpafPackages // (if (lib.versionOlder "4.08" ocaml.version) then {
+  in httpafPackages //
+  (if lib.versionOlder "4.08" ocaml.version then {
+    httpaf-mirage = buildHttpaf {
+      pname = "httpaf-mirage";
+      src = genSrc {
+        dirs = [ "mirage" ];
+        files = [ "httpaf-mirage.opam" ];
+      };
+      doCheck = false;
+      propagatedBuildInputs = with httpafPackages; [
+        faraday-lwt
+        conduit-mirage
+        httpaf-lwt
+        gluten-mirage
+      ];
+    };
+  } else {}) //
+  (if false then {
     httpaf-async = buildHttpaf {
       pname = "httpaf-async";
       src = genSrc {
@@ -76,19 +93,4 @@ in
         async_ssl
       ];
     };
-
-    httpaf-mirage = buildHttpaf {
-      pname = "httpaf-mirage";
-      src = genSrc {
-        dirs = [ "mirage" ];
-        files = [ "httpaf-mirage.opam" ];
-      };
-      doCheck = false;
-      propagatedBuildInputs = with httpafPackages; [
-        faraday-lwt
-        conduit-mirage
-        httpaf-lwt
-        gluten-mirage
-      ];
-    };
-    } else {})
+  } else {})
