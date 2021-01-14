@@ -61,7 +61,8 @@ in
       };
   };
   in httpafPackages //
-  (if lib.versionOlder "4.08" ocaml.version then {
+  (if false #lib.versionOlder "4.08" ocaml.version
+  then {
     httpaf-mirage = buildHttpaf {
       pname = "httpaf-mirage";
       src = genSrc {
