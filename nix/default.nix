@@ -1,5 +1,5 @@
 { pkgs ? import ./sources.nix { inherit ocamlVersion; }
-, ocamlVersion ? "4_10"
+, ocamlVersion ? "4_11"
 , doCheck ? true }:
 
 let
@@ -60,7 +60,7 @@ in
         ];
       };
   };
-  in httpafPackages // (if (lib.versionOlder "4.08" ocaml.version) then {
+  in httpafPackages // (if lib.versionOlder "4.08" ocaml.version then {
     httpaf-async = buildHttpaf {
       pname = "httpaf-async";
       src = genSrc {
