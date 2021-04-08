@@ -262,11 +262,11 @@ module Reader = struct
       | `Fixed 0L  ->
           handler request Body.empty;
         ok
-      | `Fixed _ | `Chunked | `Close_delimited as encoding ->
+      | `Fixed _ | `Chunked as encoding ->
           let request_body =
             Body.create Bigstringaf.empty (Optional_thunk.some (fun () ->
               wakeup (Lazy.force t)))
-    in
+        in
         handler request request_body;
         body ~encoding request_body *> ok
     in

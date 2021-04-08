@@ -170,9 +170,7 @@ let test_get () =
   read_response t response;
 
   (* Single GET, response closes connection *)
-  let response =
-    Response.create `OK ~headers:(Headers.of_list [ "connection", "close" ])
-  in
+  let response = Response.create `OK ~headers:Headers.connection_close in
   let t = create ?config:None in
   let body =
     request
@@ -190,9 +188,7 @@ let test_get () =
   connection_is_shutdown t;
 
   (* Single GET, streaming body *)
-  let response =
-    Response.create `OK ~headers:(Headers.of_list [ "transfer-encoding", "chunked" ])
-  in
+  let response = Response.create `OK ~headers:Headers.encoding_chunked in
   let t = create ?config:None in
   let body =
     request
@@ -1132,9 +1128,7 @@ let test_failed_response_parse () =
 
   test "HTTP/1.1 200\r\n\r\n" 12 (`Malformed_response ": char ' '");
 
-  let response =
-    Response.create `OK ~headers:(Headers.of_list ["Content-length", "-1"])
-  in
+  let response = Response.create `OK ~headers:(Headers.encoding_fixed (-1)) in
   test (response_to_string response) 39 (`Invalid_response_body_length response);
 ;;
 
