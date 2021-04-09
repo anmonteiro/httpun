@@ -155,7 +155,8 @@ let schedule_size writer n =
    * intemediate copy, this should be back to the original performance. *)
   begin if Faraday.is_closed faraday
   then advance n
-  else take n >>| fun s -> Faraday.write_string faraday s
+  else Angstrom.Unsafe.take n (fun bs ~off ~len ->
+    Faraday.schedule_bigstring faraday bs ~off ~len)
   end *> commit
 
 let body ~encoding writer =
