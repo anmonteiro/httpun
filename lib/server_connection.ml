@@ -221,17 +221,25 @@ let rec _next_read_operation t =
     let reqd = current_reqd_exn t in
     match Reqd.input_state reqd with
     | Wait ->
-      (* `Wait` signals that we should add backpressure to the read channel,
-       * meaning the reader should tell the runtime to yield.
-       *
-       * The exception here is if there has been an error in the parser; in
-       * that case, we need to return that exception and signal the runtime to
-       * close. *)
-      begin match Reader.next t.reader with
-      | `Error _ as operation -> operation
-      | _ -> `Yield
+      begin match Reqd.output_state reqd with
+      | Complete ->
+        (* this branch happens if the writer has completed sending the response
+           and there are still bytes remaining to be read in the request body.
+         *)
+        Reader.next t.reader
+      | Waiting | Ready ->
+        (* `Wait` signals that we should add backpressure to the read channel,
+         * meaning the reader should tell the runtime to yield.
+         *
+         * The exception here is if there has been an error in the parser; in
+         * that case, we need to return that exception and signal the runtime to
+         * close. *)
+        begin match Reader.next t.reader with
+        | `Error _ as operation -> operation
+        | _ -> `Yield
+        end
       end
-    | Ready  -> Reader.next t.reader
+    | Ready -> Reader.next t.reader
     | Complete -> _final_read_operation_for t reqd
   )
 
@@ -337,16 +345,21 @@ let rec _next_write_operation t =
 and _final_write_operation_for t reqd =
   if not (Reqd.persistent_connection reqd) then (
     shutdown_writer t;
+    wakeup_reader t;
     Writer.next t.writer;
   ) else (
     match Reqd.input_state reqd with
-    | Wait | Ready ->
-      (* If we're done sending a response in a persistent connection, but the
-       * reader hasn't yet ingested the entire request body, we need to
-       * signal that the "input state" for this request descriptor has been
-       * completed by closing the request body (not interested in ingesting
-       * more request body data). *)
-      Reqd.close_request_body reqd;
+    | Wait ->
+      wakeup_reader t;
+      Writer.next t.writer
+    | Ready ->
+      (* we can't close the request body here, otherwise the reader loop is
+         going to think that its "input state" is complete, and remove the
+         request descriptor from the request queue, when in fact it needs to
+         read the remainder of the request body. It needs to hang around
+         because there could be a sudden EOF while discarding the request body,
+         which we need to handle. *)
+      wakeup_reader t;
       Writer.next t.writer
     | Complete ->
        match Reader.next t.reader with
