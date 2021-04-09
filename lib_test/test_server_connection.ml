@@ -40,6 +40,10 @@ module Runtime : sig
   val on_writer_unyield : t -> (unit -> unit) -> bool ref
 
   val report_exn : t -> exn -> unit
+
+  val do_force_read : t -> (Server_connection.t -> 'a) -> 'a
+  val shutdown : t -> unit
+  val is_closed : t -> bool
 end = struct
   open Server_connection
 
@@ -132,6 +136,8 @@ end = struct
           Read_operation.pp_hum op
   ;;
 
+  let do_force_read t f = f t.server_connection
+
   let do_write t f =
     match current_write_operation t with
     | `Write bufs ->
@@ -158,6 +164,10 @@ end = struct
   ;;
 
   let report_exn t = Server_connection.report_exn t.server_connection
+
+  let shutdown t = Server_connection.shutdown t.server_connection
+
+  let is_closed t = Server_connection.is_closed t.server_connection
 end
 
 open Runtime
@@ -168,6 +178,10 @@ let read t str ~off ~len =
 
 let read_eof t str ~off ~len =
   do_read t (fun conn -> Server_connection.read_eof conn str ~off ~len)
+;;
+
+let force_read_eof t str ~off ~len =
+  do_force_read t (fun conn -> Server_connection.read_eof conn str ~off ~len)
 ;;
 
 let feed_string t str =
@@ -181,13 +195,28 @@ let read_string t str =
   Alcotest.(check int) "read consumes all input" (String.length str) c;
 ;;
 
+let force_read t str ~off ~len =
+  do_force_read t (fun conn -> Server_connection.read conn str ~off ~len)
+;;
+
+let force_feed_string t str =
+  let len = String.length str in
+  let input = Bigstringaf.of_string str ~off:0 ~len in
+  force_read t input ~off:0 ~len
+;;
+
+let force_read_string t str =
+  let c = force_feed_string t str in
+  Alcotest.(check int) "read consumes all input" (String.length str) c;
+;;
+
 let read_request t r =
   let request_string = request_to_string r in
   read_string t request_string
 ;;
 
 let reader_ready ?(msg="Reader is ready") t =
-  Alcotest.check read_operation "Reader is ready"
+  Alcotest.check read_operation msg
     `Read (current_read_operation t);
 ;;
 
@@ -197,7 +226,7 @@ let reader_yielded t =
 ;;
 
 let reader_closed ?(msg="Reader is closed") t =
-  Alcotest.check read_operation "Reader is closed"
+  Alcotest.check read_operation msg
     `Close (current_read_operation t);
 ;;
 
@@ -258,6 +287,10 @@ let writer_closed ?(unread = 0) t =
 let connection_is_shutdown t =
   reader_closed t;
   writer_closed t;
+;;
+
+let connection_is_closed t =
+  Alcotest.(check bool) "connection is closed" true (is_closed t)
 ;;
 
 let request_handler_with_body body reqd =
@@ -441,8 +474,8 @@ let test_echo_post () =
     ~body:"This is a test"
     response;
   read_string  t "\r\n21\r\n... that involves multiple chunks";
+  write_string  t "... that involves multiple chunks";
   read_string  t "\r\n0\r\n";
-  write_string t "... that involves multiple chunks";
   connection_is_shutdown t;
 ;;
 
@@ -610,8 +643,8 @@ let test_connection_error () =
     true !writer_woken_up;
   write_response t
     ~msg:"Error response written"
-    (Response.create `Internal_server_error)
-    ~body:"got an error"
+    (Response.create `Internal_server_error);
+  write_string t "got an error";
 ;;
 
 let test_synchronous_error () =
@@ -663,16 +696,9 @@ let test_asynchronous_error () =
   let writer_woken_up = on_writer_unyield t ignore in
   read_request t (Request.create `GET "/");
   Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
-(* ;; ?? *)
   writer_yielded t;
   reader_yielded t;
   !continue ();
-  (* TOINE check *)
-  (* reader_errored t; *)
-  (* XXX(dpatti): I don't think anything is actually waking the reader up
-   * Alcotest.check read_operation "Error shuts down the reader"
-   *   `Close (current_read_operation t);
-   *)
   Alcotest.(check bool) "Writer woken up"
     true !writer_woken_up;
   (* This shows up in two flushes because [Reqd] creates error reposnses with
@@ -680,6 +706,7 @@ let test_asynchronous_error () =
   write_response t ~msg:"Error response written"
     (Response.create `Internal_server_error);
   write_string t "got an error";
+  reader_errored t;
 ;;
 
 let test_asynchronous_error_asynchronous_handling () =
@@ -704,18 +731,14 @@ let test_asynchronous_error_asynchronous_handling () =
   Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
   writer_yielded t;
   !continue_error ();
-  (* reader_errored t; *)
-  (* XXX(dpatti): I don't think anything is actually waking the reader up
-   * Alcotest.check read_operation "Error shuts down the reader"
-   *   `Close (current_read_operation t);
-   *)
   Alcotest.(check bool) "Writer woken up"
     true !writer_woken_up;
-  (* This shows up in two flushes because [Reqd] creates error reposnses with
+  (* This shows up in two flushes because [Reqd] creates error responses with
      [~flush_headers_immediately:true] *)
   write_response t ~msg:"Error response written"
     (Response.create `Internal_server_error);
   write_string t "got an error";
+  reader_errored t;
 ;;
 
 let test_asynchronous_error_asynchronous_response_body () =
@@ -731,27 +754,25 @@ let test_asynchronous_error_asynchronous_response_body () =
         Body.write_string resp_body "got an error";
         Body.close_writer resp_body))
   in
-  let writer_woken_up = ref false in
   let t = create ~error_handler asynchronous_raise in
   writer_yielded t;
-  yield_writer   t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   read_request   t (Request.create `GET "/");
   writer_yielded t;
   reader_yielded t;
   !continue_request ();
   writer_yielded t;
   !continue_error ();
-  reader_errored t;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  writer_woken_up := false;
   write_response t
     ~msg:"Error response written"
     (Response.create `Internal_server_error);
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   !continue_error ();
   write_string t "got an error";
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  reader_errored t;
 ;;
 
 let test_chunked_encoding () =
@@ -808,17 +829,10 @@ let test_respond_with_upgrade () =
   in
   let t = create ~error_handler upgrade_handler in
   read_request t (Request.create `GET "/");
-  match next_write_operation t with
-  | `Write iovecs ->
-    let response_str = response_to_string (Response.create `Switching_protocols) in
-    Alcotest.(check string) "Switching protocols response"
-      (Write_operation.iovecs_to_string iovecs)
-      response_str;
-    let len = String.length response_str in
-    report_write_result t (`Ok len);
-    Alcotest.(check bool) "Callback was called" true !upgraded;
-    reader_ready t;
-  | _ -> Alcotest.fail "Expected Upgrade operation"
+  write_response ~msg:"Upgrade response written" t (Response.create `Switching_protocols);
+  Alcotest.(check bool) "Callback was called" true !upgraded;
+  reader_ready t;
+;;
 
 let test_unexpected_eof () =
   let t = create default_request_handler in
@@ -877,9 +891,8 @@ let basic_handler body reqd =
 ;;
 
 let test_malformed conn =
-  let writer_woken_up = ref false in
   writer_yielded conn;
-  yield_writer conn (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield conn ignore in
   let len = String.length malformed_request_string in
   let input = Bigstringaf.of_string malformed_request_string ~off:0 ~len in
   let c = read conn input ~off:0 ~len in
@@ -891,9 +904,8 @@ let test_malformed conn =
 let test_malformed_request () =
   let t = create ~error_handler (basic_handler "") in
   test_malformed t;
-  Alcotest.(check (option string)) "Error response written"
-    (Some "HTTP/1.1 400 Bad Request\r\n\r\ngot an error")
-    (next_write_operation t |> Write_operation.to_write_as_string)
+  write_response t (Response.create `Bad_request);
+  write_string t "got an error";
 ;;
 
 let test_malformed_request_async () =
@@ -907,9 +919,8 @@ let test_malformed_request_async () =
   let t = create ~error_handler (basic_handler "") in
   test_malformed t;
   !continue ();
-  Alcotest.(check (option string)) "Error response written"
-    (Some "HTTP/1.1 400 Bad Request\r\n\r\ngot an error")
-    (next_write_operation t |> Write_operation.to_write_as_string)
+  write_response t (Response.create `Bad_request);
+  write_string t "got an error";
 ;;
 
 let test_malformed_request_async_multiple_errors () =
@@ -925,11 +936,10 @@ let test_malformed_request_async_multiple_errors () =
   !continue ();
   let len = String.length malformed_request_string in
   let input = Bigstringaf.of_string malformed_request_string ~off:0 ~len in
-  let c = read t input ~off:0 ~len in
+  let c = force_read t input ~off:0 ~len in
   Alcotest.(check int) "read doesn't consume more input" 0 c;
-  Alcotest.(check (option string)) "Error response written"
-    (Some "HTTP/1.1 400 Bad Request\r\n\r\ngot an error")
-    (next_write_operation t |> Write_operation.to_write_as_string)
+  write_response t (Response.create `Bad_request);
+  write_string t "got an error";
 ;;
 
 let read_string_eof t str =
@@ -941,9 +951,8 @@ let read_string_eof t str =
 let test_malformed_request_eof () =
   let t = create ~error_handler (basic_handler "") in
   test_malformed t;
-  Alcotest.(check (option string)) "Error response written"
-    (Some "HTTP/1.1 400 Bad Request\r\n\r\ngot an error")
-    (next_write_operation t |> Write_operation.to_write_as_string)
+  write_response t (Response.create `Bad_request);
+  write_string t "got an error";
 ;;
 
 let streaming_error_handler continue_error ?request:_ _error start_response =
@@ -957,7 +966,6 @@ let streaming_error_handler continue_error ?request:_ _error start_response =
 ;;
 
 let test_malformed_request_streaming_error_response () =
-  let writer_woken_up = ref false in
   let continue_error = ref (fun () -> ()) in
   let error_handler ?request error start_response =
     continue_error := (fun () ->
@@ -965,18 +973,17 @@ let test_malformed_request_streaming_error_response () =
   in
   let t = create ~error_handler (basic_handler "") in
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   let c = read_string_eof t eof_request_string in
   Alcotest.(check int) "read consumes all input"
     (String.length eof_request_string) c;
   reader_errored t;
   !continue_error ();
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  writer_woken_up := false;
   write_response t
     (Response.create `Bad_request ~headers:Headers.empty);
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   !continue_error ();
   write_string t ~msg:"First part of the response body written" "got an error\n";
   Alcotest.(check bool) "Writer woken up once more input is available"
@@ -984,7 +991,7 @@ let test_malformed_request_streaming_error_response () =
   !continue_error ();
   write_string t ~msg:"Rest of the error response written" "more output";
   writer_closed t;
-  Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
+  connection_is_shutdown t;
 ;;
 
 let chunked_error_handler continue_error ?request:_ _error start_response =
@@ -1002,7 +1009,6 @@ let chunked_error_handler continue_error ?request:_ _error start_response =
 ;;
 
 let test_malformed_request_chunked_error_response () =
-  let writer_woken_up = ref false in
   let continue_error = ref (fun () -> ()) in
   let error_handler ?request error start_response =
     continue_error := (fun () ->
@@ -1010,7 +1016,7 @@ let test_malformed_request_chunked_error_response () =
   in
   let t = create ~error_handler (basic_handler "") in
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   let c = read_string_eof t eof_request_string in
   Alcotest.(check int) "read consumes all input"
     (String.length eof_request_string) c;
@@ -1018,14 +1024,13 @@ let test_malformed_request_chunked_error_response () =
   Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
   !continue_error ();
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  writer_woken_up := false;
   write_response t
     ~msg:"First chunk written"
-    ~body:"8\r\nchunk 1\n\r\n"
     (Response.create `Bad_request
       ~headers:(Headers.of_list ["transfer-encoding", "chunked"]));
+  write_string t "8\r\nchunk 1\n\r\n";
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   !continue_error ();
   write_string t
     ~msg:"Second chunk"
@@ -1040,13 +1045,12 @@ let test_malformed_request_chunked_error_response () =
   Alcotest.(check bool) "Writer woken up once more input is available"
     true !writer_woken_up;
   writer_closed t;
-  Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
+  connection_is_shutdown t;
 ;;
 
 (* This may happen when writing an asynchronous error response on a broken
  * pipe. *)
 let test_malformed_request_double_report_exn () =
-  let writer_woken_up = ref false in
   let continue_error = ref (fun () -> ()) in
   let error_handler ?request error start_response =
     continue_error := (fun () ->
@@ -1054,7 +1058,7 @@ let test_malformed_request_double_report_exn () =
   in
   let t = create ~error_handler (basic_handler "") in
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   let c = read_string_eof t eof_request_string in
   Alcotest.(check int) "read consumes all input"
     (String.length eof_request_string) c;
@@ -1062,15 +1066,13 @@ let test_malformed_request_double_report_exn () =
   Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
   !continue_error ();
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  writer_woken_up := false;
   write_eof t;
   report_exn t (Failure "broken pipe");
   writer_closed t ~unread:28;
-  Alcotest.(check bool) "Connection is shutdown" true (is_closed t);
+  connection_is_closed t;
 ;;
 
 let test_immediate_flush_empty_body () =
-  let reader_woken_up = ref false in
   let response = Response.create `OK in
   let request_handler reqd =
     let resp_body = Reqd.respond_with_streaming
@@ -1081,15 +1083,11 @@ let test_immediate_flush_empty_body () =
   let t = create ~error_handler request_handler in
   reader_ready t;
   writer_yielded t;
-  yield_writer t (fun () -> write_response t ~body:"" response);
   read_request t (Request.create `GET "/");
-  yield_reader t (fun () -> reader_woken_up := true);
-  writer_yielded t;
-  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  write_response t response
 ;;
 
 let test_empty_body_no_immediate_flush () =
-  let reader_woken_up = ref false in
   let response = Response.create `OK in
   let request_handler reqd =
     let resp_body = Reqd.respond_with_streaming
@@ -1101,15 +1099,11 @@ let test_empty_body_no_immediate_flush () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/");
-  reader_yielded t;
-  yield_reader t (fun () -> reader_woken_up := true);
   write_response t ~body:"" response;
   writer_yielded t;
-  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
 ;;
 
 let test_yield_before_starting_a_response () =
-  let reader_woken_up = ref false in
   let response = Response.create `OK in
   let continue_response = ref (fun () -> ()) in
   let request_handler reqd =
@@ -1123,9 +1117,8 @@ let test_yield_before_starting_a_response () =
   writer_yielded t;
   read_request t (Request.create `GET "/");
   reader_yielded t;
-  yield_reader t (fun () -> reader_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t ignore;
   !continue_response ();
   write_response t ~body:"" response;
   writer_yielded t;
@@ -1133,7 +1126,6 @@ let test_yield_before_starting_a_response () =
 ;;
 
 let test_respond_before_reading_entire_body () =
-  let reader_woken_up = ref false in
   let response = Response.create `OK in
   let continue_response = ref (fun () -> ()) in
   let request_handler reqd =
@@ -1147,9 +1139,8 @@ let test_respond_before_reading_entire_body () =
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "2"]));
   reader_yielded t;
-  yield_reader t (fun () -> reader_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t ignore;
   !continue_response ();
   write_response t ~body:"" response;
   writer_yielded t;
@@ -1165,7 +1156,6 @@ let backpressure_request_handler continue_reading reqd =
   Body.schedule_read request_body ~on_eof ~on_read
 
 let test_handling_backpressure_when_read_not_scheduled () =
-  let reader_woken_up = ref false in
   let continue_reading = ref (fun () -> ()) in
   let t = create ~error_handler (backpressure_request_handler continue_reading) in
   reader_ready t;
@@ -1177,10 +1167,9 @@ let test_handling_backpressure_when_read_not_scheduled () =
       "/"
   in
   read_request t request;
-  yield_writer t ignore;
   read_string t "five.";
   reader_yielded t;
-  yield_reader t (fun () -> reader_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
   !continue_reading ();
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
   reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
@@ -1188,7 +1177,6 @@ let test_handling_backpressure_when_read_not_scheduled () =
 ;;
 
 let test_handling_backpressure_when_read_not_scheduled_early_yield () =
-  let reader_woken_up = ref false in
   let continue_reading = ref (fun () -> ()) in
   let t = create ~error_handler (backpressure_request_handler continue_reading) in
   reader_ready t;
@@ -1200,8 +1188,7 @@ let test_handling_backpressure_when_read_not_scheduled_early_yield () =
       "/"
   in
   read_request t request;
-  yield_reader t (fun () -> reader_woken_up := true);
-  yield_writer t ignore;
+  let reader_woken_up = on_reader_unyield t ignore in
   read_string t "five.";
   reader_yielded t;
   !continue_reading ();
@@ -1226,7 +1213,10 @@ let test_input_shrunk_chunked () =
   let t = create ~error_handler request_handler in
   reader_ready t;
   writer_yielded t;
-  yield_writer t (fun () -> write_response t (Response.create `OK));
+  (* never happens*)
+  let _writer_woken_up =
+    on_writer_unyield t (fun () -> write_response t (Response.create `OK))
+  in
   let len = feed_string t "GET /v1/b HTTP/1.1\r\nH" in
   Alcotest.(check int) "partial read" 20 len;
   read_string t "Host: example.com\r\nTransfer-Encoding: chunked\r\n\r\n";
@@ -1234,10 +1224,10 @@ let test_input_shrunk_chunked () =
   let str = "5\r\ninput\r\n" in
   let len = String.length str in
   let input = Bigstringaf.of_string str ~off:0 ~len in
-  let just_read = read t input ~off:0 ~len in
+  let just_read = force_read t input ~off:0 ~len in
   Alcotest.(check int) "partial read" (len - 2) just_read;
 
-  let just_read = read_eof t input ~off:(len - 2) ~len:2 in
+  let just_read = force_read_eof t input ~off:(len - 2) ~len:2 in
   Alcotest.(check int) "eof partial read, doesn't get terminating chunk" 2 just_read;
 
   writer_yielded t;
@@ -1248,8 +1238,6 @@ let test_input_shrunk_chunked () =
 ;;
 
 let test_respond_before_reading_entire_body_chunked_eof () =
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let response = Response.create `OK in
   let continue_response = ref (fun () -> ()) in
   let request_handler reqd =
@@ -1265,15 +1253,14 @@ let test_respond_before_reading_entire_body_chunked_eof () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["transfer-encoding", "chunked"]));
-  yield_reader t (fun () -> reader_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   !continue_response ();
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t ~body:"" response;
   writer_yielded t;
   Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
-  writer_woken_up := false;
   reader_ready t;
 
   let str = "5\r\ninput\r\n" in
@@ -1282,16 +1269,11 @@ let test_respond_before_reading_entire_body_chunked_eof () =
   let just_read = read_eof t input ~off:0 ~len in
   Alcotest.(check int) "malformed chunked encoding read completely" len just_read;
 
-  writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  writer_closed t;
   reader_errored t;
-  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  writer_closed t
 ;;
 
 let test_finish_response_after_read_eof () =
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let response = Response.create `OK in
   let continue_response = ref (fun () -> ()) in
   let request_handler reqd =
@@ -1307,16 +1289,19 @@ let test_finish_response_after_read_eof () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["transfer-encoding", "chunked"]));
-  yield_reader t (fun () -> reader_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
 
   let str = "5\r\ninput\r\n" in
   let len = String.length str in
   let input = Bigstringaf.of_string str ~off:0 ~len in
-  let just_read = read_eof t input ~off:0 ~len in
+  let just_read = force_read_eof t input ~off:0 ~len in
   Alcotest.(check int) "malformed chunked encoding read completely" len just_read;
 
+  let (_ : Read_operation.t) =
+    do_force_read t (fun t -> Server_connection.next_read_operation t)
+  in
   reader_errored t;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t ~body:"" response;
@@ -1326,8 +1311,6 @@ let test_finish_response_after_read_eof () =
 ;;
 
 let test_respond_before_reading_entire_body_no_error () =
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let response = Response.create `OK in
   let continue_response = ref (fun () -> ()) in
   let request_handler reqd =
@@ -1341,17 +1324,16 @@ let test_respond_before_reading_entire_body_no_error () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
-  yield_reader t (fun () -> reader_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
 
-  read_string t "data.";
+  force_read_string t "data.";
   !continue_response ();
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t ~body:"" response;
   writer_yielded t;
-  writer_woken_up := false;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   reader_ready t;
   (* Yield writer before feeding eof.
    *
@@ -1365,8 +1347,6 @@ let test_respond_before_reading_entire_body_no_error () =
 ;;
 
 let test_streaming_response_before_reading_entire_body_no_error () =
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let response = Response.create `OK in
   let continue_response = ref (fun () -> ()) in
   let request_handler reqd =
@@ -1384,11 +1364,11 @@ let test_streaming_response_before_reading_entire_body_no_error () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
-  yield_reader t (fun () -> reader_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
   Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
 
-  read_string t "data.";
+  force_read_string t "data.";
   !continue_response ();
   Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
 
@@ -1396,9 +1376,8 @@ let test_streaming_response_before_reading_entire_body_no_error () =
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t ~body:"hello" response;
 
-  writer_woken_up := false;
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   !continue_response ();
   (* Important that the writer wakes up after closing it, so that it gets a
    * chance to close the request body, and thus advance the remaining request
@@ -1467,7 +1446,6 @@ let test_bad_request () =
 ;;
 
 let test_shutdown_hangs_request_body_read () =
-  let reader_woken_up = ref false in
   let got_eof = ref false in
   let request_handler reqd =
     let request_body  = Reqd.request_body reqd in
@@ -1486,21 +1464,15 @@ let test_shutdown_hangs_request_body_read () =
       "/"
   in
   read_request t request;
-  yield_reader t (fun () -> reader_woken_up := true);
-  yield_writer t ignore;
   read_string t "five.";
-  reader_ready t;
-  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
   reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
   shutdown t;
   Alcotest.(check bool) "EOF delivered to the request body if the connection shuts down" true !got_eof;
-  writer_closed t;
+  do_read t ignore;
   connection_is_shutdown t;
 ;;
 
 let test_finish_response_after_read_eof_well_formed () =
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let response = Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK in
   let request_handler reqd =
     let request_body = Reqd.request_body reqd in
@@ -1518,26 +1490,20 @@ let test_finish_response_after_read_eof_well_formed () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "5"]));
-  yield_reader t (fun () -> reader_woken_up := true);
-  Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
 
   let str = "hello" in
   let bs = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
   let just_read = read_eof t bs ~off:0 ~len:(String.length str) in
   Alcotest.(check int) "EOF read" (String.length str) just_read;
-  Alcotest.(check bool) "Reader wakes up" true !reader_woken_up;
   reader_closed t;
 
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t ~body:"hello" response;
-  writer_closed t;
-  reader_closed t;
+  connection_is_shutdown t;
 ;;
 
 let test_finish_response_after_read_eof_malformed () =
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let error_handler_called = ref false in
   let response = Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK in
   let continue_response = ref (fun () -> ()) in
@@ -1561,15 +1527,12 @@ let test_finish_response_after_read_eof_malformed () =
   reader_ready t;
   writer_yielded t;
   read_request t (Request.create `GET "/" ~headers:(Headers.of_list ["content-length", "10"]));
-  yield_reader t (fun () -> reader_woken_up := true);
-  Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
 
   let str = "hello" in
   let bs = Bigstringaf.of_string ~off:0 ~len:(String.length str) str in
   let just_read = read_eof t bs ~off:0 ~len:(String.length str) in
   Alcotest.(check int) "EOF read" (String.length str) just_read;
-  Alcotest.(check bool) "Reader wakes up" true !reader_woken_up;
   reader_closed t;
   Alcotest.(check bool) "Error handler was called" true !error_handler_called;
 
@@ -1652,8 +1615,6 @@ let test_request_body_eof_response_not_sent_empty_eof () =
 
 let test_race_condition_writer_issues_yield_after_reader_eof () =
   let continue_response = ref (fun () -> ()) in
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
@@ -1680,12 +1641,12 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
   read_string t "hello";
   write_response t ~body:(String.make 10 'a') response;
   reader_yielded t;
-  yield_reader t (fun () ->
-    reader_woken_up := true;
+  let reader_woken_up = on_reader_unyield t (fun () ->
     ignore @@ read_eof t Bigstringaf.empty ~off:0 ~len:0;
-    reader_closed t);
+    reader_closed t)
+  in
   writer_yielded t;
-  yield_writer t (fun () -> writer_woken_up := true);
+  let writer_woken_up = on_writer_unyield t ignore in
   !continue_response ();
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   writer_closed t;
@@ -1705,8 +1666,8 @@ let test_multiple_requests_in_single_read () =
     request_to_string (Request.create `GET "/")
   in
   read_string t reqs;
-  write_response t response;
-  write_response t response;
+
+  write_string t (response_to_string response ^ response_to_string response);
 ;;
 
 let test_multiple_async_requests_in_single_read () =
@@ -1776,8 +1737,6 @@ let test_errored_content_length_streaming_response () =
 ;;
 
 let test_errored_chunked_streaming_response_async () =
-  let reader_woken_up = ref false in
-  let writer_woken_up = ref false in
   let continue = ref (fun () -> ()) in
   let request  = Request.create `GET "/" in
   let response =
@@ -1790,15 +1749,16 @@ let test_errored_chunked_streaming_response_async () =
     Body.close_reader request_body;
     let body = Reqd.respond_with_streaming reqd response in
     Body.write_string body "hello";
+    Body.flush body (fun () ->
     continue := (fun () ->
-      Reqd.report_exn reqd (Failure "heh"));
+      Reqd.report_exn reqd (Failure "heh")))
   in
 
   let t = create request_handler in
   read_request   t request;
   write_response t response ~body:"5\r\nhello\r\n";
-  yield_reader t (fun () -> reader_woken_up := true);
-  yield_writer t (fun () -> writer_woken_up := true);
+  let reader_woken_up = on_reader_unyield t ignore in
+  let writer_woken_up = on_writer_unyield t ignore in
   !continue ();
   Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
