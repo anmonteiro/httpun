@@ -260,10 +260,15 @@ and _final_read_operation_for t reqd =
        * non-empty `request_queue` has had the request handler called on its
        * head element. *)
        match Reader.next t.reader with
-       | `Error _ | `Read as operation ->
+       | `Error _ as op ->
          (* Keep reading when in a "partial" state (`Read).
           * Don't advance the request queue if in an error state. *)
-         operation
+         op
+       | `Read as op ->
+         (* we just don't advance the request queue in the case of a parser
+           error. *)
+         advance_request_queue t;
+         op
        | _ ->
          advance_request_queue t;
          _next_read_operation t
