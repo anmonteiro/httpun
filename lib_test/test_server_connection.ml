@@ -1809,6 +1809,22 @@ let test_response_finished_before_body_read () =
   write_response t response ~body:"done";
 ;;
 
+let test_pipelined_requests_answer_before_reading_body () =
+  let response = Response.create `OK ~headers:(Headers.encoding_fixed 0) in
+  let request_handler reqd =
+    let response =
+      Response.create ~headers:(Headers.of_list ["content-length", "0"]) `OK
+    in
+    Reqd.respond_with_string reqd response ""
+  in
+  let t = create request_handler in
+  read_request t (Request.create `GET "/" ~headers:(Headers.encoding_fixed 5));
+  write_response t response;
+  (* Finish the request and send another *)
+  read_string t "helloGET / HTTP/1.1\r\nhost: localhost\r\ncontent-length: 5\r\n\r\n";
+  write_response t response;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1869,4 +1885,5 @@ let tests =
   ; "multiple requests with connection close", `Quick, test_multiple_requests_in_single_read_with_close
   ; "parse failure after checkpoint", `Quick, test_parse_failure_after_checkpoint
   ; "response finished before body read", `Quick, test_response_finished_before_body_read
+  ; "pipelined", `Quick, test_pipelined_requests_answer_before_reading_body
   ]
