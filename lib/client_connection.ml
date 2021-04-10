@@ -78,14 +78,23 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   ; request_queue
   }
 
+let create_request_body t =
+  Body.create
+    (Bigstringaf.create t.config.request_body_buffer_size)
+    (Optional_thunk.some (fun () -> wakeup_writer t))
+
 let request t request ~error_handler ~response_handler =
   let request_body =
-    Body.create
-      (Bigstringaf.create t.config.request_body_buffer_size)
-      (Optional_thunk.some (fun () -> wakeup_writer t))
+    match Request.body_length request with
+    | `Fixed 0L -> Body.empty
+    | `Chunked -> create_request_body t
+    | `Fixed _ ->
+      let body = create_request_body t in
+      Body.set_non_chunked body;
+      body
+    | `Error _ ->
+      assert false
   in
-  if not (Request.body_length request = `Chunked) then
-    Body.set_non_chunked request_body;
   let respd =
     Respd.create error_handler request request_body t.writer response_handler in
   let handle_now = Queue.is_empty t.request_queue in

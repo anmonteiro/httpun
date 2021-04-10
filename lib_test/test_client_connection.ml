@@ -551,7 +551,7 @@ let test_empty_fixed_body () =
     Body.close_reader response_body
   in
   let t = create ?config:None in
-  let body =
+  let (_body: [`write] Body.t) =
     request
       t
       request'
@@ -559,14 +559,12 @@ let test_empty_fixed_body () =
       ~error_handler:no_error_handler
   in
   write_request t request';
-  writer_yielded t;
-  Body.close_writer body;
+  writer_closed t;
   reader_ready t;
   read_response t (Response.create ~headers:(Headers.of_list ["Connection", "close"]) `OK);
   let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
   Alcotest.(check int) "read_eof with no input returns 0" 0 c;
   reader_closed t;
-  writer_closed t;
 ;;
 
 let test_fixed_body () =
@@ -1396,6 +1394,29 @@ let test_304_not_modified () =
   Alcotest.(check bool) "error handler not called" false !error_handler_called;
 ;;
 
+let test_empty_content_length_body_closed () =
+  let response = Response.create `OK in
+  let request' = Request.create `GET "/" in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:no_error_handler
+  in
+  Alcotest.(check bool) "request body length is 0"
+    true
+    ((Request.body_length request') = (`Fixed 0L));
+  Alcotest.(check bool) "Request body starts out closed" true (Body.is_closed body);
+  write_request t request';
+  read_response t response;
+  let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
+  Alcotest.(check int) "read_eof with no input returns 0" 0 c;
+  connection_is_shutdown t;
+;;
+
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1432,4 +1453,5 @@ let tests =
   ; "multiple responses in single read", `Quick, test_multiple_responses_in_single_read
   ; "test chunked error", `Quick, test_chunked_error
   ; "304 Not Modified with Content-Length", `Quick, test_304_not_modified
+  ; "body for a request with no payload starts out closed", `Quick, test_empty_content_length_body_closed
   ]
