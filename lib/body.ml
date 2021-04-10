@@ -135,6 +135,9 @@ let schedule_read t ~on_eof ~on_read =
     t.read_scheduled <- true;
     t.on_eof         <- on_eof;
     t.on_read        <- on_read;
+    if Faraday.pending_bytes t.faraday > 0 then begin
+      execute_read t;
+    end;
     ready t;
   end
 
