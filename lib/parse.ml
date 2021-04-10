@@ -254,24 +254,22 @@ module Reader = struct
     t.wakeup <- Optional_thunk.none;
     Optional_thunk.call_if_some f
 
-  let request handler =
-    let parser t handler =
+  let request ~wakeup handler =
+    let parser handler =
       request <* commit >>= fun request ->
         match Request.body_length request with
       | `Error `Bad_request -> return (Error (`Bad_request request))
       | `Fixed 0L  ->
-          handler request Body.empty;
+        handler request Body.empty;
         ok
       | `Fixed _ | `Chunked as encoding ->
-          let request_body =
-            Body.create Bigstringaf.empty (Optional_thunk.some (fun () ->
-              wakeup (Lazy.force t)))
+        let request_body =
+          Body.create Bigstringaf.empty (Optional_thunk.some wakeup)
         in
         handler request request_body;
         body ~encoding request_body *> ok
     in
-    let rec t = lazy (create (parser t handler)) in
-    Lazy.force t
+    create (parser handler)
 
   let response request_queue =
     let parser t request_queue =
