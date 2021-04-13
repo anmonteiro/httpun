@@ -81,7 +81,16 @@ let current_reqd_exn t =
 let yield_reader t k =
   Reader.on_wakeup t.reader k
 
-let wakeup_reader t = Reader.wakeup t.reader
+let wakeup_reader t =
+  if is_active t then begin
+    let reqd = current_reqd_exn t in
+    (* Before going through another read loop, give the body a chance to flush
+       its buffered bytes to the application. This fixes a pathological case
+       where the body could buffer too much without a chance of executing
+       scheduled reads. *)
+    Reqd.flush_request_body reqd;
+  end;
+  Reader.wakeup t.reader
 
 let yield_writer t k =
  Writer.on_wakeup t.writer k
@@ -110,21 +119,23 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   let writer = Writer.create ~buffer_size:response_buffer_size () in
   let request_queue = Queue.create () in
   let response_body_buffer = Bigstringaf.create response_body_buffer_size in
-  let rec reader = lazy (Reader.request handler)
+  let rec reader = lazy (Reader.request ~wakeup:(fun () -> wakeup_reader (Lazy.force t)) handler)
   and handler request request_body =
     let reqd =
       Reqd.create error_handler request request_body (Lazy.force reader) writer response_body_buffer
     in
     Queue.push reqd request_queue;
+  and t = lazy
+    { reader = Lazy.force reader
+    ; writer
+    ; response_body_buffer
+    ; request_handler = request_handler
+    ; error_handler   = error_handler
+    ; request_queue
+    ; error_code = No_error
+    }
   in
-  { reader = Lazy.force reader
-  ; writer
-  ; response_body_buffer
-  ; request_handler = request_handler
-  ; error_handler   = error_handler
-  ; request_queue
-  ; error_code = No_error
-  }
+  Lazy.force t
 
 let shutdown_reader t =
   Reader.force_close t.reader;

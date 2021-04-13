@@ -1825,6 +1825,37 @@ let test_pipelined_requests_answer_before_reading_body () =
   write_response t response;
 ;;
 
+let test_body_flush_fairness () =
+  let rev_body_chunks = ref [] in
+  let continue = ref (fun () -> ()) in
+  let t = create (fun reqd ->
+    let request_body  = Reqd.request_body reqd in
+      let rec on_read buffer ~off ~len =
+        rev_body_chunks := (Bigstringaf.substring buffer ~off ~len) :: !rev_body_chunks;
+        continue := (fun () ->
+          Body.schedule_read request_body ~on_eof ~on_read)
+    and on_eof () = print_endline "got eof" in
+    continue := (fun () ->
+      Body.schedule_read request_body ~on_eof ~on_read))
+  in
+  read_request   t (Request.create `GET "/" ~headers:(Headers.encoding_fixed 20));
+  reader_yielded t;
+  writer_yielded t;
+  let reader_woken_up = on_reader_unyield t ignore in
+  !continue ();
+  reader_ready t;
+  Alcotest.(check bool) "reader woken up" true !reader_woken_up;
+  read_string t "hello";
+  !continue ();
+  read_string t "hello";
+  reader_yielded t;
+  let reader_woken_up = on_reader_unyield t ignore in
+  force_read_string t "hello";
+  !continue ();
+  Alcotest.(check bool) "reader woken up" true !reader_woken_up;
+  Alcotest.(check int) "Request handler processed 3 chunks" 3 (List.length !rev_body_chunks);
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -1886,4 +1917,5 @@ let tests =
   ; "parse failure after checkpoint", `Quick, test_parse_failure_after_checkpoint
   ; "response finished before body read", `Quick, test_response_finished_before_body_read
   ; "pipelined", `Quick, test_pipelined_requests_answer_before_reading_body
+  ; "body has a chance to flush before the next read operation", `Quick, test_body_flush_fairness
   ]
