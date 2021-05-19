@@ -56,22 +56,6 @@ module type Server = sig
     -> (socket -> unit Lwt.t)
 end
 
-module Server_with_conduit = struct
-  open Conduit_mirage
-  include Server (Conduit_mirage.Flow)
-
-  type t = Conduit_mirage.Flow.flow -> unit Lwt.t
-
-  let listen handler flow =
-    Lwt.finalize
-      (fun () -> handler flow)
-      (fun () -> Flow.close flow)
-
-  let connect t =
-    let listen s f = Conduit_mirage.listen t s (listen f) in
-    Lwt.return listen
-end
-
 module type Client = Httpaf_lwt.Client
 
 module Client (Flow : Mirage_flow.S) =
