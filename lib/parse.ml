@@ -293,6 +293,8 @@ module Reader = struct
         respd.response_handler response Body.empty;
         ok
       | `Fixed _ | `Chunked | `Close_delimited as encoding ->
+        (* We do not trust the length provided in the [`Fixed] case, as the
+           client could DOS easily. *)
         let response_body =
           Body.create Bigstringaf.empty (Optional_thunk.some (fun () ->
             wakeup (Lazy.force t)))
