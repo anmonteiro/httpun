@@ -266,6 +266,28 @@ let test_get_last_close () =
   connection_is_shutdown t;
 ;;
 
+let test_send_streaming_body () =
+  let request' = Request.create `GET "/" ~headers:Headers.encoding_chunked in
+  let response = Response.create `OK ~headers:Headers.encoding_chunked in
+  let t = create ?config:None in
+  let body =
+    request t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:no_error_handler
+  in
+  write_request  t request';
+  read_response  t response;
+  Body.write_string body "hello";
+  write_string t "5\r\nhello\r\n";
+  Body.write_string body "world";
+  Body.close_writer body;
+  write_string t "5\r\nworld\r\n";
+  write_string t "0\r\n\r\n";
+  writer_yielded t;
+;;
+
+
 let test_response_eof () =
   let request' = Request.create `GET "/" in
   let response = Response.create `OK in (* not actually writen to the channel *)
@@ -1421,6 +1443,7 @@ let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
   ; "HEAD"        , `Quick, test_head
+  ; "send streaming body", `Quick, test_send_streaming_body
   ; "Response EOF", `Quick, test_response_eof
   ; "Response header order preserved", `Quick, test_response_header_order
   ; "report_exn"  , `Quick, test_report_exn
