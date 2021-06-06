@@ -333,14 +333,14 @@ module Reader = struct
       | _ -> assert false
   ;;
 
-  let rec read_with_more t bs ~off ~len more =
+  let rec _read_with_more t bs ~off ~len more =
     let initial = match t.parse_state with Done -> true | _ -> false in
     let consumed =
       match t.parse_state with
       | Fail _ -> 0
       | Done   ->
         start t (AU.parse t.parser);
-        read_with_more  t bs ~off ~len more;
+        _read_with_more  t bs ~off ~len more;
       | Partial continue ->
         transition t (continue bs more ~off ~len)
     in
@@ -348,18 +348,21 @@ module Reader = struct
      * bigstring. Avoid putting them parser in an error state in this scenario.
      * If we were already in a `Partial` state, return the error. *)
     if initial && len = 0 then t.parse_state <- Done;
-    match more with
-    | Complete ->
-      t.closed <- true;
-      consumed
-    | Incomplete ->
-      (match t.parse_state with
-       | Done when consumed < len ->
-         let off = off + consumed
-         and len = len - consumed in
-         consumed + read_with_more t bs ~off ~len more
-       | _ -> consumed)
+    match t.parse_state with
+    | Done when consumed < len ->
+      let off = off + consumed
+      and len = len - consumed in
+      consumed + _read_with_more t bs ~off ~len more
+    | _ -> consumed
   ;;
+
+  let read_with_more t bs ~off ~len more =
+    let consumed = _read_with_more t bs ~off ~len more in
+    (match more with
+     | Complete ->
+       t.closed <- true
+     | Incomplete -> ());
+    consumed
 
   let force_close t =
     t.closed <- true;

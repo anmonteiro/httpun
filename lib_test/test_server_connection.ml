@@ -1776,8 +1776,7 @@ let test_multiple_requests_in_single_read_with_eof () =
     request_to_string (Request.create `GET "/")
   in
   read_string t reqs ~eof:true;
-  write_response t response;
-  write_response t response;
+  write_string t (response_to_string response ^ response_to_string response);
 ;;
 
 let test_parse_failure_after_checkpoint () =
@@ -1925,11 +1924,11 @@ let test_schedule_read_with_data_available () =
   in
 
   (* We get some data on the connection, but not the full response yet. *)
-  read_string t "Hello";
+  force_read_string t "Hello";
   (* Schedule a read when there is already data available. on_read should be
      called synchronously *)
   schedule_read "Hello";
-  read_string t "!";
+  force_read_string t "!";
   schedule_read "!";
   (* Also works with eof *)
   Body.Reader.schedule_read body
