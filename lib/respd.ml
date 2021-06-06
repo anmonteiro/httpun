@@ -9,15 +9,15 @@ module Request_state = struct
   type t =
     | Uninitialized
     | Awaiting_response
-    | Received_response of Response.t * [`read] Body.t
+    | Received_response of Response.t * Body.Reader.t
     | Upgraded of Response.t
     | Closed
 end
 
 type t =
   { request          : Request.t
-  ; request_body     : [ `write ] Body.t
-  ; response_handler : (Response.t -> [`read] Body.t -> unit)
+  ; request_body     : Body.Writer.t
+  ; response_handler : (Response.t -> Body.Reader.t -> unit)
   ; error_handler    : (error -> unit)
   ; mutable error_code : [ `Ok | error ]
   ; writer : Writer.t
@@ -60,8 +60,8 @@ let write_request t =
 
 let report_error t error =
   t.persistent <- false;
-  Body.set_non_chunked t.request_body;
-  Body.close_writer t.request_body;
+  Body.Writer.set_non_chunked t.request_body;
+  Body.Writer.close t.request_body;
   match t.state, t.error_code with
   | (Uninitialized | Awaiting_response | Upgraded _), `Ok ->
     t.state <- Closed;
@@ -71,7 +71,7 @@ let report_error t error =
     (* TODO(anmonteiro): Not entirely sure this is possible in the client. *)
     assert false
   | Received_response (_, response_body), `Ok ->
-     Body.close_reader response_body;
+     Body.Reader.close response_body;
      t.error_code <- (error :> [`Ok | error]);
      t.error_handler error
   | (Uninitialized | Awaiting_response | Received_response _ | Closed | Upgraded _), _ ->
@@ -88,7 +88,7 @@ let close_response_body t =
   | Awaiting_response
   | Closed -> ()
   | Received_response (_, response_body) ->
-    Body.close_reader response_body
+    Body.Reader.close response_body
   | Upgraded _ -> t.state <- Closed
 
 let input_state t : Input_state.t =
@@ -96,9 +96,9 @@ let input_state t : Input_state.t =
   | Uninitialized
   | Awaiting_response -> Ready
   | Received_response (_, response_body) ->
-    if Body.is_closed response_body
+    if Body.Reader.is_closed response_body
     then Complete
-    else if Body.is_read_scheduled response_body
+    else if Body.Reader.is_read_scheduled response_body
     then Ready
     else Wait
     (* Upgraded is "Complete" because the descriptor doesn't wish to receive
@@ -115,24 +115,24 @@ let output_state { request_body; state; _ } : Output_state.t =
      * transition the response descriptor to the `Closed` state. *)
     Waiting
   | state ->
-    if state = Uninitialized || Body.requires_output request_body
+    if state = Uninitialized || Body.Writer.requires_output request_body
     then Ready
     else Complete
 
 let flush_request_body { request; request_body; writer; _ } =
-  if Body.has_pending_output request_body then begin
+  if Body.Writer.has_pending_output request_body then begin
     let encoding =
       match Request.body_length request with
       | `Fixed _ | `Chunked as encoding -> encoding
       | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
     in
-    Body.transfer_to_writer_with_encoding request_body ~encoding writer
+    Body.Writer.transfer_to_writer_with_encoding request_body ~encoding writer
   end
 
 let flush_response_body t =
   match t.state with
   | Uninitialized | Awaiting_response | Closed | Upgraded _ -> ()
   | Received_response(_, response_body) ->
-    if Body.has_pending_output response_body
-    then try Body.execute_read response_body
+    if Body.Reader.has_pending_output response_body
+    then try Body.Reader.execute_read response_body
     with exn -> report_error t (`Exn exn)

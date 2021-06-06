@@ -31,173 +31,190 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-(* XXX(dpatti): A [Body.t] is kind of a reader body and writer body stitched
-   together into a single structure, but only half of it is used at any given
-   time. The two uses are also quite different in that a writer body is always
-   wired up to some [Writer.t] by httpaf internals at time of creation, whereas
-   a reader body is given to the user as-is and the user is expected to drive
-   the feeding of data into the body. It feels like they should simply be two
-   separate types. *)
+module Reader = struct
+  type t =
+    { faraday                        : Faraday.t
+    ; mutable read_scheduled         : bool
+    ; mutable on_eof                 : unit -> unit
+    ; mutable on_read                : Bigstringaf.t -> off:int -> len:int -> unit
+    ; mutable when_ready_to_read     : Optional_thunk.t
+    }
 
-type _ t =
-  { faraday                        : Faraday.t
-  ; mutable read_scheduled         : bool
-  ; mutable write_final_if_chunked : bool
-  ; mutable on_eof                 : unit -> unit
-  ; mutable on_read                : Bigstringaf.t -> off:int -> len:int -> unit
-  ; mutable when_ready             : Optional_thunk.t
-  ; buffered_bytes                 : int ref
-  }
+  let default_on_eof         = Sys.opaque_identity (fun () -> ())
+  let default_on_read        = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
 
-let default_on_eof         = Sys.opaque_identity (fun () -> ())
-let default_on_read        = Sys.opaque_identity (fun _ ~off:_ ~len:_ -> ())
+  let create buffer ~when_ready_to_read =
+    { faraday                = Faraday.of_bigstring buffer
+    ; read_scheduled         = false
+    ; on_eof                 = default_on_eof
+    ; on_read                = default_on_read
+    ; when_ready_to_read
+    }
 
-let of_faraday faraday when_ready =
-  { faraday
-  ; read_scheduled         = false
-  ; write_final_if_chunked = true
-  ; on_eof                 = default_on_eof
-  ; on_read                = default_on_read
-  ; when_ready
-  ; buffered_bytes         = ref 0
-  }
+  let create_empty () =
+    let t = create Bigstringaf.empty ~when_ready_to_read:Optional_thunk.none in
+    Faraday.close t.faraday;
+    t
 
-let create buffer when_ready =
-  of_faraday (Faraday.of_bigstring buffer) when_ready
+  let empty = create_empty ()
 
-let create_empty () =
-  let t = create Bigstringaf.empty Optional_thunk.none in
-  t.write_final_if_chunked <- false;
-  Faraday.close t.faraday;
-  t
+  let is_closed t =
+    Faraday.is_closed t.faraday
 
-let empty = create_empty ()
+  let unsafe_faraday t =
+    t.faraday
 
-let set_non_chunked t =
-  t.write_final_if_chunked <- false
+  let ready_to_read t = Optional_thunk.call_if_some t.when_ready_to_read
 
-let write_char t c =
-  Faraday.write_char t.faraday c
+  let rec do_execute_read t on_eof on_read =
+    match Faraday.operation t.faraday with
+    | `Yield           -> ()
+    | `Close           ->
+      t.read_scheduled <- false;
+      t.on_eof         <- default_on_eof;
+      t.on_read        <- default_on_read;
+      on_eof ()
+    (* [Faraday.operation] never returns an empty list of iovecs *)
+    | `Writev []       -> assert false
+    | `Writev (iovec::_) ->
+      t.read_scheduled <- false;
+      t.on_eof         <- default_on_eof;
+      t.on_read        <- default_on_read;
+      let { IOVec.buffer; off; len } = iovec in
+      Faraday.shift t.faraday len;
+      on_read buffer ~off ~len;
+      execute_read t
+  and execute_read t =
+    if t.read_scheduled then do_execute_read t t.on_eof t.on_read
 
-let write_string t ?off ?len s =
-  Faraday.write_string ?off ?len t.faraday s
+  let schedule_read t ~on_eof ~on_read =
+    if t.read_scheduled
+    then failwith "Body.Reader.schedule_read: reader already scheduled";
+    if not (is_closed t) then begin
+      t.read_scheduled <- true;
+      t.on_eof         <- on_eof;
+      t.on_read        <- on_read;
+      ready_to_read t;
+    end;
+    do_execute_read t on_eof on_read
 
-let write_bigstring t ?off ?len b =
-  Faraday.write_bigstring ?off ?len t.faraday b
+  let close t =
+    Faraday.close t.faraday;
+    execute_read t;
+    ready_to_read t
+  ;;
 
-let schedule_bigstring t ?off ?len (b:Bigstringaf.t) =
-  Faraday.schedule_bigstring ?off ?len t.faraday b
+  let has_pending_output t = Faraday.has_pending_output t.faraday
 
-let ready t =
-  Optional_thunk.call_if_some t.when_ready
+  let is_read_scheduled t = t.read_scheduled
+end
 
-let flush t kontinue =
-  Faraday.flush t.faraday kontinue;
-  ready t
+module Writer = struct
+  type t =
+    { faraday                        : Faraday.t
+    ; mutable write_final_if_chunked : bool
+    ; when_ready_to_write            : Optional_thunk.t
+    ; buffered_bytes                 : int ref
+    }
 
-let is_closed t =
-  Faraday.is_closed t.faraday
+  let of_faraday faraday ~when_ready_to_write =
+    { faraday
+    ; write_final_if_chunked = true
+    ; when_ready_to_write
+    ; buffered_bytes         = ref 0
+    }
 
-let close_writer t =
-  Faraday.close t.faraday;
-  ready t;
-;;
+  let create buffer ~when_ready_to_write =
+    of_faraday (Faraday.of_bigstring buffer) ~when_ready_to_write
 
-let unsafe_faraday t =
-  t.faraday
+  let create_empty () =
+    let t = create Bigstringaf.empty ~when_ready_to_write:Optional_thunk.none in
+    Faraday.close t.faraday;
+    t
 
-let rec do_execute_read t on_eof on_read =
-  match Faraday.operation t.faraday with
-  | `Yield           -> ()
-  | `Close           ->
-    t.read_scheduled <- false;
-    t.on_eof         <- default_on_eof;
-    t.on_read        <- default_on_read;
-    on_eof ()
-  (* [Faraday.operation] never returns an empty list of iovecs *)
-  | `Writev []       -> assert false
-  | `Writev (iovec::_) ->
-    t.read_scheduled <- false;
-    t.on_eof         <- default_on_eof;
-    t.on_read        <- default_on_read;
-    let { IOVec.buffer; off; len } = iovec in
-    Faraday.shift t.faraday len;
-    on_read buffer ~off ~len;
-    execute_read t
-and execute_read t =
-  if t.read_scheduled then do_execute_read t t.on_eof t.on_read
+  let empty = create_empty ()
 
-let schedule_read t ~on_eof ~on_read =
-  if t.read_scheduled
-  then failwith "Body.schedule_read: reader already scheduled";
-  if is_closed t
-  then do_execute_read t on_eof on_read
-  else begin
-    t.read_scheduled <- true;
-    t.on_eof         <- on_eof;
-    t.on_read        <- on_read;
-    ready t;
-  end
+  let write_char t c =
+    Faraday.write_char t.faraday c
 
-let is_read_scheduled t = t.read_scheduled
+  let write_string t ?off ?len s =
+    Faraday.write_string ?off ?len t.faraday s
 
-let has_pending_output t =
-  (* Force another write poll to make sure that the final chunk is emitted for
-     chunk-encoded bodies.
+  let write_bigstring t ?off ?len b =
+    Faraday.write_bigstring ?off ?len t.faraday b
 
-     Note that the body data type does not keep track of encodings, so it is
-     necessary for [transfer_to_writer_with_encoding] to check the encoding and
-     clear the [write_final_if_chunked] field when outputting a fixed or
-     close-delimited body. *)
-  Faraday.has_pending_output t.faraday
-  || (Faraday.is_closed t.faraday && t.write_final_if_chunked)
+  let schedule_bigstring t ?off ?len (b:Bigstringaf.t) =
+    Faraday.schedule_bigstring ?off ?len t.faraday b
 
-let requires_output t =
-  not (is_closed t) || has_pending_output t
+  let ready_to_write t = Optional_thunk.call_if_some t.when_ready_to_write
 
-let close_reader t =
-  Faraday.close t.faraday;
-  execute_read t;
-  ready t;
-;;
+  let flush t kontinue =
+    Faraday.flush t.faraday kontinue;
+    ready_to_write t
 
-let transfer_to_writer_with_encoding t ~encoding writer =
-  let faraday = t.faraday in
-  begin match t.write_final_if_chunked, encoding with
-  | true, (`Fixed _ | `Close_delimited) ->
-    (* Play nicely with [has_pending_output] in the case of a fixed or
-       close-delimited encoding.
+  let set_non_chunked t =
+    t.write_final_if_chunked <- false
 
-       Immediately set `t.write_final_if_chunked` to `false` because we may
-       not have another opportunity to do so before advancing the request
-       queue. *)
-    t.write_final_if_chunked <- false;
-  | false, (`Fixed _ | `Close_delimited)
-  | _, `Chunked ->
-    (* Handled explicitly later when closing the writer. *)
-    ()
-  end;
-  begin match Faraday.operation faraday with
-  | `Yield -> ()
-  | `Close ->
-    let must_write_the_final_chunk = t.write_final_if_chunked in
-    t.write_final_if_chunked <- false;
-    if must_write_the_final_chunk then
-      Serialize.Writer.schedule_chunk writer [];
-    Serialize.Writer.unyield writer;
-  | `Writev iovecs ->
-    let buffered = t.buffered_bytes in
-    begin match IOVec.shiftv iovecs !buffered with
-    | []     -> ()
-    | iovecs ->
-      let lengthv  = IOVec.lengthv iovecs in
-      buffered := !buffered + lengthv;
-      begin match encoding with
-      | `Fixed _ | `Close_delimited -> Serialize.Writer.schedule_fixed writer iovecs
-      | `Chunked                    -> Serialize.Writer.schedule_chunk writer iovecs
-      end;
-      Serialize.Writer.flush writer (fun () ->
-        Faraday.shift faraday lengthv;
-        buffered := !buffered - lengthv)
+  let is_closed t =
+    Faraday.is_closed t.faraday
+
+  let close t =
+    Faraday.close t.faraday;
+    ready_to_write t;
+  ;;
+
+  let has_pending_output t =
+    (* Force another write poll to make sure that the final chunk is emitted for
+       chunk-encoded bodies.
+
+       Note that the body data type does not keep track of encodings, so it is
+       necessary for [transfer_to_writer_with_encoding] to check the encoding and
+       clear the [write_final_if_chunked] field when outputting a fixed or
+       close-delimited body. *)
+    Faraday.has_pending_output t.faraday
+    || (Faraday.is_closed t.faraday && t.write_final_if_chunked)
+
+  let requires_output t =
+    not (is_closed t) || has_pending_output t
+
+  let transfer_to_writer_with_encoding t ~encoding writer =
+    let faraday = t.faraday in
+    begin match t.write_final_if_chunked, encoding with
+    | true, (`Fixed _ | `Close_delimited) ->
+      (* Play nicely with [has_pending_output] in the case of a fixed or
+         close-delimited encoding.
+
+         Immediately set `t.write_final_if_chunked` to `false` because we may
+         not have another opportunity to do so before advancing the request
+         queue. *)
+      t.write_final_if_chunked <- false;
+    | false, (`Fixed _ | `Close_delimited)
+    | _, `Chunked ->
+      (* Handled explicitly later when closing the writer. *)
+      ()
+    end;
+    begin match Faraday.operation faraday with
+    | `Yield -> ()
+    | `Close ->
+      let must_write_the_final_chunk = t.write_final_if_chunked in
+      t.write_final_if_chunked <- false;
+      if must_write_the_final_chunk then
+        Serialize.Writer.schedule_chunk writer [];
+      Serialize.Writer.unyield writer;
+    | `Writev iovecs ->
+      let buffered = t.buffered_bytes in
+      begin match IOVec.shiftv iovecs !buffered with
+      | []     -> ()
+      | iovecs ->
+        let lengthv  = IOVec.lengthv iovecs in
+        buffered := !buffered + lengthv;
+        begin match encoding with
+        | `Fixed _ | `Close_delimited -> Serialize.Writer.schedule_fixed writer iovecs
+        | `Chunked                    -> Serialize.Writer.schedule_chunk writer iovecs
+        end;
+        Serialize.Writer.flush writer (fun () ->
+          Faraday.shift faraday lengthv;
+          buffered := !buffered - lengthv)
+      end
     end
-  end
+end

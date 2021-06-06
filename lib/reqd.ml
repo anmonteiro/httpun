@@ -35,7 +35,7 @@ type error =
   [ `Bad_request | `Bad_gateway | `Internal_server_error | `Exn of exn ]
 
 type error_handler =
-  ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
+  ?request:Request.t -> error -> (Headers.t -> Body.Writer.t) -> unit
 
 module Reader = Parse.Reader
 module Writer = Serialize.Writer
@@ -52,11 +52,11 @@ module Writer = Serialize.Writer
  * {[
  *   type 'handle t =
  *     { mutable request        : Request.t
- *     ; mutable request_body   : Response.Body.t
+ *     ; mutable request_body   : Response.Body.Reader.t
  *     ; mutable response       : Response.t (* Starts off as a dummy value,
  *                                            * using [(==)] to identify it when
  *                                            * necessary *)
- *     ; mutable response_body  : Response.Body.t
+ *     ; mutable response_body  : Response.Body.Writer.t
  *     ; mutable persistent     : bool
  *     ; mutable response_state : [ `Waiting | `Started | `Streaming ]
  *     }
@@ -65,7 +65,7 @@ module Writer = Serialize.Writer
  * *)
 type t =
   { request                 : Request.t
-  ; request_body            : [`read] Body.t
+  ; request_body            : Body.Reader.t
   ; reader                  : Reader.request
   ; writer                  : Writer.t
   ; response_body_buffer    : Bigstringaf.t
@@ -142,7 +142,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
   match t.response_state with
   | Waiting ->
     let response_body =
-      Body.create t.response_body_buffer (Optional_thunk.some (fun () ->
+      Body.Writer.create t.response_body_buffer ~when_ready_to_write:(Optional_thunk.some (fun () ->
         Writer.wakeup t.writer))
     in
     Writer.write_response t.writer response;
@@ -172,7 +172,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Upgrade (response, upgrade_handler);
     Writer.flush t.writer upgrade_handler;
-    Body.close_reader t.request_body;
+    Body.Reader.close t.request_body;
     Writer.wakeup t.writer
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"
@@ -206,10 +206,10 @@ let report_error t error =
          response has started. Otherwise, the request body `on_eof` handler
          could erroneously send a successful response instead of letting us
          handle the error. *)
-      Body.close_reader t.request_body;
+      Body.Reader.close t.request_body;
       response_body)
   | other ->
-    Body.close_reader t.request_body;
+    Body.Reader.close t.request_body;
     match other with
     | Waiting, `Exn _ ->
       (* XXX(seliopou): Decide what to do in this unlikely case. There is an
@@ -217,11 +217,11 @@ let report_error t error =
        * has been reported as well. *)
       failwith "httpaf.Reqd.report_exn: NYI"
     | Streaming (_response, response_body), `Ok ->
-      Body.set_non_chunked response_body;
-      Body.close_writer response_body;
+      Body.Writer.set_non_chunked response_body;
+      Body.Writer.close response_body;
       Reader.wakeup t.reader;
     | Streaming (_response, response_body), `Exn _ ->
-      Body.close_writer response_body;
+      Body.Writer.close response_body;
       Writer.close_and_drain t.writer;
       Reader.wakeup t.reader;
     | (Fixed _ | Streaming _ | Upgrade _ | Waiting) , _ ->
@@ -238,7 +238,7 @@ let try_with t f : (unit, exn) Result.result =
 (* Private API, not exposed to the user through httpaf.mli *)
 
 let close_request_body { request_body; _ } =
-  Body.close_reader request_body
+  Body.Reader.close request_body
 
 let error_code t =
   match t.error_code with
@@ -252,18 +252,17 @@ let input_state t : Input_state.t =
   match t.response_state with
   | Upgrade _ -> Ready
   | _ ->
-    if Body.is_closed t.request_body
+    if Body.Reader.is_closed t.request_body
     then Complete
-    else if Body.is_read_scheduled t.request_body
+    else if Body.Reader.is_read_scheduled t.request_body
     then Ready
     else Wait
 
 let output_state t = Response_state.output_state t.response_state
 
 let flush_request_body t =
-  let request_body = request_body t in
-  if Body.has_pending_output request_body
-  then try Body.execute_read request_body
+  if Body.Reader.has_pending_output t.request_body
+  then try Body.Reader.execute_read t.request_body
   with exn -> report_exn t exn
 
 let flush_response_body t =

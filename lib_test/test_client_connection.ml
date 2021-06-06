@@ -51,7 +51,8 @@ let reader_yielded ?(msg="Reader is in a yield state") t =
 
 let reader_closed t =
   Alcotest.check read_operation "Reader is closed"
-    `Close (next_read_operation t :> [`Close | `Read | `Yield])
+    `Close (next_read_operation t :> [`Close | `Read | `Yield]);
+;;
 
 let write_string ?(msg="output written") t str =
   let len = String.length str in
@@ -84,7 +85,7 @@ let default_response_handler expected_response response body =
   Alcotest.check (module Response) "expected response" expected_response response;
   let on_read _ ~off:_ ~len:_ = () in
   let on_eof () = () in
-  Body.schedule_read body ~on_read ~on_eof;
+  Body.Reader.schedule_read body ~on_read ~on_eof;
 ;;
 
 let no_error_handler _ = assert false
@@ -109,7 +110,7 @@ let test_commit_parse_after_every_header () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
 
   let response_line = "HTTP/1.1 200 OK\r\n" in
@@ -146,7 +147,7 @@ let test_get () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
 
@@ -164,7 +165,7 @@ let test_get () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request_close;
   writer_closed t;
   read_response t response;
@@ -179,7 +180,7 @@ let test_get () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   writer_closed t;
@@ -197,7 +198,7 @@ let test_get () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   read_string t "d\r\nHello, world!\r\n0\r\n\r\n";
@@ -219,7 +220,7 @@ let test_head () =
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -242,7 +243,7 @@ let test_get_last_close () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
 
@@ -256,7 +257,7 @@ let test_get_last_close () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body';
+  Body.Writer.close body';
   write_request t request'';
   read_response t response;
 
@@ -278,10 +279,10 @@ let test_send_streaming_body () =
   in
   write_request  t request';
   read_response  t response;
-  Body.write_string body "hello";
+  Body.Writer.write_string body "hello";
   write_string t "5\r\nhello\r\n";
-  Body.write_string body "world";
-  Body.close_writer body;
+  Body.Writer.write_string body "world";
+  Body.Writer.close body;
   write_string t "5\r\nworld\r\n";
   write_string t "0\r\n\r\n";
   writer_yielded t;
@@ -303,7 +304,7 @@ let test_response_eof () =
         | `Malformed_response msg -> error_message := Some msg
         | _ -> assert false)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   reader_ready t;
   let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -327,7 +328,7 @@ let test_persistent_connection_requests () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   writer_yielded t;
@@ -339,7 +340,7 @@ let test_persistent_connection_requests () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body';
+  Body.Writer.close body';
   write_request t request';
   read_response t response;
 ;;
@@ -357,7 +358,7 @@ let test_persistent_connection_requests_pipelining () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   (* send the 2nd request without reading the response *)
   let response' =
@@ -371,7 +372,7 @@ let test_persistent_connection_requests_pipelining () =
         (default_response_handler response' response body))
       ~error_handler:no_error_handler
   in
-  Body.close_writer body';
+  Body.Writer.close body';
   write_request t request';
   read_response t response;
   read_response t response';
@@ -406,9 +407,9 @@ let test_persistent_connection_requests_pipelining_send_body () =
         (default_response_handler response' response body))
       ~error_handler:no_error_handler
   in
-  Body.close_writer body';
-  Body.write_string body "a string";
-  Body.close_writer body;
+  Body.Writer.close body';
+  Body.Writer.write_string body "a string";
+  Body.Writer.close body;
   write_string ~msg:"writes the body for the first request" t "a string";
   write_request t request'';
   read_response t response;
@@ -429,7 +430,7 @@ let test_persistent_connection_requests_body () =
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   let response' = Response.create `OK in
   read_response t response;
@@ -441,7 +442,7 @@ let test_persistent_connection_requests_body () =
       ~response_handler:(default_response_handler response')
       ~error_handler:no_error_handler
   in
-  Body.close_writer body';
+  Body.Writer.close body';
   write_request t request'';
   read_response t response';
 ;;
@@ -464,7 +465,7 @@ let test_response_header_order () =
       ~response_handler:(fun response _ -> received := Some response)
       ~error_handler:no_error_handler
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   writer_yielded t;
   read_response t response;
@@ -490,7 +491,7 @@ let test_report_exn () =
         | `Exn (Failure msg) -> error_message := Some msg
         | _ -> assert false)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request  t request';
   writer_yielded  t;
   reader_ready t;
@@ -516,7 +517,7 @@ let test_input_shrunk () =
         | `Exn (Failure msg) -> error_message := Some msg
         | _ -> assert false)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   writer_yielded  t;
   reader_ready t;
@@ -536,7 +537,7 @@ let test_partial_input () =
       "got expected headers"
       [ "Connection", "close" ]
       (Headers.to_rev_list response.Response.headers);
-    Body.close_reader response_body
+    Body.Reader.close response_body
   in
   let t = create ?config:None in
   let body =
@@ -548,7 +549,7 @@ let test_partial_input () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   let len = feed_string t "HTTP/1.1 200 OK\r\nC" in
   Alcotest.(check int) "partial read" 17 len;
@@ -570,10 +571,10 @@ let test_empty_fixed_body () =
       "got expected headers"
       [ "Connection", "close" ]
       (Headers.to_rev_list response.Response.headers);
-    Body.close_reader response_body
+    Body.Reader.close response_body
   in
   let t = create ?config:None in
-  let (_body: [`write] Body.t) =
+  let (_body: Body.Writer.t) =
     request
       t
       request'
@@ -599,7 +600,7 @@ let test_fixed_body () =
       "got expected headers"
       [ "Connection", "close" ]
       (Headers.to_rev_list response.Response.headers);
-    Body.close_reader response_body
+    Body.Reader.close response_body
   in
   let t = create ?config:None in
   let body =
@@ -611,10 +612,10 @@ let test_fixed_body () =
   in
   write_request t request';
   writer_yielded t;
-  Body.write_string body "foo";
+  Body.Writer.write_string body "foo";
   write_string t "foo";
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t (Response.create ~headers:(Headers.of_list ["Connection", "close"]) `OK);
   let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -634,7 +635,7 @@ let test_fixed_body_persistent_connection () =
       "got expected headers"
       []
       (Headers.to_rev_list response.Response.headers);
-    Body.close_reader response_body
+    Body.Reader.close response_body
   in
   let t = create ?config:None in
   let body =
@@ -647,8 +648,8 @@ let test_fixed_body_persistent_connection () =
   write_request t request';
   writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
-  Body.write_string body "hi";
-  Body.close_writer body;
+  Body.Writer.write_string body "hi";
+  Body.Writer.close body;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_string t "hi";
   writer_yielded t;
@@ -672,7 +673,7 @@ let test_empty_fixed_body_persistent_connection () =
       "got expected headers"
       []
       (Headers.to_rev_list response.Response.headers);
-    Body.close_reader response_body
+    Body.Reader.close response_body
   in
   let t = create ?config:None in
   let body =
@@ -684,7 +685,7 @@ let test_empty_fixed_body_persistent_connection () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t (Response.create ~headers:(Headers.of_list []) `OK);
   reader_ready t;
@@ -709,7 +710,7 @@ let test_client_upgrade () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t response;
   reader_yielded t;
@@ -728,9 +729,9 @@ let backpressure_response_handler continue_reading expected_response response bo
   Alcotest.check (module Response) "expected response" expected_response response;
   let rec on_read _buffer ~off:_ ~len:_ =
     continue_reading := (fun () ->
-      Body.schedule_read body ~on_eof ~on_read);
+      Body.Reader.schedule_read body ~on_eof ~on_read);
   and on_eof () = print_endline "got eof" in
-  Body.schedule_read body ~on_eof ~on_read
+  Body.Reader.schedule_read body ~on_eof ~on_read
 ;;
 
 let test_handling_backpressure_when_read_not_scheduled () =
@@ -751,7 +752,7 @@ let test_handling_backpressure_when_read_not_scheduled () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t response;
   yield_writer t (fun () -> writer_woken_up := true);
@@ -760,6 +761,7 @@ let test_handling_backpressure_when_read_not_scheduled () =
   yield_reader t (fun () -> reader_woken_up := true);
   !continue_reading ();
   reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+  Format.eprintf "toine: %B@." !reader_woken_up;
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
   Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
 ;;
@@ -782,7 +784,7 @@ let test_handling_backpressure_when_read_not_scheduled_early_yield () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t response;
   yield_reader t (fun () -> reader_woken_up := true);
@@ -807,9 +809,9 @@ let test_eof_with_another_pipelined_request () =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _buffer ~off:_ ~len:_ =
       continue_reading := (fun () ->
-        Body.close_reader body);
+        Body.Reader.close body);
     and on_eof () = print_endline "got eof" in
-    Body.schedule_read body ~on_eof ~on_read
+    Body.Reader.schedule_read body ~on_eof ~on_read
   in
   let body =
     request
@@ -820,7 +822,7 @@ let test_eof_with_another_pipelined_request () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t response;
   yield_reader t (fun () -> reader_woken_up := true);
@@ -829,6 +831,7 @@ let test_eof_with_another_pipelined_request () =
   reader_yielded t;
   !continue_reading ();
   reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+  Format.eprintf "epa lol %B@." !reader_woken_up;
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
   writer_yielded t;
 
@@ -843,7 +846,7 @@ let test_eof_with_another_pipelined_request () =
         Alcotest.check (module Response) "expected response" expected_response response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
-  Body.close_writer body';
+  Body.Writer.close body';
   write_request t request';
   writer_yielded t;
 
@@ -870,7 +873,7 @@ let test_eof_handler_response_body_not_closed () =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _buffer ~off:_ ~len:_ = () in
     let on_eof () = print_endline "got eof" in
-    Body.schedule_read body ~on_eof ~on_read
+    Body.Reader.schedule_read body ~on_eof ~on_read
   in
   let error_handler_called = ref false in
   let body =
@@ -882,7 +885,7 @@ let test_eof_handler_response_body_not_closed () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t response;
   yield_writer t ignore;
@@ -911,9 +914,9 @@ let test_eof_handler_closed_response_body () =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _buffer ~off:_ ~len:_ =
       continue_reading := (fun () ->
-        Body.close_reader body);
+        Body.Reader.close body);
     and on_eof () = print_endline "got eof" in
-    Body.schedule_read body ~on_eof ~on_read
+    Body.Reader.schedule_read body ~on_eof ~on_read
   in
   let error_handler_called = ref false in
   let body =
@@ -925,7 +928,7 @@ let test_eof_handler_closed_response_body () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t response;
   yield_writer t ignore;
@@ -961,7 +964,7 @@ let test_exception_closes_reader () =
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   writer_closed t;
@@ -990,7 +993,7 @@ let test_exception_closes_reader_persistent_connection () =
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   writer_yielded t;
@@ -1016,7 +1019,7 @@ let test_exception_reading_response_body () =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _ ~off:_ ~len:_ = failwith "something went wrong" in
     let on_eof () = () in
-    Body.schedule_read body ~on_read ~on_eof;
+    Body.Reader.schedule_read body ~on_read ~on_eof;
   in
   let body =
     request
@@ -1025,7 +1028,7 @@ let test_exception_reading_response_body () =
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   read_string t "hello";
@@ -1047,13 +1050,13 @@ let test_exception_reading_response_body_last_chunk () =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_eof () = () in
     let on_read _ ~off:_ ~len:_ =
-      Body.schedule_read
+      Body.Reader.schedule_read
         body
         ~on_read:(fun _ ~off:_ ~len:_ ->
           report_exn t (Failure "something went wrong"))
         ~on_eof
     in
-    Body.schedule_read body ~on_read ~on_eof;
+    Body.Reader.schedule_read body ~on_read ~on_eof;
   in
   let body =
     request
@@ -1062,7 +1065,7 @@ let test_exception_reading_response_body_last_chunk () =
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   writer_yielded t;
@@ -1092,7 +1095,7 @@ let test_async_exception_reading_response_body () =
     let on_read _ ~off:_ ~len:_ =
       continue_reading := (fun () -> report_exn t (Failure "something went wrong")) in
     let on_eof () = () in
-    Body.schedule_read body ~on_read ~on_eof;
+    Body.Reader.schedule_read body ~on_read ~on_eof;
   in
   let body =
     request
@@ -1101,7 +1104,7 @@ let test_async_exception_reading_response_body () =
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   read_string t "hello";
@@ -1132,7 +1135,7 @@ let test_failed_response_parse () =
         ~response_handler:(fun _ _ -> assert false)
         ~error_handler:(fun e -> error := Some e)
     in
-    Body.close_writer body;
+    Body.Writer.close body;
     write_request t request';
     writer_yielded t;
     yield_writer t (fun () -> writer_woken_up := true);
@@ -1161,9 +1164,9 @@ let test_shutdown_hangs_response_body_read () =
   let response_handler expected_response response response_body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let rec on_read _buffer ~off:_ ~len:_ =
-      Body.schedule_read response_body ~on_eof ~on_read;
+      Body.Reader.schedule_read response_body ~on_eof ~on_read;
     and on_eof () = got_eof := true in
-  Body.schedule_read response_body ~on_eof ~on_read
+  Body.Reader.schedule_read response_body ~on_eof ~on_read
   in
   let t = create ?config:None in
   let body =
@@ -1176,7 +1179,7 @@ let test_shutdown_hangs_response_body_read () =
   reader_ready t;
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   read_response t response;
   read_string t "five.";
@@ -1202,11 +1205,11 @@ let test_response_arrives_before_body_uploaded () =
     let on_read _buffer ~off:_ ~len:_ = ()
     and on_eof () = eof_delivered := true;
     in
-    Body.schedule_read body ~on_eof ~on_read;
+    Body.Reader.schedule_read body ~on_eof ~on_read;
     continue_response := (fun () ->
-     Body.schedule_read body ~on_eof ~on_read;
+     Body.Reader.schedule_read body ~on_eof ~on_read;
      continue_response := (fun () ->
-       Body.schedule_read body ~on_eof ~on_read))
+       Body.Reader.schedule_read body ~on_eof ~on_read))
   in
   let error_handler_called = ref false in
   let second_error_handler_called = ref false in
@@ -1219,7 +1222,7 @@ let test_response_arrives_before_body_uploaded () =
   in
   write_request t request';
   writer_yielded t;
-  Body.write_string body "hello";
+  Body.Writer.write_string body "hello";
   write_string t "hello";
   writer_yielded t;
   (* Never close the request body. *)
@@ -1246,7 +1249,7 @@ let test_response_arrives_before_body_uploaded () =
         Alcotest.check (module Response) "expected response" expected_response response)
       ~error_handler:(fun _ -> second_error_handler_called := true;)
   in
-  Body.close_writer body';
+  Body.Writer.close body';
   writer_yielded t;
 
   !continue_response ();
@@ -1289,13 +1292,13 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
       ~error_handler:(fun _ -> ())
   in
   write_request t request';
-  Body.write_string body "hello";
-  Body.flush body ignore;
+  Body.Writer.write_string body "hello";
+  Body.Writer.flush body ignore;
   write_string t "hello";
   reader_ready t;
   read_response t response;
   read_string t (String.make 5 'a');
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_yielded t;
   yield_reader t (fun () ->
     reader_woken_up := true;
@@ -1323,14 +1326,14 @@ let test_multiple_responses_in_single_read () =
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
   let body =
     request t request' ~response_handler ~error_handler:no_error_handler
   in
   write_request t request';
   writer_yielded t;
-  Body.close_writer body;
+  Body.Writer.close body;
   reader_ready t;
 
   let responses =
@@ -1359,11 +1362,11 @@ let test_chunked_error () =
       ~error_handler:(fun _ -> error_handler_called := true)
   in
   write_request t request';
-  Body.write_string body "hello";
+  Body.Writer.write_string body "hello";
   write_string t "5\r\nhello\r\n";
   report_exn t (Failure "something went wrong");
   Alcotest.(check bool) "First error handler called" true !error_handler_called;
-  Alcotest.(check bool) "request body is closed" true (Body.is_closed body);
+  Alcotest.(check bool) "request body is closed" true (Body.Writer.is_closed body);
   writer_closed t;
   connection_is_shutdown t;
 
@@ -1380,13 +1383,13 @@ let test_chunked_error () =
       ~error_handler:(fun _ -> error_handler_called := true)
   in
   write_request t request';
-  Body.write_string body "hello";
-  Body.flush body ignore;
+  Body.Writer.write_string body "hello";
+  Body.Writer.flush body ignore;
   write_string t "5\r\nhello\r\n";
   read_response t response;
   report_exn t (Failure "something went wrong");
   Alcotest.(check bool) "First error handler called" true !error_handler_called;
-  Alcotest.(check bool) "request body is closed" true (Body.is_closed body);
+  Alcotest.(check bool) "request body is closed" true (Body.Writer.is_closed body);
   writer_closed t;
   connection_is_shutdown t;
 ;;
@@ -1407,7 +1410,7 @@ let test_304_not_modified () =
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true)
   in
-  Body.close_writer body;
+  Body.Writer.close body;
   write_request t request';
   read_response t response;
   let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -1430,7 +1433,7 @@ let test_empty_content_length_body_closed () =
   Alcotest.(check bool) "request body length is 0"
     true
     ((Request.body_length request') = (`Fixed 0L));
-  Alcotest.(check bool) "Request body starts out closed" true (Body.is_closed body);
+  Alcotest.(check bool) "Request body starts out closed" true (Body.Writer.is_closed body);
   write_request t request';
   read_response t response;
   let c = read_eof t Bigstringaf.empty ~off:0 ~len:0 in
@@ -1438,6 +1441,52 @@ let test_empty_content_length_body_closed () =
   connection_is_shutdown t;
 ;;
 
+let test_schedule_read_with_data_available () =
+  let request' = Request.create `GET "/" in
+  let response = Response.create `OK ~headers:(Headers.encoding_fixed 6) in
+  let t = create ?config:None in
+
+  let body = ref None in
+  let response_handler response' body' =
+    body := Some body';
+    Alcotest.check (module Response) "expected response" response response';
+  in
+  let req_body =
+    request t request' ~response_handler ~error_handler:no_error_handler
+  in
+  Body.Writer.close req_body;
+  write_request t request';
+  writer_yielded t;
+  read_response t response;
+
+  let body = Option.get !body in
+  let schedule_read expected =
+    let did_read = ref false in
+    Format.eprintf "HEH@.";
+    Body.Reader.schedule_read body
+      ~on_read:(fun buf ~off ~len ->
+        let actual = Bigstringaf.substring buf ~off ~len in
+        did_read := true;
+        Alcotest.(check string) "Body" expected actual)
+      ~on_eof:(fun () -> assert false);
+    Alcotest.(check bool) "on_read called" true !did_read;
+  in
+
+  (* We get some data on the connection, but not the full response yet. *)
+  read_string t "Hello";
+  reader_yielded t;
+
+  (* Schedule a read when there is already data available. on_read should be called
+     straight away, as who knows how long it'll be before more data arrives. *)
+  schedule_read "Hello";
+  read_string t "!";
+  schedule_read "!";
+  let did_eof = ref false in
+  Body.Reader.schedule_read body
+    ~on_read:(fun _ ~off:_ ~len:_ -> Alcotest.fail "Expected eof")
+    ~on_eof:(fun () -> did_eof := true);
+  Alcotest.(check bool) "on_eof called" true !did_eof;
+;;
 
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
@@ -1477,4 +1526,5 @@ let tests =
   ; "test chunked error", `Quick, test_chunked_error
   ; "304 Not Modified with Content-Length", `Quick, test_304_not_modified
   ; "body for a request with no payload starts out closed", `Quick, test_empty_content_length_body_closed
+  ; "schedule read with data available", `Quick, test_schedule_read_with_data_available
   ]

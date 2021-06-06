@@ -144,12 +144,12 @@ let response =
     (take_till P.is_cr    <* eol <* commit)
     (headers              <* eol)
 
-let finish writer =
-  Body.close_reader writer;
+let finish body =
+  Body.Reader.close body;
   commit
 
-let schedule_size writer n =
-  let faraday = Body.unsafe_faraday writer in
+let schedule_size body n =
+  let faraday = Body.Reader.unsafe_faraday body in
   (* XXX(seliopou): performance regression due to switching to a single output
    * format in Farady. Once a specialized operation is exposed to avoid the
    * intemediate copy, this should be back to the original performance. *)
@@ -158,7 +158,7 @@ let schedule_size writer n =
   else take n >>| fun s -> Faraday.write_string faraday s
   end *> commit
 
-let body ~encoding writer =
+let body ~encoding body =
   let rec fixed n ~unexpected =
     if n = 0L
     then unit
@@ -170,12 +170,12 @@ let body ~encoding writer =
           available >>= fun m ->
           let m' = Int64.(min (of_int m) n) in
           let n' = Int64.sub n m' in
-          schedule_size writer (Int64.to_int m') >>= fun () -> fixed n' ~unexpected
+          schedule_size body (Int64.to_int m') >>= fun () -> fixed n' ~unexpected
   in
   match encoding with
   | `Fixed n ->
     fixed n ~unexpected:"expected more from fixed body"
-    >>= fun () -> finish writer
+    >>= fun () -> finish body
   | `Chunked ->
     (* XXX(seliopou): The [eol] in this parser should really parse a collection
      * of "chunk extensions", as defined in RFC7230§4.1. These do not show up
@@ -191,14 +191,14 @@ let body ~encoding writer =
       in
       _hex >>= fun size ->
       if size = 0L
-      then eol *> finish writer
+      then eol *> finish body
       else fixed size ~unexpected:"expected more from body chunk" *> eol *> p)
   | `Close_delimited ->
     fix (fun p ->
-      let _rec = (available >>= fun n -> schedule_size writer n) *> p in
+      let _rec = (available >>= fun n -> schedule_size body n) *> p in
       at_end_of_input
       >>= function
-        | true  -> finish writer
+        | true  -> finish body
         | false -> _rec)
 
 module Reader = struct
@@ -260,11 +260,13 @@ module Reader = struct
         match Request.body_length request with
       | `Error `Bad_request -> return (Error (`Bad_request request))
       | `Fixed 0L  ->
-        handler request Body.empty;
+        handler request Body.Reader.empty;
         ok
       | `Fixed _ | `Chunked as encoding ->
         let request_body =
-          Body.create Bigstringaf.empty (Optional_thunk.some wakeup)
+          Body.Reader.create
+            Bigstringaf.empty
+            ~when_ready_to_read:(Optional_thunk.some wakeup)
         in
         handler request request_body;
         body ~encoding request_body *> ok
@@ -290,13 +292,13 @@ module Reader = struct
       | `Error `Bad_gateway           -> assert (not proxy); assert false
       | `Error `Internal_server_error -> return (Error (`Invalid_response_body_length response))
       | `Fixed 0L ->
-        respd.response_handler response Body.empty;
+        respd.response_handler response Body.Reader.empty;
         ok
       | `Fixed _ | `Chunked | `Close_delimited as encoding ->
         (* We do not trust the length provided in the [`Fixed] case, as the
            client could DOS easily. *)
         let response_body =
-          Body.create Bigstringaf.empty (Optional_thunk.some (fun () ->
+          Body.Reader.create Bigstringaf.empty ~when_ready_to_read:(Optional_thunk.some (fun () ->
             wakeup (Lazy.force t)))
         in
         respd.response_handler response response_body;

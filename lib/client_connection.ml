@@ -38,7 +38,7 @@ module Writer = Serialize.Writer
 type error =
   [ `Malformed_response of string | `Invalid_response_body_length of Response.t | `Exn of exn ]
 
-type response_handler = Response.t -> [`read] Body.t  -> unit
+type response_handler = Response.t -> Body.Reader.t  -> unit
 type error_handler = error -> unit
 
 type t =
@@ -79,18 +79,18 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   }
 
 let create_request_body t =
-  Body.create
+  Body.Writer.create
     (Bigstringaf.create t.config.request_body_buffer_size)
-    (Optional_thunk.some (fun () -> wakeup_writer t))
+    ~when_ready_to_write:(Optional_thunk.some (fun () -> wakeup_writer t))
 
 let request t request ~error_handler ~response_handler =
   let request_body =
     match Request.body_length request with
-    | `Fixed 0L -> Body.empty
+    | `Fixed 0L -> Body.Writer.empty
     | `Chunked -> create_request_body t
     | `Fixed _ ->
       let body = create_request_body t in
-      Body.set_non_chunked body;
+      Body.Writer.set_non_chunked body;
       body
     | `Error _ ->
       assert false
@@ -118,7 +118,7 @@ let shutdown_writer t =
   Writer.close t.writer;
   if is_active t then begin
     let respd = current_respd_exn t in
-    Body.close_writer respd.request_body;
+    Body.Writer.close respd.request_body;
   end
 ;;
 

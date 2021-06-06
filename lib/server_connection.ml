@@ -42,7 +42,7 @@ type error =
   [ `Bad_gateway | `Bad_request | `Internal_server_error | `Exn of exn]
 
 type error_handler =
-  ?request:Request.t -> error -> (Headers.t -> [`write] Body.t) -> unit
+  ?request:Request.t -> error -> (Headers.t -> Body.Writer.t) -> unit
 
 type error_code =
   | No_error
@@ -105,8 +105,8 @@ let default_error_handler ?request:_ error handle =
     | (#Status.client_error | #Status.server_error) as error -> Status.to_string error
   in
   let body = handle Headers.empty in
-  Body.write_string body message;
-  Body.close_writer body
+  Body.Writer.write_string body message;
+  Body.Writer.close body
 ;;
 
 let create ?(config=Config.default) ?(error_handler=default_error_handler) request_handler =
@@ -182,7 +182,8 @@ let set_error_and_handle ?request t error =
        * (is_active t == false), and are therefore not making use of that
        * buffer. *)
       let response_body =
-        Body.create t.response_body_buffer (Optional_thunk.some (fun () ->
+        (* of_faraday? *)
+        Body.Writer.create t.response_body_buffer ~when_ready_to_write:(Optional_thunk.some (fun () ->
           wakeup_writer t))
       in
       t.error_code <- Error { request; response_state = Waiting };
@@ -283,7 +284,32 @@ and _final_read_operation_for t reqd =
        | _ ->
          advance_request_queue t;
          _next_read_operation t
-;;
+
+(*UPSTREAM:*)
+(* and _final_read_operation_for t reqd =
+  if not (Reqd.persistent_connection reqd) then (
+    shutdown_reader t;
+    Reader.next t.reader;
+  ) else (
+    match Reqd.output_state reqd with
+    | Waiting | Ready ->
+      (* XXX(dpatti): This is a way in which the reader and writer are not
+         parallel -- we tell the writer when it needs to yield but the reader is
+         always asking for more data. This is the only branch in either
+         operation function that does not return `(Reader|Writer).next`, which
+         means there are surprising states you can get into. For example, we ask
+         the runtime to yield but then raise when it tries to because the reader
+         is closed. I don't think checking `is_closed` here makes sense
+         semantically, but I don't think checking it in `_next_read_operation`
+         makes sense either. I chose here so I could describe why. *)
+      if Reader.is_closed t.reader
+      then Reader.next t.reader
+      else `Yield
+    | Complete ->
+      advance_request_queue t;
+      _next_read_operation t;
+  )
+;; *)
 
 let next_read_operation t =
   match _next_read_operation t with
