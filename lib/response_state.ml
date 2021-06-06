@@ -1,7 +1,7 @@
 type t =
   | Waiting
   | Fixed  of Response.t
-  | Streaming of Response.t * [`write] Body.t
+  | Streaming of Response.t * Body.Writer.t
   | Upgrade of Response.t * (unit -> unit)
 
 let output_state t : Output_state.t =
@@ -9,7 +9,7 @@ let output_state t : Output_state.t =
   | Fixed _ -> Complete
   | Waiting -> Waiting
   | Streaming(_, response_body) ->
-    if Body.requires_output response_body
+    if Body.Writer.requires_output response_body
     then Ready
     else Complete
   | Upgrade _ -> Ready
@@ -22,5 +22,5 @@ let flush_response_body t ~request_method writer =
       | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
       | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
     in
-    Body.transfer_to_writer_with_encoding response_body ~encoding writer
+    Body.Writer.transfer_to_writer_with_encoding response_body ~encoding writer
   | _ -> ()
