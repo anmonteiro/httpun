@@ -14,13 +14,8 @@ let output_state t : Output_state.t =
     else Complete
   | Upgrade _ -> Ready
 
-let flush_response_body t ~request_method writer =
+let flush_response_body t writer =
   match t with
-  | Streaming (response, response_body) ->
-    let encoding =
-      match Response.body_length ~request_method response with
-      | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
-      | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
-    in
-    Body.Writer.transfer_to_writer_with_encoding response_body ~encoding writer
+  | Streaming (_, response_body) ->
+    Body.Writer.transfer_to_writer response_body writer
   | _ -> ()

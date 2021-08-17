@@ -69,9 +69,6 @@ type t =
 let is_closed t =
   Reader.is_closed t.reader && Writer.is_closed t.writer
 
-let is_waiting t =
-  not (is_closed t) && Queue.is_empty t.request_queue
-
 let is_active t =
   not (Queue.is_empty t.request_queue)
 
@@ -177,18 +174,33 @@ let set_error_and_handle ?request t error =
     let writer = t.writer in
     match t.error_code with
     | No_error ->
-      (* The (shared) response body buffer can be used in this case because in
-       * this conditional branch we're not sending a response
-       * (is_active t == false), and are therefore not making use of that
-       * buffer. *)
-      let response_body =
-        (* of_faraday? *)
-        Body.Writer.create t.response_body_buffer ~when_ready_to_write:(Optional_thunk.some (fun () ->
-          wakeup_writer t))
-      in
       t.error_code <- Error { request; response_state = Waiting };
       t.error_handler ?request error (fun headers ->
           let response = Response.create ~headers status in
+          let encoding =
+            (* If we haven't parsed the request method, just use GET as a standard
+               placeholder. The method is only used for edge cases, like HEAD or
+               CONNECT. *)
+            let request_method =
+              match request with
+              | None -> `GET
+              | Some (request: Request.t) -> request.meth
+            in
+            match Response.body_length ~request_method response with
+            | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
+            | `Error (`Bad_gateway | `Internal_server_error) ->
+              failwith "httpaf.Server_connection.error_handler: invalid response body length"
+          in
+          let response_body =
+            (* The (shared) response body buffer can be used in this case
+             * because in this conditional branch we're not sending a response
+             * (is_active t == false), and are therefore not making use of that
+             * buffer. *)
+            Body.Writer.create
+              t.response_body_buffer
+              ~encoding ~when_ready_to_write:(Optional_thunk.some (fun () ->
+                wakeup_writer t))
+          in
           Writer.write_response writer response;
           t.error_code <- Error { request; response_state = Streaming(response, response_body) };
           wakeup_writer t;
@@ -225,7 +237,10 @@ let rec _next_read_operation t =
        * parsing error, as we might be in the process of streaming back the
        * error response body to the client. *)
       shutdown_reader t
-    | `Close -> shutdown t
+    | `Close ->
+      (match t.error_code with
+      | No_error -> shutdown t
+      | Error _ -> ())
     | _ -> ()
     end;
     next
@@ -311,25 +326,8 @@ let read t bs ~off ~len =
 let read_eof t bs ~off ~len =
   read_with_more t bs ~off ~len Complete
 
-let flush_response_error_body t ?request response_state =
-  let request_method = match request with
-    | Some { Request.meth; _ } -> meth
-    | None ->
-      (* XXX(anmonteiro): Error responses may not have a request method if they
-       * are the result of e.g. an EOF error. Assuming that the request method
-       * is `GET` smells a little because it's exposing implementation details,
-       * though the only case where it'd matter would be potentially assuming
-       * the _successful_ response to a CONNECT request and sending one of the
-       * forbidden headers according to RFC7231§4.3.6:
-       *
-       *   A server MUST NOT send any Transfer-Encoding or Content-Length
-       *   header fields in a 2xx (Successful) response to CONNECT.
-       *
-       * If we're running this code, however, we're not responding with a
-       * successful status code, which makes us compliant to the above. *)
-      `GET
-  in
-  Response_state.flush_response_body response_state ~request_method t.writer
+let flush_response_error_body t response_state =
+  Response_state.flush_response_body response_state t.writer
 
 let rec _next_write_operation t =
   if not (is_active t) then (
@@ -338,11 +336,11 @@ let rec _next_write_operation t =
       if Reader.is_closed t.reader
       then shutdown t;
       Writer.next t.writer
-    | Error { request; response_state } ->
+    | Error { response_state; _ } ->
       match Response_state.output_state response_state with
       | Waiting -> `Yield
       | Ready ->
-        flush_response_error_body t ?request response_state;
+        flush_response_error_body t response_state;
         Writer.next t.writer
       | Complete ->
         shutdown_writer t;
@@ -350,8 +348,7 @@ let rec _next_write_operation t =
   ) else (
     let reqd = current_reqd_exn t in
     match Reqd.output_state reqd with
-    | Waiting ->
-      Writer.next t.writer
+    | Waiting -> Writer.next t.writer
     | Ready ->
       Reqd.flush_response_body reqd;
       Writer.next t.writer

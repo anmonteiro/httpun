@@ -1,7 +1,7 @@
 open Httpaf
 open Helpers
 
-let trace fmt = Format.ksprintf (Format.printf "%s\n") fmt
+let trace fmt = Format.ksprintf (Format.printf "%s\n%!") fmt
 
 let request_error_pp_hum fmt = function
   | `Bad_request           -> Format.fprintf fmt "Bad_request"
@@ -96,6 +96,15 @@ end = struct
   ;;
 
   let create ?config ?error_handler request_handler =
+    let request_handler r =
+      trace "invoked: request_handler";
+      request_handler r
+    in
+    let error_handler =
+      Option.map (fun error_handler ?request ->
+        trace "invoked: error_handler";
+        error_handler ?request) error_handler
+    in
     let rec t =
       lazy (
         { server_connection = create ?config ?error_handler request_handler
@@ -128,12 +137,14 @@ end = struct
   let do_read t f =
     match current_read_operation t with
     | `Read ->
+      trace "read: start";
       let res = f t.server_connection in
+      trace "read: finished";
       t.read_loop ();
       res
     | `Yield | `Close as op ->
-        Alcotest.failf "Read attempted during operation: %a"
-          Read_operation.pp_hum op
+      Alcotest.failf "Read attempted during operation: %a"
+        Read_operation.pp_hum op
   ;;
 
   let do_force_read t f = f t.server_connection
@@ -141,12 +152,14 @@ end = struct
   let do_write t f =
     match current_write_operation t with
     | `Write bufs ->
-        let res = f t.server_connection bufs in
-        t.write_loop ();
-        res
+      trace "write: start";
+      let res = f t.server_connection bufs in
+      trace "write: finished";
+      t.write_loop ();
+      res
     | `Yield | `Close _ as op ->
-        Alcotest.failf "Write attempted during operation: %a"
-          Write_operation.pp_hum op
+      Alcotest.failf "Write attempted during operation: %a"
+        Write_operation.pp_hum op
   ;;
 
   let on_reader_unyield t f =
@@ -292,6 +305,11 @@ let connection_is_shutdown t =
 
 let connection_is_closed t =
   Alcotest.(check bool) "connection is closed" true (is_closed t)
+
+let raises_writer_closed f =
+  (* This is raised when you write to a closed [Faraday.t] *)
+  Alcotest.check_raises "raises because writer is closed"
+    (Failure "cannot write to closed writer") f
 ;;
 
 let request_handler_with_body body reqd =
@@ -310,7 +328,10 @@ let echo_handler response reqd =
     Body.Writer.write_string response_body (Bigstringaf.substring ~off ~len buffer);
     Body.Writer.flush response_body (fun () ->
       Body.Reader.schedule_read request_body ~on_eof ~on_read)
-    and on_eof () = print_endline "got eof"; Body.Writer.close response_body in
+  and on_eof () =
+    print_endline "echo handler eof";
+    Body.Writer.close response_body
+  in
   Body.Reader.schedule_read request_body ~on_eof ~on_read;
 ;;
 
@@ -708,6 +729,7 @@ let test_asynchronous_error () =
     (Response.create `Internal_server_error);
   write_string t "got an error";
   reader_errored t;
+  connection_is_shutdown t
 ;;
 
 let test_asynchronous_error_asynchronous_handling () =
@@ -774,6 +796,78 @@ let test_asynchronous_error_asynchronous_response_body () =
   write_string t "got an error";
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   reader_errored t;
+  connection_is_shutdown t
+;;
+
+let test_error_while_parsing () =
+  let continue_error = ref (fun () -> ()) in
+  let error_handler ?request error start_response =
+    continue_error := (fun () ->
+      error_handler ?request error start_response)
+  in
+  let setup () =
+    let t = create ~error_handler (fun _ -> assert false) in
+    let n = feed_string t "GET / HTTP/1.1\r\n" in
+    Alcotest.(check int) "read bytes" 16 n;
+    reader_ready t;
+    report_exn t (Failure "runtime error during parse");
+    t
+  in
+
+  (* Handle before read *)
+  let t = setup () in
+  !continue_error ();
+  write_response t ~msg:"Error response written"
+    (Response.create `Internal_server_error);
+  write_string t "got an error";
+  writer_closed t;
+  (* XXX(dpatti): Runtime is in a read loop and must report something. I don't
+     know if this could ever deadlock or if that's a runtime concern. *)
+  reader_ready t;
+  let n = feed_string t "Host: localhost\r\n" in
+  (* NOTE(anmonteiro): we commit after parsing each single header, so this
+     differs from the upstream test. *)
+  Alcotest.(check int) "read bytes" 17 n;
+  reader_closed t;
+
+  (* Read before handle *)
+  let t = setup () in
+  reader_ready t;
+  let n = feed_string t "Host: localhost\r\n" in
+  Alcotest.(check int) "read bytes" 17 n;
+  reader_closed t;
+  !continue_error ();
+  write_response t ~msg:"Error response written"
+    (Response.create `Internal_server_error);
+  write_string t "got an error";
+  writer_closed t;
+;;
+
+let test_error_before_read () =
+  let request_handler _ = assert false in
+  let invoked_error_handler = ref false in
+  let error_handler ?request:_ _ _ =
+    invoked_error_handler := true;
+  in
+  let t = create ~error_handler request_handler in
+  report_exn t (Failure "immediate runtime error");
+  reader_ready t;
+  writer_yielded t;
+  (* XXX(dpatti): This seems wrong to me. Should we be sending responses when we
+     haven't even read any bytes yet? Maybe too much of an edge case to worry. *)
+  Alcotest.(check bool) "Error handler was invoked" true !invoked_error_handler;
+;;
+
+let test_error_left_unhandled () =
+  let error_handler ?request:_ _ _ = () in
+  let t = create ~error_handler (fun _ -> ()) in
+  read_request t (Request.create `GET "/");
+  report_exn t (Failure "runtime error");
+  (* If the error handler is invoked and does not try to complete a response,
+     the connection will hang. This is not necessarily desirable but rather a
+     tradeoff to let the user respond asynchronously. *)
+  reader_yielded t;
+  writer_yielded t;
 ;;
 
 let test_chunked_encoding () =
@@ -799,6 +893,29 @@ let test_chunked_encoding () =
     ~msg:"Final chunk written"
     "0\r\n\r\n";
   reader_ready ~msg:"Keep-alive" t;
+;;
+
+let test_chunked_encoding_for_error () =
+  let error_handler ?request error start_response =
+    Alcotest.(check (option request)) "No parsed request"
+      None request;
+    Alcotest.(check request_error) "Request error"
+      `Bad_request error;
+    let body = start_response Headers.encoding_chunked in
+    Body.Writer.write_string body "Bad";
+    Body.Writer.flush body (fun () ->
+      Body.Writer.write_string body " request";
+      Body.Writer.close body);
+  in
+  let t = create ~error_handler (fun _ -> assert false) in
+  let c = feed_string t "  X\r\n\r\n" in
+  Alcotest.(check int) "Partial read" 2 c;
+  write_response t
+    (Response.create `Bad_request ~headers:Headers.encoding_chunked);
+  write_string t "3\r\nBad\r\n";
+  write_string t "8\r\n request\r\n";
+  write_string t "0\r\n\r\n";
+  connection_is_shutdown t;
 ;;
 
 let test_blocked_write_on_chunked_encoding () =
@@ -1706,7 +1823,7 @@ let test_errored_chunked_streaming_response () =
 
   let t = create (streaming_handler ~error:true response []) in
   read_request   t request;
-  write_response t response;
+  write_response t response ~body:"0\r\n\r\n";
   connection_is_shutdown t;
 ;;
 
@@ -1763,6 +1880,7 @@ let test_errored_chunked_streaming_response_async () =
   !continue ();
   Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  write_string t "0\r\n\r\n";
   connection_is_shutdown t;
 ;;
 
@@ -1795,6 +1913,34 @@ let test_parse_failure_after_checkpoint () =
   match !error_queue with
   | None -> Alcotest.fail "Expected error"
   | Some error -> Alcotest.(check request_error) "Error" error `Bad_request
+;;
+
+let test_parse_failure_at_eof () =
+  let error_queue = ref None in
+  let continue = ref (fun () -> ()) in
+  let error_handler ?request error start_response =
+    Alcotest.(check (option reject)) "Error queue is empty" !error_queue None;
+    Alcotest.(check (option reject)) "Request was not parsed" request None;
+    error_queue := Some error;
+    continue := (fun () ->
+      let resp_body = start_response Headers.empty in
+      Body.Writer.write_string resp_body "got an error";
+      Body.Writer.close resp_body);
+  in
+  let request_handler _reqd = assert false in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  read_string t "GET index.html HTTP/1.1\r\n";
+  let result = feed_string ~eof:true t " index.html HTTP/1.1\r\n\r\n" in
+  Alcotest.(check int) "Bad header not consumed" result 0;
+  reader_closed t;
+  (match !error_queue with
+   | None -> Alcotest.fail "Expected error"
+   | Some error -> Alcotest.(check request_error) "Error" error `Bad_request);
+  !continue ();
+  write_response t (Response.create `Bad_request);
+  write_string t "got an error";
+  writer_closed t;
 ;;
 
 let test_response_finished_before_body_read () =
@@ -1891,10 +2037,7 @@ let test_shutdown_during_asynchronous_request () =
   in
   read_request t request;
   shutdown t;
-  (* This is raised from Faraday *)
-  Alcotest.check_raises "[continue] raises because writer is closed"
-    (Failure "cannot write to closed writer")
-    !continue;
+  raises_writer_closed !continue;
   reader_closed t;
   writer_closed t
 ;;
@@ -1958,7 +2101,11 @@ let tests =
   ; "asynchronous error, synchronous handling", `Quick, test_asynchronous_error
   ; "asynchronous error, asynchronous handling", `Quick, test_asynchronous_error_asynchronous_handling
   ; "asynchronous error, asynchronous handling + asynchronous body", `Quick, test_asynchronous_error_asynchronous_response_body
+  ; "error while parsing", `Quick, test_error_while_parsing
+  ; "error before read", `Quick, test_error_before_read
+  ; "error left unhandled", `Quick, test_error_left_unhandled
   ; "chunked encoding", `Quick, test_chunked_encoding
+  ; "chunked encoding for error", `Quick, test_chunked_encoding_for_error
   ; "blocked write on chunked encoding", `Quick, test_blocked_write_on_chunked_encoding
   ; "respond with upgrade", `Quick, test_respond_with_upgrade
   ; "writer unexpected eof", `Quick, test_unexpected_eof
@@ -1997,6 +2144,7 @@ let tests =
   ; "multiple requests with connection close", `Quick, test_multiple_requests_in_single_read_with_close
   ; "multiple requests with eof", `Quick, test_multiple_requests_in_single_read_with_eof
   ; "parse failure after checkpoint", `Quick, test_parse_failure_after_checkpoint
+  ; "parse failure at eof", `Quick, test_parse_failure_at_eof
   ; "response finished before body read", `Quick, test_response_finished_before_body_read
   ; "pipelined", `Quick, test_pipelined_requests_answer_before_reading_body
   ; "body has a chance to flush before the next read operation", `Quick, test_body_flush_fairness

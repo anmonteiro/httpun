@@ -141,17 +141,25 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
 let unsafe_respond_with_streaming ~flush_headers_immediately t response =
   match t.response_state with
   | Waiting ->
+    let encoding =
+      match Response.body_length ~request_method:t.request.meth response with
+      | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
+      | `Error (`Bad_gateway | `Internal_server_error) ->
+        failwith "httpaf.Reqd.respond_with_streaming: invalid response body length"
+    in
     let response_body =
-      Body.Writer.create t.response_body_buffer ~when_ready_to_write:(Optional_thunk.some (fun () ->
-        Writer.wakeup t.writer))
+      Body.Writer.create
+        t.response_body_buffer
+        ~encoding
+        ~when_ready_to_write:(Optional_thunk.some (fun () ->
+          Writer.wakeup t.writer))
     in
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     t.response_state <- Streaming (response, response_body);
     if flush_headers_immediately
-    then Writer.wakeup t.writer
-    else Writer.yield t.writer;
+    then Writer.wakeup t.writer;
     response_body
   | Streaming _ | Upgrade _ ->
     failwith "httpaf.Reqd.respond_with_streaming: response already started"
@@ -217,7 +225,6 @@ let report_error t error =
        * has been reported as well. *)
       failwith "httpaf.Reqd.report_exn: NYI"
     | Streaming (_response, response_body), `Ok ->
-      Body.Writer.set_non_chunked response_body;
       Body.Writer.close response_body;
       Reader.wakeup t.reader;
     | Streaming (_response, response_body), `Exn _ ->
@@ -266,5 +273,4 @@ let flush_request_body t =
   with exn -> report_exn t exn
 
 let flush_response_body t =
-  let request_method = t.request.Request.meth in
-  Response_state.flush_response_body t.response_state ~request_method t.writer
+  Response_state.flush_response_body t.response_state t.writer
