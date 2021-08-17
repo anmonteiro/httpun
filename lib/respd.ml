@@ -60,7 +60,6 @@ let write_request t =
 
 let report_error t error =
   t.persistent <- false;
-  Body.Writer.set_non_chunked t.request_body;
   Body.Writer.close t.request_body;
   match t.state, t.error_code with
   | (Uninitialized | Awaiting_response | Upgraded _), `Ok ->
@@ -119,15 +118,9 @@ let output_state { request_body; state; _ } : Output_state.t =
     then Ready
     else Complete
 
-let flush_request_body { request; request_body; writer; _ } =
-  if Body.Writer.has_pending_output request_body then begin
-    let encoding =
-      match Request.body_length request with
-      | `Fixed _ | `Chunked as encoding -> encoding
-      | `Error _ -> assert false (* XXX(seliopou): This needs to be handled properly *)
-    in
-    Body.Writer.transfer_to_writer_with_encoding request_body ~encoding writer
-  end
+let flush_request_body { request_body; writer; _ } =
+  if Body.Writer.has_pending_output request_body then
+    Body.Writer.transfer_to_writer request_body writer
 
 let flush_response_body t =
   match t.state with

@@ -110,25 +110,39 @@ module Reader = struct
 end
 
 module Writer = struct
+  type encoding =
+    | Identity
+    | Chunked of { mutable written_final_chunk : bool }
+
   type t =
-    { faraday                        : Faraday.t
-    ; mutable write_final_if_chunked : bool
-    ; when_ready_to_write            : Optional_thunk.t
-    ; buffered_bytes                 : int ref
+    { faraday             : Faraday.t
+    ; encoding            : encoding
+    ; when_ready_to_write : Optional_thunk.t
+    ; buffered_bytes      : int ref
     }
 
-  let of_faraday faraday ~when_ready_to_write =
+  let of_faraday faraday ~encoding ~when_ready_to_write =
+    let encoding =
+      match encoding with
+      | `Fixed _ | `Close_delimited -> Identity
+      | `Chunked -> Chunked { written_final_chunk = false }
+    in
     { faraday
-    ; write_final_if_chunked = true
+    ; encoding
     ; when_ready_to_write
-    ; buffered_bytes         = ref 0
+    ; buffered_bytes = ref 0
     }
 
-  let create buffer ~when_ready_to_write =
-    of_faraday (Faraday.of_bigstring buffer) ~when_ready_to_write
+  let create buffer ~encoding ~when_ready_to_write =
+    of_faraday (Faraday.of_bigstring buffer) ~encoding ~when_ready_to_write
 
   let create_empty () =
-    let t = create Bigstringaf.empty ~when_ready_to_write:Optional_thunk.none in
+    let t =
+      create
+        Bigstringaf.empty
+        ~encoding:(`Fixed 0)
+        ~when_ready_to_write:Optional_thunk.none
+    in
     Faraday.close t.faraday;
     t
 
@@ -152,9 +166,6 @@ module Writer = struct
     Faraday.flush t.faraday kontinue;
     ready_to_write t
 
-  let set_non_chunked t =
-    t.write_final_if_chunked <- false
-
   let is_closed t =
     Faraday.is_closed t.faraday
 
@@ -165,41 +176,31 @@ module Writer = struct
 
   let has_pending_output t =
     (* Force another write poll to make sure that the final chunk is emitted for
-       chunk-encoded bodies.
-
-       Note that the body data type does not keep track of encodings, so it is
-       necessary for [transfer_to_writer_with_encoding] to check the encoding and
-       clear the [write_final_if_chunked] field when outputting a fixed or
-       close-delimited body. *)
-    Faraday.has_pending_output t.faraday
-    || (Faraday.is_closed t.faraday && t.write_final_if_chunked)
+       chunk-encoded bodies. *)
+    let faraday_has_output = Faraday.has_pending_output t.faraday in
+    let additional_encoding_output =
+      match t.encoding with
+      | Identity -> false
+      | Chunked { written_final_chunk } ->
+        Faraday.is_closed t.faraday && not written_final_chunk
+    in
+    faraday_has_output || additional_encoding_output
 
   let requires_output t =
     not (is_closed t) || has_pending_output t
 
-  let transfer_to_writer_with_encoding t ~encoding writer =
+  let transfer_to_writer t writer =
     let faraday = t.faraday in
-    begin match t.write_final_if_chunked, encoding with
-    | true, (`Fixed _ | `Close_delimited) ->
-      (* Play nicely with [has_pending_output] in the case of a fixed or
-         close-delimited encoding.
-
-         Immediately set `t.write_final_if_chunked` to `false` because we may
-         not have another opportunity to do so before advancing the request
-         queue. *)
-      t.write_final_if_chunked <- false;
-    | false, (`Fixed _ | `Close_delimited)
-    | _, `Chunked ->
-      (* Handled explicitly later when closing the writer. *)
-      ()
-    end;
     begin match Faraday.operation faraday with
     | `Yield -> ()
     | `Close ->
-      let must_write_the_final_chunk = t.write_final_if_chunked in
-      t.write_final_if_chunked <- false;
-      if must_write_the_final_chunk then
-        Serialize.Writer.schedule_chunk writer [];
+      (match t.encoding with
+       | Identity -> ()
+       | Chunked ({ written_final_chunk } as chunked) ->
+         if not written_final_chunk then begin
+           chunked.written_final_chunk <- true;
+           Serialize.Writer.schedule_chunk writer [];
+         end);
       Serialize.Writer.unyield writer;
     | `Writev iovecs ->
       let buffered = t.buffered_bytes in
@@ -208,9 +209,9 @@ module Writer = struct
       | iovecs ->
         let lengthv  = IOVec.lengthv iovecs in
         buffered := !buffered + lengthv;
-        begin match encoding with
-        | `Fixed _ | `Close_delimited -> Serialize.Writer.schedule_fixed writer iovecs
-        | `Chunked                    -> Serialize.Writer.schedule_chunk writer iovecs
+        begin match t.encoding with
+        | Identity  -> Serialize.Writer.schedule_fixed writer iovecs
+        | Chunked _ -> Serialize.Writer.schedule_chunk writer iovecs
         end;
         Serialize.Writer.flush writer (fun () ->
           Faraday.shift faraday lengthv;

@@ -761,7 +761,6 @@ let test_handling_backpressure_when_read_not_scheduled () =
   yield_reader t (fun () -> reader_woken_up := true);
   !continue_reading ();
   reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
-  Format.eprintf "toine: %B@." !reader_woken_up;
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
   Alcotest.(check bool) "Writer not woken up" false !writer_woken_up;
 ;;
@@ -831,7 +830,6 @@ let test_eof_with_another_pipelined_request () =
   reader_yielded t;
   !continue_reading ();
   reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
-  Format.eprintf "epa lol %B@." !reader_woken_up;
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
   writer_yielded t;
 
@@ -1462,7 +1460,6 @@ let test_schedule_read_with_data_available () =
   let body = Option.get !body in
   let schedule_read expected =
     let did_read = ref false in
-    Format.eprintf "HEH@.";
     Body.Reader.schedule_read body
       ~on_read:(fun buf ~off ~len ->
         let actual = Bigstringaf.substring buf ~off ~len in
