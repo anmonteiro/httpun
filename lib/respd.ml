@@ -60,6 +60,7 @@ let write_request t =
 
 let report_error t error =
   t.persistent <- false;
+  Body.Writer.set_non_chunked t.request_body;
   Body.Writer.close t.request_body;
   match t.state, t.error_code with
   | (Uninitialized | Awaiting_response | Upgraded _), `Ok ->

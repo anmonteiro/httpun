@@ -178,6 +178,11 @@ module Writer = struct
     Faraday.flush t.faraday kontinue;
     ready_to_write t
 
+  let set_non_chunked t =
+    match t.encoding with
+    | Chunked t -> t.written_final_chunk <- true
+    | Identity -> ()
+
   let is_closed t =
     Faraday.is_closed t.faraday
 

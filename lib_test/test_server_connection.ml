@@ -1823,7 +1823,7 @@ let test_errored_chunked_streaming_response () =
 
   let t = create (streaming_handler ~error:true response []) in
   read_request   t request;
-  write_response t response ~body:"0\r\n\r\n";
+  write_response t response;
   connection_is_shutdown t;
 ;;
 
@@ -1880,7 +1880,6 @@ let test_errored_chunked_streaming_response_async () =
   !continue ();
   Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  write_string t "0\r\n\r\n";
   connection_is_shutdown t;
 ;;
 
