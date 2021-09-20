@@ -178,11 +178,6 @@ module Writer = struct
     Faraday.flush t.faraday kontinue;
     ready_to_write t
 
-  let set_non_chunked t =
-    match t.encoding with
-    | Chunked t -> t.written_final_chunk <- true
-    | Identity -> ()
-
   let is_closed t =
     Faraday.is_closed t.faraday
 
@@ -190,6 +185,13 @@ module Writer = struct
     Faraday.close t.faraday;
     ready_to_write t;
   ;;
+
+  let force_close t =
+    begin match t.encoding with
+    | Chunked t -> t.written_final_chunk <- true
+    | Identity -> ()
+    end;
+    close t
 
   let has_pending_output t =
     (* Force another write poll to make sure that the final chunk is emitted for
