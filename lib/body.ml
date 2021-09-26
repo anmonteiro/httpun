@@ -87,16 +87,17 @@ module Reader = struct
   and execute_read t =
     if t.read_scheduled then do_execute_read t t.on_eof t.on_read
 
-  let schedule_read t ~on_eof ~on_read =
-    if t.read_scheduled
-    then failwith "Body.Reader.schedule_read: reader already scheduled";
-    if not (is_closed t) then begin
-      t.read_scheduled <- true;
-      t.on_eof         <- on_eof;
-      t.on_read        <- on_read;
-      ready_to_read t;
-    end;
-    do_execute_read t on_eof on_read
+let schedule_read t ~on_eof ~on_read =
+  if t.read_scheduled
+  then failwith "Body.schedule_read: reader already scheduled";
+  if not (is_closed t)
+  then begin
+    t.read_scheduled <- true;
+    t.on_eof         <- on_eof;
+    t.on_read        <- on_read;
+  end;
+  do_execute_read t on_eof on_read;
+  ready_to_read t
 
   let close t =
     Faraday.close t.faraday;
@@ -173,6 +174,13 @@ module Writer = struct
     Faraday.close t.faraday;
     ready_to_write t;
   ;;
+
+  let force_close t =
+    begin match t.encoding with
+    | Chunked t -> t.written_final_chunk <- true
+    | Identity -> ()
+    end;
+    close t
 
   let has_pending_output t =
     (* Force another write poll to make sure that the final chunk is emitted for

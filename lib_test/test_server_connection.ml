@@ -1823,7 +1823,7 @@ let test_errored_chunked_streaming_response () =
 
   let t = create (streaming_handler ~error:true response []) in
   read_request   t request;
-  write_response t response ~body:"0\r\n\r\n";
+  write_response t response;
   connection_is_shutdown t;
 ;;
 
@@ -1880,7 +1880,6 @@ let test_errored_chunked_streaming_response_async () =
   !continue ();
   Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
-  write_string t "0\r\n\r\n";
   connection_is_shutdown t;
 ;;
 
@@ -2080,6 +2079,47 @@ let test_schedule_read_with_data_available () =
   write_response t response;
 ;;
 
+
+let test_eof_called_multiple_times () =
+  let continue_reading = ref (fun () -> ()) in
+  let eof_counter = ref 0 in
+  let request_handler reqd =
+    let request_body  = Reqd.request_body reqd in
+    let rec on_read _buffer ~off:_ ~len:_ =
+      continue_reading := (fun () ->
+        Body.Reader.schedule_read request_body ~on_eof ~on_read);
+    and on_eof () =
+      incr eof_counter;
+      print_endline ("got eof" ^ (string_of_bool (Body.Reader.is_closed request_body))) in
+    Body.Reader.schedule_read request_body ~on_eof ~on_read
+  in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  let request =
+    Request.create
+      `GET
+      ~headers:(Headers.of_list ["content-length", "10"])
+      "/"
+  in
+  read_request t request;
+  read_string t "five.";
+  reader_yielded t;
+  let reader_woken_up = on_reader_unyield t ignore in
+  !continue_reading ();
+  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  reader_ready ~msg:"Reader wants to read if there's a read scheduled in the body" t;
+  read_string t "more.";
+  reader_yielded t;
+  let reader_woken_up = on_reader_unyield t !continue_reading in
+  !continue_reading ();
+  Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
+  Alcotest.(check int) "`on_eof` only called once" 2 !eof_counter;
+  writer_yielded t;
+;;
+
+
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -2151,4 +2191,5 @@ let tests =
   ; "shutdown in request handler", `Quick, test_shutdown_in_request_handler
   ; "shutdown during asynchronous request", `Quick, test_shutdown_during_asynchronous_request
   ; "schedule read with data available", `Quick, test_schedule_read_with_data_available
+  ; "read body eof called multiple times", `Quick, test_eof_called_multiple_times
   ]
