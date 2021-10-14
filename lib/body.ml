@@ -36,6 +36,7 @@ module Reader = struct
     { faraday                        : Faraday.t
     ; mutable read_scheduled         : bool
     ; mutable on_eof                 : unit -> unit
+    ; mutable eof_has_been_called    : bool
     ; mutable on_read                : Bigstringaf.t -> off:int -> len:int -> unit
     ; mutable when_ready_to_read     : Optional_thunk.t
     }
@@ -46,6 +47,7 @@ module Reader = struct
   let create buffer ~when_ready_to_read =
     { faraday                = Faraday.of_bigstring buffer
     ; read_scheduled         = false
+    ; eof_has_been_called    = false
     ; on_eof                 = default_on_eof
     ; on_read                = default_on_read
     ; when_ready_to_read
@@ -73,7 +75,10 @@ module Reader = struct
       t.read_scheduled <- false;
       t.on_eof         <- default_on_eof;
       t.on_read        <- default_on_read;
-      on_eof ()
+      if not t.eof_has_been_called then begin
+        t.eof_has_been_called <- true;
+        on_eof ()
+      end
     (* [Faraday.operation] never returns an empty list of iovecs *)
     | `Writev []       -> assert false
     | `Writev (iovec::_) ->
