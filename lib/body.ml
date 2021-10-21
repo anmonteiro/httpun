@@ -58,8 +58,6 @@ module Reader = struct
     Faraday.close t.faraday;
     t
 
-  let empty = create_empty ()
-
   let is_closed t =
     Faraday.is_closed t.faraday
 
