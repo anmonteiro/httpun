@@ -2119,6 +2119,39 @@ let test_eof_called_multiple_times () =
 ;;
 
 
+let test_eof_called_for_empty_bodies () =
+  let eof_counter = ref 0 in
+  let request_handler reqd =
+    let request_body  = Reqd.request_body reqd in
+    let on_read _buffer ~off:_ ~len:_ = assert false
+    and on_eof () =
+      incr eof_counter;
+    in
+    Body.Reader.schedule_read request_body ~on_eof ~on_read
+  in
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  let request =
+    Request.create
+      `GET
+      ~headers:(Headers.of_list ["content-length", "0"])
+      "/"
+  in
+  read_request t request;
+  reader_yielded t;
+  Alcotest.(check int) "`on_eof` only called once" 1 !eof_counter;
+  writer_yielded t;
+  shutdown t;
+
+  let t = create ~error_handler request_handler in
+  reader_ready t;
+  writer_yielded t;
+  read_request t request;
+  reader_yielded t;
+  Alcotest.(check int) "`on_eof` only called once" 2 !eof_counter;
+  writer_yielded t;
+;;
 
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
@@ -2192,4 +2225,5 @@ let tests =
   ; "shutdown during asynchronous request", `Quick, test_shutdown_during_asynchronous_request
   ; "schedule read with data available", `Quick, test_schedule_read_with_data_available
   ; "read body eof called multiple times", `Quick, test_eof_called_multiple_times
+  ; "eof called for empty bodies", `Quick, test_eof_called_for_empty_bodies
   ]

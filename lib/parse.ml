@@ -260,7 +260,7 @@ module Reader = struct
         match Request.body_length request with
       | `Error `Bad_request -> return (Error (`Bad_request request))
       | `Fixed 0L  ->
-        handler request Body.Reader.empty;
+        handler request (Body.Reader.create_empty ());
         ok
       | `Fixed _ | `Chunked as encoding ->
         let request_body =
@@ -292,7 +292,7 @@ module Reader = struct
       | `Error `Bad_gateway           -> assert (not proxy); assert false
       | `Error `Internal_server_error -> return (Error (`Invalid_response_body_length response))
       | `Fixed 0L ->
-        respd.response_handler response Body.Reader.empty;
+        respd.response_handler response (Body.Reader.create_empty ());
         ok
       | `Fixed _ | `Chunked | `Close_delimited as encoding ->
         (* We do not trust the length provided in the [`Fixed] case, as the
