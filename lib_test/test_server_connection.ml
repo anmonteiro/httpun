@@ -2114,7 +2114,7 @@ let test_eof_called_multiple_times () =
   let reader_woken_up = on_reader_unyield t !continue_reading in
   !continue_reading ();
   Alcotest.(check bool) "Reader wakes up if scheduling read" true !reader_woken_up;
-  Alcotest.(check int) "`on_eof` only called once" 2 !eof_counter;
+  Alcotest.(check int) "`on_eof` only called once" 1 !eof_counter;
   writer_yielded t;
 ;;
 
