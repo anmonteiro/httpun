@@ -1,5 +1,6 @@
+{ pkgs }:
+
 let
-  pkgs = import ./nix/sources.nix { };
   inherit (pkgs) stdenv lib;
   httpafPkgs = pkgs.recurseIntoAttrs (import ./nix { inherit pkgs; doCheck = false; });
   httpafDrvs = lib.filterAttrs (_: value: lib.isDerivation value) httpafPkgs;
