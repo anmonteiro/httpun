@@ -89,7 +89,7 @@ let create_request_body ~request t =
   | `Error `Bad_request ->
     failwith "Httpaf.Client_connection.request: invalid body length"
 
-let request t ?(flush_headers_immediately=false) request ~error_handler ~response_handler =
+let request t ?(flush_headers_immediately=true) request ~error_handler ~response_handler =
   let request_body = create_request_body ~request t in
   let respd =
     Respd.create error_handler request request_body t.writer response_handler in
@@ -100,8 +100,9 @@ let request t ?(flush_headers_immediately=false) request ~error_handler ~respons
   (* Not handling the request now means it may be pipelined.
    * `advance_request_queue_if_necessary` will take care of it, but we still
    * wanna wake up the writer so that the function gets called. *)
-  if flush_headers_immediately
-  then wakeup_writer t;
+  if not flush_headers_immediately
+  then Writer.yield t.writer
+  else wakeup_writer t;
   request_body
 ;;
 
