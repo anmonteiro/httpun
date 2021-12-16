@@ -79,13 +79,16 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   }
 
 let create_request_body ~request t =
+  let when_ready_to_write =
+    Optional_thunk.some (fun () -> wakeup_writer t)
+  in
   match Request.body_length request with
-  | `Fixed 0L -> Body.Writer.empty
+  | `Fixed 0L -> Body.Writer.create_empty ~when_ready_to_write
   | `Fixed _ | `Chunked as encoding ->
     Body.Writer.create
       (Bigstringaf.create t.config.request_body_buffer_size)
       ~encoding
-      ~when_ready_to_write:(Optional_thunk.some (fun () -> wakeup_writer t))
+      ~when_ready_to_write
   | `Error `Bad_request ->
     failwith "Httpaf.Client_connection.request: invalid body length"
 
@@ -97,12 +100,14 @@ let request t ?(flush_headers_immediately=true) request ~error_handler ~response
   Queue.push respd t.request_queue;
   if handle_now then
     Respd.write_request respd;
+
+  if not flush_headers_immediately
+  then Writer.yield t.writer;
+
   (* Not handling the request now means it may be pipelined.
    * `advance_request_queue_if_necessary` will take care of it, but we still
    * wanna wake up the writer so that the function gets called. *)
-  if not flush_headers_immediately
-  then Writer.yield t.writer
-  else wakeup_writer t;
+  wakeup_writer t;
   request_body
 ;;
 

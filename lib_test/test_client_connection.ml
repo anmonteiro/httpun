@@ -1515,6 +1515,55 @@ let test_dont_flush_headers_immediately () =
   read_string t "d\r\nHello, world!\r\n0\r\n\r\n";
 ;;
 
+let test_pipelining_no_immediate_flush () =
+  let writer_woken_up = ref false in
+  let request' = Request.create `GET "/" in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+  in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      ~flush_headers_immediately:false
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:no_error_handler
+  in
+
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+
+  Body.Writer.close body;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  writer_woken_up := false;
+
+  write_request t request';
+
+  (* send the 2nd request without reading the response *)
+  let response' =
+    Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `Not_found
+  in
+  let body' =
+    request
+      t
+      request'
+      ~flush_headers_immediately:false
+      ~response_handler:(fun response body ->
+        (default_response_handler response' response body))
+      ~error_handler:no_error_handler
+  in
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+
+  Body.Writer.close body';
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  writer_woken_up := false;
+
+  write_request t request';
+  read_response t response;
+  read_response t response';
+;;
 
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
@@ -1555,5 +1604,6 @@ let tests =
   ; "304 Not Modified with Content-Length", `Quick, test_304_not_modified
   ; "body for a request with no payload starts out closed", `Quick, test_empty_content_length_body_closed
   ; "schedule read with data available", `Quick, test_schedule_read_with_data_available
-  ; "flush headers immediately", `Quick, test_dont_flush_headers_immediately
+  ; "don't flush headers immediately", `Quick, test_dont_flush_headers_immediately
+  ; "pipelining + don't flush headers immediately", `Quick, test_pipelining_no_immediate_flush
   ]
