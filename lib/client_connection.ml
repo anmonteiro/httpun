@@ -92,7 +92,7 @@ let create_request_body ~request t =
   | `Error `Bad_request ->
     failwith "Httpaf.Client_connection.request: invalid body length"
 
-let request t ?(flush_headers_immediately=true) request ~error_handler ~response_handler =
+let request t ?(flush_headers_immediately=false) request ~error_handler ~response_handler =
   let request_body = create_request_body ~request t in
   let respd =
     Respd.create error_handler request request_body t.writer response_handler in
