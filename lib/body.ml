@@ -140,17 +140,15 @@ module Writer = struct
   let create buffer ~encoding ~when_ready_to_write =
     of_faraday (Faraday.of_bigstring buffer) ~encoding ~when_ready_to_write
 
-  let create_empty () =
+  let create_empty ~when_ready_to_write =
     let t =
       create
         Bigstringaf.empty
         ~encoding:(`Fixed 0)
-        ~when_ready_to_write:Optional_thunk.none
+        ~when_ready_to_write
     in
     Faraday.close t.faraday;
     t
-
-  let empty = create_empty ()
 
   let write_char t c =
     Faraday.write_char t.faraday c

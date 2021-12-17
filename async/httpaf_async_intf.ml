@@ -64,6 +64,7 @@ module type Client = sig
 
   val request
     :  t
+    -> ?flush_headers_immediately: bool
     -> Request.t
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
