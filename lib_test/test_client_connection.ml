@@ -107,6 +107,7 @@ let test_commit_parse_after_every_header () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -144,6 +145,7 @@ let test_get () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -162,6 +164,7 @@ let test_get () =
     request
       t
       request_close
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -177,6 +180,7 @@ let test_get () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -195,6 +199,7 @@ let test_get () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -217,6 +222,7 @@ let test_head () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true)
   in
@@ -240,6 +246,7 @@ let test_get_last_close () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -254,6 +261,7 @@ let test_get_last_close () =
     request
       t
       request''
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -274,6 +282,7 @@ let test_send_streaming_body () =
   let body =
     request t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -299,6 +308,7 @@ let test_response_eof () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(function
         | `Malformed_response msg -> error_message := Some msg
@@ -325,6 +335,7 @@ let test_persistent_connection_requests () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -337,6 +348,7 @@ let test_persistent_connection_requests () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -355,6 +367,7 @@ let test_persistent_connection_requests_pipelining () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -368,6 +381,7 @@ let test_persistent_connection_requests_pipelining () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(fun response body ->
         (default_response_handler response' response body))
       ~error_handler:no_error_handler
@@ -390,6 +404,7 @@ let test_persistent_connection_requests_pipelining_send_body () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -403,6 +418,7 @@ let test_persistent_connection_requests_pipelining_send_body () =
     request
       t
       request''
+      ~flush_headers_immediately:true
       ~response_handler:(fun response body ->
         (default_response_handler response' response body))
       ~error_handler:no_error_handler
@@ -427,6 +443,7 @@ let test_persistent_connection_requests_body () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -439,6 +456,7 @@ let test_persistent_connection_requests_body () =
     request
       t
       request''
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response')
       ~error_handler:no_error_handler
   in
@@ -462,6 +480,7 @@ let test_response_header_order () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(fun response _ -> received := Some response)
       ~error_handler:no_error_handler
   in
@@ -486,6 +505,7 @@ let test_report_exn () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(function
         | `Exn (Failure msg) -> error_message := Some msg
@@ -512,6 +532,7 @@ let test_input_shrunk () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(function
         | `Exn (Failure msg) -> error_message := Some msg
@@ -544,6 +565,7 @@ let test_partial_input () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler
       ~error_handler:no_error_handler
   in
@@ -578,6 +600,7 @@ let test_empty_fixed_body () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler
       ~error_handler:no_error_handler
   in
@@ -607,6 +630,7 @@ let test_fixed_body () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler
       ~error_handler:no_error_handler
   in
@@ -642,6 +666,7 @@ let test_fixed_body_persistent_connection () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler
       ~error_handler:no_error_handler
   in
@@ -680,6 +705,7 @@ let test_empty_fixed_body_persistent_connection () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:response_handler
       ~error_handler:no_error_handler
   in
@@ -705,6 +731,7 @@ let test_client_upgrade () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -747,6 +774,7 @@ let test_handling_backpressure_when_read_not_scheduled () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(backpressure_response_handler continue_reading response)
       ~error_handler:no_error_handler
   in
@@ -778,6 +806,7 @@ let test_handling_backpressure_when_read_not_scheduled_early_yield () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(backpressure_response_handler continue_reading response)
       ~error_handler:no_error_handler
   in
@@ -816,6 +845,7 @@ let test_eof_with_another_pipelined_request () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler continue_reading response)
       ~error_handler:no_error_handler
   in
@@ -840,6 +870,7 @@ let test_eof_with_another_pipelined_request () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(fun response _ ->
         Alcotest.check (module Response) "expected response" expected_response response)
       ~error_handler:(fun _ -> error_handler_called := true;)
@@ -878,6 +909,7 @@ let test_eof_handler_response_body_not_closed () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -921,6 +953,7 @@ let test_eof_handler_closed_response_body () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler continue_reading response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -959,6 +992,7 @@ let test_exception_closes_reader () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -988,6 +1022,7 @@ let test_exception_closes_reader_persistent_connection () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -1023,6 +1058,7 @@ let test_exception_reading_response_body () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -1060,6 +1096,7 @@ let test_exception_reading_response_body_last_chunk () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -1099,6 +1136,7 @@ let test_async_exception_reading_response_body () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -1130,6 +1168,7 @@ let test_failed_response_parse () =
       request
         t
         request'
+        ~flush_headers_immediately:true
         ~response_handler:(fun _ _ -> assert false)
         ~error_handler:(fun e -> error := Some e)
     in
@@ -1171,6 +1210,7 @@ let test_shutdown_hangs_response_body_read () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler response)
       ~error_handler:no_error_handler
   in
@@ -1215,6 +1255,7 @@ let test_response_arrives_before_body_uploaded () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler continue_response response)
       ~error_handler:(fun _ -> error_handler_called := true;)
   in
@@ -1243,6 +1284,7 @@ let test_response_arrives_before_body_uploaded () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(fun response _ ->
         Alcotest.check (module Response) "expected response" expected_response response)
       ~error_handler:(fun _ -> second_error_handler_called := true;)
@@ -1286,6 +1328,7 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(response_handler response)
       ~error_handler:(fun _ -> ())
   in
@@ -1320,14 +1363,24 @@ let test_multiple_responses_in_single_read () =
     res_handled := !res_handled + 1;
   in
   let body =
-    request t request' ~response_handler ~error_handler:no_error_handler
+    request
+      t
+      request'
+      ~flush_headers_immediately:true
+      ~response_handler
+      ~error_handler:no_error_handler
   in
   write_request t request';
   writer_yielded t;
   Body.Writer.close body;
   reader_ready t;
   let body =
-    request t request' ~response_handler ~error_handler:no_error_handler
+    request
+      t
+      request'
+      ~flush_headers_immediately:true
+      ~response_handler
+      ~error_handler:no_error_handler
   in
   write_request t request';
   writer_yielded t;
@@ -1356,6 +1409,7 @@ let test_chunked_error () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler
       ~error_handler:(fun _ -> error_handler_called := true)
   in
@@ -1377,6 +1431,7 @@ let test_chunked_error () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true)
   in
@@ -1405,6 +1460,7 @@ let test_304_not_modified () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:(fun _ -> error_handler_called := true)
   in
@@ -1425,6 +1481,7 @@ let test_empty_content_length_body_closed () =
     request
       t
       request'
+      ~flush_headers_immediately:true
       ~response_handler:(default_response_handler response)
       ~error_handler:no_error_handler
   in
@@ -1450,7 +1507,12 @@ let test_schedule_read_with_data_available () =
     Alcotest.check (module Response) "expected response" response response';
   in
   let req_body =
-    request t request' ~response_handler ~error_handler:no_error_handler
+    request
+      t
+      request'
+      ~flush_headers_immediately:true
+      ~response_handler
+      ~error_handler:no_error_handler
   in
   Body.Writer.close req_body;
   write_request t request';
