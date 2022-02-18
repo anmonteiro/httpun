@@ -25,7 +25,7 @@ let main port host =
     ~response_handler
     (Request.create ~headers `GET "/")
   in
-  Body.close_writer request_body;
+  Body.Writer.close request_body;
   finished
 ;;
 

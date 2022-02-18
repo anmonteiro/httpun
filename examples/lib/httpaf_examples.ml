@@ -64,7 +64,7 @@ module Server = struct
 
   let benchmark =
     let headers = Headers.of_list ["content-length", Int.to_string (Bigstringaf.length text)] in
-    let handler reqd =
+    let handler { Gluten.reqd; _ } =
       let { Request.target; _ } = Reqd.request reqd in
       let request_body          = Reqd.request_body reqd in
       Body.Reader.close request_body;

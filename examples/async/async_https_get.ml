@@ -9,9 +9,9 @@ let response_handler finished response response_body =
   | { Response.status = `OK; _ } ->
     let rec on_read bs ~off ~len =
       Bigstring.to_string ~pos:off ~len bs |> print_endline;
-      Body.schedule_read response_body ~on_read ~on_eof
+      Body.Reader.schedule_read response_body ~on_read ~on_eof
     and on_eof () = Ivar.fill finished () in
-    Body.schedule_read response_body ~on_read ~on_eof;
+    Body.Reader.schedule_read response_body ~on_read ~on_eof;
   | response ->
     Format.fprintf Format.std_formatter "%a\n%!" Response.pp_hum response;
     Core.exit 1
@@ -33,7 +33,7 @@ let main port host () =
         conn
         (Request.create ~headers `GET "/")
     in
-    Body.close_writer request_body;
+    Body.Writer.close request_body;
     Ivar.read finished
 ;;
 

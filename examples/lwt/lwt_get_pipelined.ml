@@ -39,8 +39,8 @@ let main port host =
       ~error_handler
       request_headers
   in
-  Body.close_writer request_body';
-  Body.close_writer request_body;
+  Body.Writer.close request_body';
+  Body.Writer.close request_body;
   Lwt.join [finished; finished'] >>= fun () ->
     Client.shutdown connection
 ;;
