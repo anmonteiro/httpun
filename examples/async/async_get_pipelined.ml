@@ -34,9 +34,9 @@ let main port host () =
         ~error_handler
         request_headers
     in
-    Body.close_writer request_body';
-    Body.close_writer request_body;
-    Async.Deferred.all_unit [Ivar.read finished; Ivar.read finished'] >>| fun () ->
+    Body.Writer.close request_body';
+    Body.Writer.close request_body;
+    Async.Deferred.all_unit [Ivar.read finished; Ivar.read finished'] >>= fun () ->
       Client.shutdown connection
 ;;
 
