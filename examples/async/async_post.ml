@@ -49,4 +49,4 @@ let () =
           (anon ("host" %: string)))
         ~f:(fun (port, host) ->
               (fun () -> main port host ())))
-  |> Command.run
+  |> Command_unix.run
