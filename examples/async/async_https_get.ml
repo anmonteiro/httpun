@@ -47,4 +47,4 @@ let () =
       flag "-h" (required string)
         ~doc:"string destination host"
     ) main
-  |> Command.run
+  |> Command_unix.run

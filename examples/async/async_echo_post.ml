@@ -31,5 +31,5 @@ let () =
             ~doc:"int Maximum accepts per batch"))
         ~f:(fun (port, accepts) ->
               (fun () -> main port accepts ())))
-  |> Command.run
+  |> Command_unix.run
 ;;

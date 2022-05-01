@@ -1,7 +1,13 @@
 (executable
  (name wrk_async_benchmark)
  (modules wrk_async_benchmark)
- (libraries httpaf httpaf_examples httpaf-async async core))
+ (libraries
+  httpaf
+  httpaf_examples
+  httpaf-async
+  async
+  core
+  core_unix.command_unix))
 
 (executable
  (name wrk_lwt_benchmark)
