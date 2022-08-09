@@ -1,18 +1,13 @@
-{ pkgs, doCheck ? true }:
-
-let
-  inherit (pkgs) lib stdenv ocamlPackages;
-
-in
+{ nix-filter, lib, stdenv, ocamlPackages, doCheck ? true }:
 
 with ocamlPackages;
 
 let
-  genSrc = { dirs, files }: lib.filterGitSource {
-    src = ./..;
-    inherit dirs;
-    files = files ++ [ "dune-project" ];
-  };
+  genSrc = { dirs, files }:
+    with nix-filter; filter {
+      root = ./..;
+      include = [ "dune-project" ] ++ files ++ (builtins.map inDirectory dirs);
+    };
   buildHttpaf = args: buildDunePackage ({
     version = "0.6.5-dev";
     doCheck = doCheck;

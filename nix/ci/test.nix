@@ -6,7 +6,15 @@ let
     url = with lock.nodes.nixpkgs.locked; "https://github.com/${owner}/${repo}";
     inherit (lock.nodes.nixpkgs.locked) rev;
   };
-  pkgs = import "${src}/boot.nix" {
+  nix-filter-src = fetchGit {
+    url = with lock.nodes.nix-filter.locked; "https://github.com/${owner}/${repo}";
+    inherit (lock.nodes.nix-filter.locked) rev;
+    # inherit (lock.nodes.nixpkgs.original) ref;
+    allRefs = true;
+  };
+  nix-filter = import "${nix-filter-src}";
+
+  pkgs = import "${src}" {
     overlays = [
       (import src)
       (self: super: {
@@ -17,7 +25,7 @@ let
 
 in
 
-import ./.. {
-  inherit pkgs;
+pkgs.callPackage ./.. {
+  inherit nix-filter;
   doCheck = true;
 }
