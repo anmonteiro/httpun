@@ -45,6 +45,12 @@ module Server (Server_runtime: Gluten_lwt.Server) :
           and type addr := Server_runtime.addr
 
 (* For an example, see [examples/lwt_get.ml]. *)
-module Client (Client_runtime: Gluten_lwt.Client) :
-  Client with type socket = Client_runtime.socket
+module Client (Client_runtime: Gluten_lwt.Client) : sig
+  include Client with type socket = Client_runtime.socket
           and type runtime = Client_runtime.t
+
+  val create_connection
+    : ?config : Httpaf.Config.t
+    -> Client_runtime.socket
+    -> t Lwt.t
+end
