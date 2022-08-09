@@ -1,7 +1,13 @@
 (library
  (name httpaf_mirage)
  (public_name httpaf-mirage)
- (libraries faraday-lwt httpaf httpaf-lwt gluten-mirage lwt mirage-flow
-   conduit-mirage cstruct)
+ (libraries
+  faraday-lwt
+  httpaf
+  httpaf-lwt
+  gluten-mirage
+  lwt
+  mirage-flow
+  cstruct)
  (flags
   (:standard -safe-string)))
