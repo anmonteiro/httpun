@@ -1,0 +1,25 @@
+opam-version: "2.0"
+name: "httpaf-lwt-unix"
+maintainer: "Antonio Monteiro <anmonteiro@gmail.com>"
+authors: [
+  "Antonio Monteiro <anmonteiro@gmail.com>"
+  "Anton Bachin <antonbachin@yahoo.com>"
+  "Spiros Eliopoulos <spiros@inhabitedtype.com>"
+]
+license: "BSD-3-clause"
+homepage: "https://github.com/inhabitedtype/httpaf"
+bug-reports: "https://github.com/inhabitedtype/httpaf/issues"
+dev-repo: "git+https://github.com/inhabitedtype/httpaf.git"
+build: [
+  ["dune" "build" "-p" name]
+]
+depends: [
+  "ocaml" {>= "5.0"}
+  "httpaf" {>= "0.6.0"}
+  "dune" {>= "1.5"}
+  "gluten-eio"
+]
+pin-depends: [
+  [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
+]
+synopsis: "EIO support for http/af"

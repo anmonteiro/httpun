@@ -1,0 +1,9 @@
+(executables
+ (libraries httpaf httpaf-eio httpaf_examples base stdio)
+ (names eio_echo_post eio_get eio_ssl_get)
+ (flags :standard -warn-error -A))
+
+(alias
+ (name examples)
+ (deps
+  (glob_files *.exe)))
