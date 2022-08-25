@@ -118,9 +118,9 @@ let output_state { request_body; state; _ } : Output_state.t =
     then Ready
     else Complete
 
-let flush_request_body { request_body; writer; _ } =
+let flush_request_body { request_body; _ } =
   if Body.Writer.has_pending_output request_body then
-    Body.Writer.transfer_to_writer request_body writer
+    Body.Writer.transfer_to_writer request_body
 
 let flush_response_body t =
   match t.state with

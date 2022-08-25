@@ -79,16 +79,13 @@ let[@ocaml.warning "-16"] create ?(config=Config.default) =
   }
 
 let create_request_body ~request t =
-  let when_ready_to_write =
-    Optional_thunk.some (fun () -> wakeup_writer t)
-  in
   match Request.body_length request with
-  | `Fixed 0L -> Body.Writer.create_empty ~when_ready_to_write
+  | `Fixed 0L -> Body.Writer.create_empty ~writer:t.writer
   | `Fixed _ | `Chunked as encoding ->
     Body.Writer.create
       (Bigstringaf.create t.config.request_body_buffer_size)
       ~encoding
-      ~when_ready_to_write
+      ~writer:t.writer
   | `Error `Bad_request ->
     failwith "Httpaf.Client_connection.request: invalid body length"
 

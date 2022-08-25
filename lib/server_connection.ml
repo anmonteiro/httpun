@@ -196,10 +196,12 @@ let set_error_and_handle ?request t error =
              * because in this conditional branch we're not sending a response
              * (is_active t == false), and are therefore not making use of that
              * buffer. *)
+
+            (* XXX(anmonteiro): I think this doesn't correctly emit
+               chunked-encoded responses *)
             Body.Writer.create
               t.response_body_buffer
-              ~encoding ~when_ready_to_write:(Optional_thunk.some (fun () ->
-                wakeup_writer t))
+              ~encoding ~writer:t.writer
           in
           Writer.write_response writer response;
           t.error_code <- Error { request; response_state = Streaming(response, response_body) };
@@ -326,8 +328,8 @@ let read t bs ~off ~len =
 let read_eof t bs ~off ~len =
   read_with_more t bs ~off ~len Complete
 
-let flush_response_error_body t response_state =
-  Response_state.flush_response_body response_state t.writer
+let flush_response_error_body response_state =
+  Response_state.flush_response_body response_state
 
 let rec _next_write_operation t =
   if not (is_active t) then (
@@ -340,7 +342,7 @@ let rec _next_write_operation t =
       match Response_state.output_state response_state with
       | Waiting -> `Yield
       | Ready ->
-        flush_response_error_body t response_state;
+        flush_response_error_body response_state;
         Writer.next t.writer
       | Complete ->
         shutdown_writer t;
