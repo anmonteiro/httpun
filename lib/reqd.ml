@@ -151,8 +151,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
       Body.Writer.create
         t.response_body_buffer
         ~encoding
-        ~when_ready_to_write:(Optional_thunk.some (fun () ->
-          Writer.wakeup t.writer))
+        ~writer:t.writer
     in
     Writer.write_response t.writer response;
     if t.persistent then
@@ -273,4 +272,4 @@ let flush_request_body t =
   with exn -> report_exn t exn
 
 let flush_response_body t =
-  Response_state.flush_response_body t.response_state t.writer
+  Response_state.flush_response_body t.response_state

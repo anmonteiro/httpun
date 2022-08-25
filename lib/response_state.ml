@@ -14,8 +14,8 @@ let output_state t : Output_state.t =
     else Complete
   | Upgrade _ -> Ready
 
-let flush_response_body t writer =
+let flush_response_body t =
   match t with
   | Streaming (_, response_body) ->
-    Body.Writer.transfer_to_writer response_body writer
+    Body.Writer.transfer_to_writer response_body
   | _ -> ()
