@@ -172,6 +172,7 @@ module Writer = struct
     Faraday.is_closed t.faraday
 
   let close t =
+    Serialize.Writer.unyield t.writer;
     Faraday.close t.faraday;
     ready_to_write t;
   ;;
@@ -210,7 +211,6 @@ module Writer = struct
            chunked.written_final_chunk <- true;
            Serialize.Writer.schedule_chunk t.writer [];
          end);
-      Serialize.Writer.unyield t.writer
     | `Writev iovecs ->
       let buffered = t.buffered_bytes in
       begin match IOVec.shiftv iovecs !buffered with
