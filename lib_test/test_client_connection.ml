@@ -1649,7 +1649,6 @@ let test_flush_on_close () =
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
 
   Body.Writer.close body;
-  (* writer_yielded t; *)
 
   write_request t request';
   read_response t response;
