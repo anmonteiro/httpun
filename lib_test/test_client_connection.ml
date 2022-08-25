@@ -1627,6 +1627,35 @@ let test_pipelining_no_immediate_flush () =
   read_response t response';
 ;;
 
+let test_flush_on_close () =
+  let writer_woken_up = ref false in
+  let request' = Request.create `GET "/" in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
+  in
+  let t = create ?config:None in
+
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+
+  let body =
+    request
+      t
+      ~flush_headers_immediately:false
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:no_error_handler
+  in
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+
+  Body.Writer.close body;
+  (* writer_yielded t; *)
+
+  write_request t request';
+  read_response t response;
+;;
+
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1668,4 +1697,5 @@ let tests =
   ; "schedule read with data available", `Quick, test_schedule_read_with_data_available
   ; "don't flush headers immediately", `Quick, test_dont_flush_headers_immediately
   ; "pipelining + don't flush headers immediately", `Quick, test_pipelining_no_immediate_flush
+  ; "flushing on close with ~set_headers_immediately:false", `Quick, test_flush_on_close
   ]
