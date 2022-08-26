@@ -1073,8 +1073,10 @@ let test_malformed_request_eof () =
   write_string t "got an error";
 ;;
 
-let streaming_error_handler continue_error ?request:_ _error start_response =
-  let resp_body = start_response Headers.empty in
+let streaming_error_handler
+  ?(headers=Headers.empty) continue_error
+  ?request:_ _error start_response =
+  let resp_body = start_response headers in
   continue_error := (fun () ->
     Body.Writer.write_string resp_body "got an error\n";
     Body.Writer.flush resp_body (fun () ->
@@ -2153,6 +2155,37 @@ let test_eof_called_for_empty_bodies () =
   writer_yielded t;
 ;;
 
+let test_error_handler_chunked_response () =
+  let continue_error = ref (fun () -> ()) in
+  let error_handler ?request error start_response =
+    continue_error := (fun () ->
+      streaming_error_handler
+        ~headers:(Headers.of_list ["transfer-encoding", "chunked"])
+        continue_error ?request
+        error start_response)
+  in
+  let t = create ~error_handler (basic_handler "") in
+  writer_yielded t;
+  let writer_woken_up = on_writer_unyield t ignore in
+  let c = read_string_eof t eof_request_string in
+  Alcotest.(check int) "read consumes all input"
+    (String.length eof_request_string) c;
+  reader_errored t;
+  Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
+  !continue_error ();
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  write_response
+    t
+    (Response.create
+      ~headers:(Headers.of_list ["transfer-encoding", "chunked"])
+      `Bad_request);
+  !continue_error ();
+  write_string t "d\r\ngot an error\n\r\n";
+  report_exn t (Failure "broken pipe");
+  writer_closed t;
+  connection_is_closed t;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -2226,4 +2259,5 @@ let tests =
   ; "schedule read with data available", `Quick, test_schedule_read_with_data_available
   ; "read body eof called multiple times", `Quick, test_eof_called_multiple_times
   ; "eof called for empty bodies", `Quick, test_eof_called_for_empty_bodies
+  ; "error handler with chunked transfer encoding", `Quick, test_error_handler_chunked_response
   ]
