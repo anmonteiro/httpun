@@ -197,8 +197,6 @@ let set_error_and_handle ?request t error =
              * (is_active t == false), and are therefore not making use of that
              * buffer. *)
 
-            (* XXX(anmonteiro): I think this doesn't correctly emit
-               chunked-encoded responses *)
             Body.Writer.create
               t.response_body_buffer
               ~encoding ~writer:t.writer
