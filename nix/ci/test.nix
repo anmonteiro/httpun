@@ -16,8 +16,7 @@ let
   nix-filter = import "${nix-filter-src}";
 
   pkgs = import "${src}" {
-    overlays = [
-      (import src)
+    extraOverlays = [
       (self: super: {
         ocamlPackages = super.ocaml-ng."ocamlPackages_${ocamlVersion}";
       })
