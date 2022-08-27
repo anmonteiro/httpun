@@ -312,7 +312,6 @@ let next_read_operation t =
   | (`Yield | `Close) as operation -> operation
 
 let read_with_more t bs ~off ~len more =
-  let call_handler = Queue.is_empty t.request_queue in
   let consumed = Reader.read_with_more t.reader bs ~off ~len more in
   if is_active t
   then (

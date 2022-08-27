@@ -227,7 +227,7 @@ and _final_read_operation_for t respd =
       | Waiting | Ready -> `Yield
       | Complete       ->
          match Reader.next t.reader with
-         | `Error _ | `Read as operation->
+         | `Error _ | `Read as operation ->
            (* Keep reading when in a "partial" state (`Read).
             * Don't advance the request queue if in an error state. *)
            operation
