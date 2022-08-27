@@ -1787,7 +1787,8 @@ let test_multiple_requests_in_single_read () =
   in
   read_string t reqs;
 
-  write_string t (response_to_string response ^ response_to_string response);
+  write_string t (response_to_string response );
+  write_string t (response_to_string response );
 ;;
 
 let test_multiple_async_requests_in_single_read () =
@@ -1895,7 +1896,8 @@ let test_multiple_requests_in_single_read_with_eof () =
     request_to_string (Request.create `GET "/")
   in
   read_string t reqs ~eof:true;
-  write_string t (response_to_string response ^ response_to_string response);
+  write_string t (response_to_string response);
+  write_string t (response_to_string response);
 ;;
 
 let test_parse_failure_after_checkpoint () =

@@ -176,7 +176,8 @@ let maybe_pipeline_queued_requests t =
         | Some prev ->
           match respd.Respd.state, Respd.output_state prev with
           | Uninitialized, Complete ->
-            Respd.write_request respd
+            Respd.write_request respd;
+            Respd.flush_request_body respd
           | _ ->
             (* bail early. If we can't pipeline this request, we can't write
              * next ones either. *)
@@ -300,7 +301,7 @@ and _final_write_operation_for t respd =
       Writer.next t.writer;
     | Complete ->
        match Reader.next t.reader with
-       | `Error _ | `Read  -> Writer.next t.writer
+       | `Error _ -> Writer.next t.writer
        | _ ->
          advance_request_queue t;
          wakeup_reader t;

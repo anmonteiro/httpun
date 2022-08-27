@@ -121,7 +121,11 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
     let reqd =
       Reqd.create error_handler request request_body (Lazy.force reader) writer response_body_buffer
     in
+    let call_handler = Queue.is_empty request_queue in
     Queue.push reqd request_queue;
+    if call_handler
+    then request_handler reqd;
+
   and t = lazy
     { reader = Lazy.force reader
     ; writer
@@ -313,8 +317,6 @@ let read_with_more t bs ~off ~len more =
   if is_active t
   then (
     let reqd = current_reqd_exn t in
-    if call_handler
-    then t.request_handler reqd;
     Reqd.flush_request_body reqd;
   );
   consumed
