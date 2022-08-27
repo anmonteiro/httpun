@@ -2190,7 +2190,6 @@ let test_pipelined_requests_in_single_buffer_partial_body () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK
   in
-  let continue = ref (fun () -> ()) in
   let request_handler reqd =
     let request_body = Reqd.request_body reqd in
     let response_body = Reqd.respond_with_streaming reqd response
@@ -2199,32 +2198,27 @@ let test_pipelined_requests_in_single_buffer_partial_body () =
       Body.Writer.write_bigstring response_body buffer ~off ~len;
       Body.Reader.schedule_read request_body ~on_eof ~on_read
     and on_eof () =
-      continue := (fun () ->
-        Body.Writer.close response_body) in
+      Body.Writer.close response_body
+    in
     Body.Reader.schedule_read (Reqd.request_body reqd) ~on_eof ~on_read;
   in
   let t = create request_handler in
+  let req = (Request.create `POST "/" ~headers:(Headers.encoding_fixed 5)) in
   let reqs =
-    let req = (Request.create `POST "/" ~headers:(Headers.encoding_fixed 5)) in
     request_to_string req ^ "hello" ^
     request_to_string req
   in
   read_string t reqs;
   reader_yielded t;
-
-  writer_yielded t;
-  !continue ();
   write_response t ~body:"hello" response;
 
-  continue := (fun () -> ());
   write_response t response;
   writer_yielded t;
-  let _writer_woken_up = on_writer_unyield t (fun () -> ()) in
-  reader_ready t;
 
+  reader_ready t;
   read_string t "hello";
-  !continue ();
   write_string t "hello";
+  reader_ready t;
 ;;
 
 
