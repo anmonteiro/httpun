@@ -2221,6 +2221,43 @@ let test_pipelined_requests_in_single_buffer_partial_body () =
   reader_ready t;
 ;;
 
+let test_multiple_pipelined_requests () =
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK
+  in
+  let request_handler reqd =
+    let request_body = Reqd.request_body reqd in
+    let response_body = Reqd.respond_with_streaming reqd response
+    in
+    let rec on_read buffer ~off ~len =
+      Body.Writer.write_bigstring response_body buffer ~off ~len;
+      Body.Reader.schedule_read request_body ~on_eof ~on_read
+    and on_eof () = Body.Writer.close response_body
+    in
+    Body.Reader.schedule_read (Reqd.request_body reqd) ~on_eof ~on_read;
+  in
+  let t = create request_handler in
+  let req = (Request.create `POST "/" ~headers:(Headers.encoding_fixed 5)) in
+  read_string t (request_to_string req ^ "hello");
+  reader_yielded t;
+
+  write_response t ~body:"hello" response;
+  read_request t req;
+
+  writer_yielded t;
+  let writer_woken_up = on_writer_unyield t (fun () ->
+    write_response t ~body:"hello" response)
+  in
+  reader_ready t;
+
+  let reqs =
+    "hello" ^ request_to_string req ^ "hello"
+  in
+  read_string t reqs;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  reader_yielded t;
+  write_response t ~body:"hello" response;
+;;
 
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
@@ -2297,4 +2334,5 @@ let tests =
   ; "eof called for empty bodies", `Quick, test_eof_called_for_empty_bodies
   ; "error handler with chunked transfer encoding", `Quick, test_error_handler_chunked_response
   ; "pipelined requests in single read" ,`Quick, test_pipelined_requests_in_single_buffer_partial_body
+  ; "multiple pipelined requests", `Quick, test_multiple_pipelined_requests
   ]
