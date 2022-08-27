@@ -284,7 +284,7 @@ module Reader = struct
             raise (Local respd)) request_queue)
         with
         | exception Local respd -> respd
-        | _ -> assert false
+        | () -> assert false
       in
       let request = Respd.request respd in
       let proxy = false in

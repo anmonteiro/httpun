@@ -1654,6 +1654,98 @@ let test_flush_on_close () =
   read_response t response;
 ;;
 
+let test_request_pipelining_async () =
+  let request' =
+    Request.create `GET "/" ~headers:(Headers.of_list [ "content-length", "5" ])
+  in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "5" ]) `OK
+  in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(default_response_handler response)
+      ~error_handler:no_error_handler
+  in
+  Body.Writer.write_string body "hello";
+  Body.Writer.close body;
+  let body' =
+    request
+      t
+      request'
+      ~response_handler:(fun response body ->
+        (default_response_handler response response body))
+      ~error_handler:no_error_handler
+  in
+  Body.Writer.write_string body' "hello";
+  Body.Writer.close body';
+
+  let req_string = request_to_string request' ^ "hello" in
+  write_string t req_string;
+  write_string t req_string;
+
+  read_response t response;
+  read_string t "hello";
+  read_response t response;
+  read_string t "hello";
+  shutdown t;
+  connection_is_shutdown t;
+;;
+
+let test_request_pipelining_single_read () =
+  let request' =
+    Request.create `GET "/" ~headers:(Headers.of_list [ "content-length", "5" ])
+  in
+  let response =
+    Response.create ~headers:(Headers.of_list [ "content-length", "5" ]) `OK
+  in
+  let handlers_called = ref 0 in
+  let response_handler actual_response body =
+    incr handlers_called;
+    Alcotest.check (module Response) "expected response" response actual_response;
+    let rec on_read _ ~off:_ ~len:_ =
+      Body.Reader.schedule_read body ~on_read ~on_eof;
+    and on_eof () = () in
+    Body.Reader.schedule_read body ~on_read ~on_eof;
+  in
+
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~response_handler
+      ~error_handler:no_error_handler
+  in
+  Body.Writer.write_string body "hello";
+  Body.Writer.close body;
+  let body' =
+    request
+      t
+      request'
+      ~response_handler
+      ~error_handler:no_error_handler
+  in
+  let req_string = request_to_string request'  in
+  write_string t (req_string ^ "hello");
+  write_string t req_string;
+
+  let resp_string = response_to_string response in
+  read_string t (resp_string ^ "hello" ^ resp_string) ;
+  Alcotest.(check int) "Both response handlers called" 2 !handlers_called;
+
+  writer_yielded t;
+  let writer_woken_up = ref false in
+  yield_writer t (fun () ->
+    writer_woken_up := true;
+    write_string t "hello");
+
+  Body.Writer.write_string body' "hello";
+  Body.Writer.close body';
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+;;
 
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
@@ -1697,4 +1789,6 @@ let tests =
   ; "don't flush headers immediately", `Quick, test_dont_flush_headers_immediately
   ; "pipelining + don't flush headers immediately", `Quick, test_pipelining_no_immediate_flush
   ; "flushing on close with ~set_headers_immediately:false", `Quick, test_flush_on_close
+  ; "request pipelining flushes request body", `Quick, test_request_pipelining_async
+  ; "request pipelining both responses in single buffer", `Quick, test_request_pipelining_single_read
   ]

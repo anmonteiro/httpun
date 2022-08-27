@@ -38,7 +38,7 @@ module Reader = struct
     ; mutable on_eof                 : unit -> unit
     ; mutable eof_has_been_called    : bool
     ; mutable on_read                : Bigstringaf.t -> off:int -> len:int -> unit
-    ; mutable when_ready_to_read     : Optional_thunk.t
+    ; when_ready_to_read             : Optional_thunk.t
     }
 
   let default_on_eof         = Sys.opaque_identity (fun () -> ())
