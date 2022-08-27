@@ -376,8 +376,7 @@ and _final_write_operation_for t reqd =
       Writer.next t.writer
     | Complete ->
        match Reader.next t.reader with
-       | `Error _ | `Read  ->
-         Writer.next t.writer
+       | `Error _ -> Writer.next t.writer
        | _ ->
          advance_request_queue t;
          wakeup_reader t;
