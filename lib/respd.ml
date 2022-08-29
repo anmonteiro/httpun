@@ -81,6 +81,9 @@ let report_error t error =
 let persistent_connection t =
   t.persistent
 
+let close_request_body t =
+  Body.Writer.close t.request_body
+
 let close_response_body t =
   match t.state with
   | Uninitialized

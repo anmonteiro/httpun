@@ -161,8 +161,6 @@ let error_code t =
   else None
 
 let shutdown t =
-  Queue.iter Reqd.close_request_body t.request_queue;
-  Queue.clear t.request_queue;
   shutdown_reader t;
   shutdown_writer t
 
