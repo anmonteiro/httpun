@@ -2261,6 +2261,47 @@ let test_multiple_pipelined_requests () =
   write_response t ~body:"hello" response;
 ;;
 
+let test_body_flush_after_bytes_in_the_wire () =
+  let response =
+    Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK
+  in
+  let callback_called = ref false in
+  let callback () = callback_called := true in
+  let request_handler ~flush_headers_immediately reqd =
+    let response_body =
+      Reqd.respond_with_streaming
+        ~flush_headers_immediately
+        reqd
+        response
+    in
+    Body.Writer.flush response_body callback
+  in
+  let t = create (request_handler ~flush_headers_immediately:true) in
+  let req = Request.create `GET "/" in
+  read_request t req ;
+
+  Alcotest.(check bool)
+    "flush callback isn't called until the response has been written"
+    false !callback_called;
+  write_response t response;
+  Alcotest.(check bool) "flush callback" true !callback_called;
+  shutdown t;
+
+  callback_called := false;
+  let t = create (request_handler ~flush_headers_immediately:false) in
+  let req = Request.create `GET "/" in
+  read_request t req;
+
+  Alcotest.(check bool)
+    "flush callback isn't called until the response has been written"
+    false !callback_called;
+  write_response t response;
+  Alcotest.(check bool) "flush callback" true !callback_called;
+  shutdown t;
+  connection_is_shutdown t;
+;;
+
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -2337,4 +2378,5 @@ let tests =
   ; "error handler with chunked transfer encoding", `Quick, test_error_handler_chunked_response
   ; "pipelined requests in single read" ,`Quick, test_pipelined_requests_in_single_buffer_partial_body
   ; "multiple pipelined requests", `Quick, test_multiple_pipelined_requests
+  ; "Body.Writer.flush waits for bytes to have been written to the wire", `Quick, test_body_flush_after_bytes_in_the_wire
   ]

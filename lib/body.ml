@@ -165,7 +165,8 @@ module Writer = struct
   let ready_to_write t = Serialize.Writer.wakeup t.writer
 
   let flush t kontinue =
-    Faraday.flush t.faraday kontinue;
+    Faraday.flush t.faraday (fun () ->
+      Serialize.Writer.flush t.writer kontinue);
     ready_to_write t
 
   let is_closed t =
