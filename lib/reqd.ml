@@ -246,9 +246,6 @@ let try_with t f : (unit, exn) Result.result =
 let close_request_body { request_body; _ } =
   Body.Reader.close request_body
 
-let close_response_body { response_state; _ } =
-  Response_state.close_response_body response_state
-
 let error_code t =
   match t.error_code with
   | #error as error -> Some error

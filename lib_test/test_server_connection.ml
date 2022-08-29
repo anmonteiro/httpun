@@ -2318,30 +2318,7 @@ let test_body_flush_after_bytes_in_the_wire () =
   write_response t response;
   Alcotest.(check bool) "flush callback" true !callback_called;
   shutdown t;
-  connection_is_closed t;
-;;
-
-let test_flush_response_before_shutdown_closes_body () =
-  let request = Request.create `GET "/" ~headers:(Headers.encoding_fixed 0) in
-  let response = Response.create `OK ~headers:Headers.encoding_chunked in
-  let resp_body = ref None in
-  let continue = ref (fun () -> ()) in
-  let request_handler reqd =
-    let body = Reqd.respond_with_streaming ~flush_headers_immediately:true reqd response in
-    resp_body := Some body;
-    continue := (fun () ->
-      Body.Writer.write_string body "hello world");
-  in
-  let t = create request_handler in
-  read_request t request;
-  write_response t response;
-  !continue ();
-  shutdown t;
-  Alcotest.(check bool) "response body got closed on shutdown"
-    true (Body.Writer.is_closed (Option.get !resp_body));
-  raises_writer_closed (fun () ->
-    write_string t "b\r\nhello world\r\n";
-    connection_is_shutdown t);
+  connection_is_shutdown t;
 ;;
 
 
@@ -2423,5 +2400,4 @@ let tests =
   ; "pipelined requests in single read" ,`Quick, test_pipelined_requests_in_single_buffer_partial_body
   ; "multiple pipelined requests", `Quick, test_multiple_pipelined_requests
   ; "Body.Writer.flush waits for bytes to have been written to the wire", `Quick, test_body_flush_after_bytes_in_the_wire
-  ; "shutting down closes response bodies", `Quick, test_flush_response_before_shutdown_closes_body
   ]
