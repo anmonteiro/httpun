@@ -109,27 +109,20 @@ let request t ?(flush_headers_immediately=false) request ~error_handler ~respons
 ;;
 
 let shutdown_reader t =
-  Reader.force_close t.reader;
   if is_active t
-  then Respd.close_response_body (current_respd_exn t)
-  else wakeup_reader t
+  then Respd.close_response_body (current_respd_exn t);
+  Reader.force_close t.reader;
+  wakeup_reader t
 
 let shutdown_writer t =
+  if is_active t
+  then Respd.close_request_body (current_respd_exn t);
   Writer.close t.writer;
-  if is_active t then begin
-    let respd = current_respd_exn t in
-    Body.Writer.close respd.request_body;
-  end
-;;
+  wakeup_writer t
 
 let shutdown t =
-  Queue.iter Respd.close_response_body t.request_queue;
-  Queue.clear t.request_queue;
   shutdown_reader t;
-  shutdown_writer t;
-  wakeup_reader t;
-  wakeup_writer t;
-;;
+  shutdown_writer t
 
 let set_error_and_handle t error =
   Queue.iter (fun respd ->

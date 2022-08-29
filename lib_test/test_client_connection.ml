@@ -1747,6 +1747,40 @@ let test_request_pipelining_single_read () =
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
 ;;
 
+let raises_writer_closed f =
+  (* This is raised when you write to a closed [Faraday.t] *)
+  Alcotest.check_raises "raises because writer is closed"
+    (Failure "cannot write to closed writer") f
+;;
+
+let test_flush_response_before_shutdown () =
+  let request' = Request.create `GET "/" ~headers:Headers.encoding_chunked in
+  let response_handler _response _body =
+    assert false
+  in
+  let t = create ?config:None in
+  let body =
+    request
+      t
+      request'
+      ~flush_headers_immediately:true
+      ~response_handler
+      ~error_handler:no_error_handler
+  in
+  write_request t request';
+
+  Body.Writer.write_string body "hello world";
+  shutdown t;
+  Alcotest.(check bool) "Shutting down closes the request body"
+    true
+    (Body.Writer.is_closed body);
+
+  raises_writer_closed (fun () ->
+    write_string t "b\r\nhello world\r\n";
+    connection_is_shutdown t);
+;;
+
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1791,4 +1825,5 @@ let tests =
   ; "flushing on close with ~set_headers_immediately:false", `Quick, test_flush_on_close
   ; "request pipelining flushes request body", `Quick, test_request_pipelining_async
   ; "request pipelining both responses in single buffer", `Quick, test_request_pipelining_single_read
+  ; "shutting down closes request bodies", `Quick, test_flush_response_before_shutdown
   ]
