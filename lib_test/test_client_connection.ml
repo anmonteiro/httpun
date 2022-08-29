@@ -1776,8 +1776,8 @@ let test_flush_response_before_shutdown () =
     (Body.Writer.is_closed body);
 
   raises_writer_closed (fun () ->
-    write_string t "b\r\nhello world\r\n";
-    connection_is_shutdown t);
+    write_string t "b\r\nhello world\r\n");
+  connection_is_shutdown t
 ;;
 
 
