@@ -19,3 +19,9 @@ let flush_response_body t =
   | Streaming (_, response_body) ->
     Body.Writer.transfer_to_writer response_body
   | _ -> ()
+
+let close_response_body t =
+  match t with
+  | Streaming (_, response_body) ->
+    Body.Writer.close response_body
+  | _ -> ()
