@@ -79,6 +79,9 @@ type client_error = [
   | `I_m_a_teapot
   | `Enhance_your_calm
   | `Upgrade_required
+  | `Precondition_required
+  | `Too_many_requests
+  | `Request_header_fields_too_large
   ]
 
 type server_error = [
@@ -88,6 +91,7 @@ type server_error = [
   | `Service_unavailable
   | `Gateway_timeout
   | `Http_version_not_supported
+  | `Network_authentication_required
   ]
 
 type standard = [
@@ -144,6 +148,9 @@ let default_reason_phrase = function
   | `I_m_a_teapot -> "I'm a teapot" (* RFC 2342 *)
   | `Enhance_your_calm -> "Enhance Your Calm"
   | `Upgrade_required -> "Upgrade Required"
+  | `Precondition_required -> "Precondition Required"
+  | `Too_many_requests -> "Too Many Requests"
+  | `Request_header_fields_too_large -> "Request Header Fields Too Large"
  (* Server error *)
   | `Internal_server_error -> "Internal Server Error"
   | `Not_implemented -> "Not Implemented"
@@ -151,6 +158,7 @@ let default_reason_phrase = function
   | `Service_unavailable-> "Service Unavailable"
   | `Gateway_timeout -> "Gateway Timeout"
   | `Http_version_not_supported -> "HTTP Version Not Supported"
+  | `Network_authentication_required -> "Network Authentication Required"
 
 let to_code = function
  (* Informational *)
@@ -194,6 +202,9 @@ let to_code = function
   | `I_m_a_teapot -> 418
   | `Enhance_your_calm -> 420
   | `Upgrade_required -> 426
+  | `Precondition_required -> 428
+  | `Too_many_requests -> 429
+  | `Request_header_fields_too_large -> 431
  (* Server error *)
   | `Internal_server_error -> 500
   | `Not_implemented -> 501
@@ -201,6 +212,7 @@ let to_code = function
   | `Service_unavailable-> 503
   | `Gateway_timeout -> 504
   | `Http_version_not_supported -> 505
+  | `Network_authentication_required -> 511
   | `Code c -> c
 
 let really_unsafe_of_code = function
@@ -245,6 +257,9 @@ let really_unsafe_of_code = function
   | 418 -> `I_m_a_teapot
   | 420 -> `Enhance_your_calm
   | 426 -> `Upgrade_required
+  | 428 -> `Precondition_required
+  | 429 -> `Too_many_requests
+  | 431 -> `Request_header_fields_too_large
  (* Server error *)
   | 500 -> `Internal_server_error
   | 501 -> `Not_implemented
@@ -252,6 +267,7 @@ let really_unsafe_of_code = function
   | 503 -> `Service_unavailable
   | 504 -> `Gateway_timeout
   | 505 -> `Http_version_not_supported
+  | 511 -> `Network_authentication_required
   | c   -> `Code c
 
 let unsafe_of_code c =
@@ -346,6 +362,9 @@ let to_string = function (* don't allocate *)
   | `I_m_a_teapot -> "418"
   | `Enhance_your_calm -> "420"
   | `Upgrade_required -> "426"
+  | `Precondition_required -> "428"
+  | `Too_many_requests -> "429"
+  | `Request_header_fields_too_large -> "431"
  (* Server error *)
   | `Internal_server_error -> "500"
   | `Not_implemented -> "501"
@@ -353,6 +372,7 @@ let to_string = function (* don't allocate *)
   | `Service_unavailable-> "503"
   | `Gateway_timeout -> "504"
   | `Http_version_not_supported -> "505"
+  | `Network_authentication_required-> "511"
   | `Code c -> string_of_int c (* except for this *)
 
 let of_string x =

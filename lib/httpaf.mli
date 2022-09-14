@@ -212,6 +212,9 @@ module Status : sig
     | `Upgrade_required
     | `I_m_a_teapot
     | `Enhance_your_calm
+    | `Precondition_required
+    | `Too_many_requests
+    | `Request_header_fields_too_large
     ]
   (** The 4xx (Client Error) class of status code indicates that the client
       seems to have erred.
@@ -226,6 +229,7 @@ module Status : sig
     | `Service_unavailable
     | `Gateway_timeout
     | `Http_version_not_supported
+    | `Network_authentication_required
     ]
   (** The 5xx (Server Error) class of status code indicates that the server is
       aware that it has erred or is incapable of performing the requested
