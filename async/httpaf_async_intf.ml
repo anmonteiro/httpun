@@ -34,46 +34,43 @@ open Async
 open Httpaf
 
 module type Server = sig
-  type socket
-
-  type addr
+  type 'a socket constraint 'a = [< Socket.Address.t]
 
   val create_connection_handler
     :  ?config         : Config.t
-    -> request_handler : (addr -> Httpaf.Reqd.t Gluten.Server.request_handler)
-    -> error_handler   : (addr -> Server_connection.error_handler)
-    -> addr
-    -> socket
+    -> request_handler : ('a -> Httpaf.Reqd.t Gluten.Server.request_handler)
+    -> error_handler   : ('a -> Server_connection.error_handler)
+    -> 'a
+    -> ([< Socket.Address.t] as 'a) socket
     -> unit Deferred.t
 end
 
 module type Client = sig
-  type socket
+  type 'a socket constraint 'a = [< Socket.Address.t]
 
-  type runtime
+  type 'a runtime constraint 'a = [< Socket.Address.t]
 
-  type t =
+  type 'a t =
     { connection: Httpaf.Client_connection.t
-    ; runtime: runtime
+    ; runtime: 'a runtime
     }
 
   val create_connection
     : ?config: Config.t
-    -> socket
-    -> t Deferred.t
+    -> 'a socket
+    -> 'a t Deferred.t
 
   val request
-    :  t
+    :  'a t
     -> ?flush_headers_immediately: bool
     -> Request.t
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> Body.Writer.t
 
-  val shutdown: t -> unit Deferred.t
+  val shutdown: 'a t -> unit Deferred.t
 
-  val is_closed : t -> bool
+  val is_closed : 'a t -> bool
 
-  val upgrade : t -> Gluten.impl -> unit
+  val upgrade : 'a t -> Gluten.impl -> unit
 end
-

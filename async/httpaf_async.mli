@@ -38,13 +38,11 @@ open Httpaf
 
 module Server : sig
   include Httpaf_async_intf.Server
-    with type socket := ([`Active], Socket.Address.Inet.t) Socket.t
-    and type addr := Socket.Address.Inet.t
+    with type 'a socket = ([`Active], [< Socket.Address.t] as 'a) Socket.t
 
   module SSL : sig
     include Httpaf_async_intf.Server
-      with type socket := Gluten_async.Server.SSL.socket
-      and type addr := Socket.Address.Inet.t
+      with type 'a socket := 'a Gluten_async.Server.SSL.socket
 
     val create_connection_handler_with_default
       :  certfile       : string
@@ -52,7 +50,7 @@ module Server : sig
       -> ?config         : Config.t
       -> request_handler : ('a -> Httpaf.Reqd.t Gluten.Server.request_handler)
       -> error_handler   : ('a -> Server_connection.error_handler)
-      -> (Socket.Address.Inet.t as 'a)
+      -> 'a
       -> ([`Active], 'a) Socket.t
       -> unit Deferred.t
   end
@@ -60,15 +58,15 @@ end
 
 module Client : sig
   include Httpaf_async_intf.Client
-    with type socket = ([`Active], Socket.Address.Inet.t) Socket.t
+    with type 'a socket = ([`Active], [< Socket.Address.t] as 'a) Socket.t
 
   module SSL : sig
     include Httpaf_async_intf.Client
-      with type socket = Gluten_async.Client.SSL.socket
+      with type 'a socket = 'a Gluten_async.Client.SSL.socket
 
     val create_connection_with_default
       :  ?config : Config.t
-      -> ([`Active], [< Socket.Address.Inet.t]) Socket.t
-      -> t Deferred.t
+      -> ([`Active], [< Socket.Address.t] as 'a) Socket.t
+      -> 'a t Deferred.t
   end
 end
