@@ -138,7 +138,7 @@ let get t name =
 let get_exn t name =
   let rec loop t n =
     match t with
-    | [] -> Not_found
+    | [] -> raise Not_found
     | (n',v)::t' -> if CI.equal n n' then v else loop t' n
   in
   loop t name
