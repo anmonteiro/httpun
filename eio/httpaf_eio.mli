@@ -33,49 +33,36 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-
-open Httpaf
-
-
-module type Client = Httpaf_eio_intf.Client
-module type Server = Httpaf_eio_intf.Server
-
-(* The function that results from [create_connection_handler] should be passed
-   to [Lwt_io.establish_server_with_client_socket]. For an example, see
-   [examples/lwt_echo_server.ml]. *)
-module Server  : sig
-  include Httpaf_eio_intf.Server with type socket = Gluten_eio.Server.socket
-
-  module SSL : sig
-    include Httpaf_eio_intf.Server with type socket = Gluten_eio.Server.SSL.socket
-
-    val create_connection_handler_with_default
-      :  certfile        : string
-      -> keyfile         : string
-      -> ?config         : Config.t
-      -> request_handler : (Eio.Net.Sockaddr.stream  -> Httpaf.Reqd.t Gluten.reqd -> unit)
-      -> error_handler   : (Eio.Net.Sockaddr.stream -> Server_connection.error_handler)
-      -> Eio.Net.Sockaddr.stream
-      -> Eio.Net.stream_socket
-      -> unit
-  end
+module Server : sig
+  val create_connection_handler
+    :  ?config         : Httpaf.Config.t
+    -> request_handler : (Eio.Net.Sockaddr.stream  -> Httpaf.Reqd.t Gluten.reqd -> unit)
+    -> error_handler   : (Eio.Net.Sockaddr.stream -> Httpaf.Server_connection.error_handler)
+    -> Eio.Net.Sockaddr.stream
+    -> Eio.Flow.two_way
+    -> unit
 end
 
-(* For an example, see [examples/lwt_get.ml]. *)
-module Client  : sig
-  include Httpaf_eio_intf.Client
-    with type socket = Gluten_eio.Client.socket
-    and type runtime = Gluten_eio.Client.t
+module Client : sig
+  type t =
+    { connection: Httpaf.Client_connection.t
+    ; runtime: Gluten_eio.Client.t
+    }
 
-  module SSL : sig
-    include Httpaf_eio_intf.Client
-      with type socket = Gluten_eio.Client.SSL.socket
-      and type runtime = Gluten_eio.Client.SSL.t
+  val create_connection
+    :  ?config:Httpaf.Config.t -> sw:Eio.Switch.t -> Eio.Flow.two_way -> t
 
-    val create_connection_with_default
-      :  ?config : Httpaf.Config.t
-      -> sw : Eio.Switch.t
-      -> Eio.Net.stream_socket
-      -> t
-  end
+  val request
+    :  t
+    -> ?flush_headers_immediately:bool
+    -> Httpaf.Request.t
+    -> error_handler    : Httpaf.Client_connection.error_handler
+    -> response_handler : Httpaf.Client_connection.response_handler
+    -> Httpaf.Body.Writer.t
+
+  val shutdown: t -> unit
+
+  val is_closed : t -> bool
+
+  val upgrade : t -> Gluten.impl -> unit
 end
