@@ -33,11 +33,8 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-module type Client = Httpaf_eio_intf.Client
-module type Server = Httpaf_eio_intf.Server
-
-module MakeServer (Server_runtime: Gluten_eio.Server.S) = struct
-  type socket = Server_runtime.socket
+module Server = struct
+  module Server_runtime = Gluten_eio.Server
 
   let create_connection_handler
     ?(config=Httpaf.Config.default)
@@ -58,41 +55,12 @@ module MakeServer (Server_runtime: Gluten_eio.Server.S) = struct
         socket
 end
 
-module Server = struct
-  include MakeServer (Gluten_eio.Server)
-
-  module SSL = struct
-    include MakeServer (Gluten_eio.Server.SSL)
-
-    let create_connection_handler_with_default
-      ~certfile
-      ~keyfile
-      ?config
-      ~request_handler
-      ~error_handler =
-      let make_ssl_server =
-        Gluten_eio.Server.SSL.create_default ~certfile ~keyfile
-      in
-      fun client_addr socket ->
-        let ssl_server = make_ssl_server ~alpn_protocols:["http/1.1"] client_addr socket
-        in
-        create_connection_handler
-          ?config
-          ~request_handler
-          ~error_handler
-          client_addr
-          ssl_server
-  end
-end
-
-module MakeClient (Client_runtime: Gluten_eio.Client.S) = struct
-  type socket = Client_runtime.socket
-
-  type runtime = Client_runtime.t
+module Client = struct
+  module Client_runtime = Gluten_eio.Client
 
   type t =
     { connection: Httpaf.Client_connection.t
-    ; runtime: runtime
+    ; runtime : Client_runtime.t
     }
 
   let create_connection ?(config=Httpaf.Config.default) ~sw socket =
@@ -113,19 +81,4 @@ module MakeClient (Client_runtime: Gluten_eio.Client.S) = struct
   let is_closed t = Client_runtime.is_closed t.runtime
 
   let upgrade t protocol = Client_runtime.upgrade t.runtime protocol
-end
-
-module Client = struct
-  include MakeClient (Gluten_eio.Client)
-
-  module SSL = struct
-    include MakeClient (Gluten_eio.Client.SSL)
-
-    let create_connection_with_default ?config ~sw socket =
-      let ssl_client = Gluten_eio.Client.SSL.create_default
-        ~alpn_protocols:["http/1.1"]
-        socket
-      in
-      create_connection ?config ~sw ssl_client
-  end
 end
