@@ -467,7 +467,7 @@ let test_echo_post () =
   write_response t
     ~body:"e\r\nThis is a test\r\n"
     response;
-  read_string  t "\r\n0\r\n";
+  read_string  t "\r\n0\r\n\r\n";
   write_string t "0\r\n\r\n";
   writer_yielded t;
 
@@ -481,7 +481,7 @@ let test_echo_post () =
     response;
   read_string  t "\r\n21\r\n... that involves multiple chunks";
   write_string t "21\r\n... that involves multiple chunks\r\n";
-  read_string  t "\r\n0\r\n";
+  read_string  t "\r\n0\r\n\r\n";
   write_string t "0\r\n\r\n";
   writer_yielded t;
 
@@ -496,8 +496,8 @@ let test_echo_post () =
     ~body:"This is a test"
     response;
   read_string  t "\r\n21\r\n... that involves multiple chunks";
-  write_string  t "... that involves multiple chunks";
-  read_string  t "\r\n0\r\n";
+  write_string t "... that involves multiple chunks";
+  read_string  t "\r\n0\r\n\r\n";
   connection_is_shutdown t;
 ;;
 
