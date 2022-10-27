@@ -2321,6 +2321,22 @@ let test_body_flush_after_bytes_in_the_wire () =
   connection_is_shutdown t;
 ;;
 
+let test_input_consumed_before_closing_req_body () =
+  let request = Request.create `GET "/" ~headers:Headers.encoding_chunked in
+  let response = Response.create `OK ~headers:Headers.encoding_chunked in
+
+  let t = create (echo_handler response) in
+  read_request t request;
+  read_string  t "e\r\nThis is a test";
+  write_response t
+    ~body:"e\r\nThis is a test\r\n"
+    response;
+  read_string  t "\r\n0\r\n";
+  writer_yielded t;
+  read_string  t "\r\n";
+  write_string t "0\r\n\r\n";
+;;
+
 
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
@@ -2400,4 +2416,5 @@ let tests =
   ; "pipelined requests in single read" ,`Quick, test_pipelined_requests_in_single_buffer_partial_body
   ; "multiple pipelined requests", `Quick, test_multiple_pipelined_requests
   ; "Body.Writer.flush waits for bytes to have been written to the wire", `Quick, test_body_flush_after_bytes_in_the_wire
+  ; "input consumed before closing request body", `Quick, test_input_consumed_before_closing_req_body
   ]
