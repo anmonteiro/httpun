@@ -34,8 +34,6 @@
   ----------------------------------------------------------------------------*)
 
 module Server = struct
-  module Server_runtime = Gluten_eio.Server
-
   let create_connection_handler
     ?(config=Httpaf.Config.default)
     ~request_handler
@@ -46,7 +44,7 @@ module Server = struct
           ~config
           ~error_handler:(error_handler client_addr)
       in
-      Server_runtime.create_upgradable_connection_handler
+      Gluten_eio.Server.create_upgradable_connection_handler
         ~read_buffer_size:config.read_buffer_size
         ~protocol:(module Httpaf.Server_connection)
         ~create_protocol:create_connection
@@ -56,16 +54,14 @@ module Server = struct
 end
 
 module Client = struct
-  module Client_runtime = Gluten_eio.Client
-
   type t =
     { connection: Httpaf.Client_connection.t
-    ; runtime : Client_runtime.t
+    ; runtime : Gluten_eio.Client.t
     }
 
   let create_connection ?(config=Httpaf.Config.default) ~sw socket =
-    let connection = Httpaf.Client_connection.create ~config in
-    let runtime = Client_runtime.create
+    let connection = Httpaf.Client_connection.create ~config () in
+    let runtime = Gluten_eio.Client.create
       ~sw
       ~read_buffer_size:config.read_buffer_size
       ~protocol:(module Httpaf.Client_connection)
@@ -76,9 +72,9 @@ module Client = struct
 
   let request t = Httpaf.Client_connection.request t.connection
 
-  let shutdown t = Client_runtime.shutdown t.runtime
+  let shutdown t = Gluten_eio.Client.shutdown t.runtime
 
-  let is_closed t = Client_runtime.is_closed t.runtime
+  let is_closed t = Gluten_eio.Client.is_closed t.runtime
 
-  let upgrade t protocol = Client_runtime.upgrade t.runtime protocol
+  let upgrade t protocol = Gluten_eio.Client.upgrade t.runtime protocol
 end

@@ -102,7 +102,7 @@ let test_commit_parse_after_every_header () =
       `OK
   in
 
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -140,7 +140,7 @@ let test_get () =
   let response = Response.create `OK in
 
   (* Single GET *)
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -159,7 +159,7 @@ let test_get () =
       ~headers:(Headers.of_list ["connection", "close"])
       `GET "/"
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -175,7 +175,7 @@ let test_get () =
 
   (* Single GET, response closes connection *)
   let response = Response.create `OK ~headers:Headers.connection_close in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -194,7 +194,7 @@ let test_get () =
 
   (* Single GET, streaming body *)
   let response = Response.create `OK ~headers:Headers.encoding_chunked in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -217,7 +217,7 @@ let test_head () =
       `OK
   in
 
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -241,7 +241,7 @@ let test_get_last_close () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "0"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -278,7 +278,7 @@ let test_get_last_close () =
 let test_send_streaming_body () =
   let request' = Request.create `GET "/" ~headers:Headers.encoding_chunked in
   let response = Response.create `OK ~headers:Headers.encoding_chunked in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request t
       request'
@@ -303,7 +303,7 @@ let test_response_eof () =
   let response = Response.create `OK in (* not actually writen to the channel *)
 
   let error_message = ref None in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -330,7 +330,7 @@ let test_persistent_connection_requests () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -362,7 +362,7 @@ let test_persistent_connection_requests_pipelining () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -399,7 +399,7 @@ let test_persistent_connection_requests_pipelining_send_body () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -438,7 +438,7 @@ let test_persistent_connection_requests_body () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -475,7 +475,7 @@ let test_response_header_order () =
   in
   let response = Response.create `OK ~headers:(Headers.of_list headers) in
   let received = ref None in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -500,7 +500,7 @@ let test_report_exn () =
   let response = Response.create `OK in (* not actually writen to the channel *)
 
   let error_message = ref None in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -527,7 +527,7 @@ let test_input_shrunk () =
   let response = Response.create `OK in (* not actually writen to the channel *)
 
   let error_message = ref None in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -560,7 +560,7 @@ let test_partial_input () =
       (Headers.to_rev_list response.Response.headers);
     Body.Reader.close response_body
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -595,7 +595,7 @@ let test_empty_fixed_body () =
       (Headers.to_rev_list response.Response.headers);
     Body.Reader.close response_body
   in
-  let t = create ?config:None in
+  let t = create () in
   let (_body: Body.Writer.t) =
     request
       t
@@ -625,7 +625,7 @@ let test_fixed_body () =
       (Headers.to_rev_list response.Response.headers);
     Body.Reader.close response_body
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -661,7 +661,7 @@ let test_fixed_body_persistent_connection () =
       (Headers.to_rev_list response.Response.headers);
     Body.Reader.close response_body
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -700,7 +700,7 @@ let test_empty_fixed_body_persistent_connection () =
       (Headers.to_rev_list response.Response.headers);
     Body.Reader.close response_body
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -725,7 +725,7 @@ let test_client_upgrade () =
     ~headers:(Headers.of_list ["Content-Length", "0"])
     `GET "/"
   in
-  let t = create ?config:None in
+  let t = create () in
   let response = Response.create `Switching_protocols in
   let body =
     request
@@ -769,7 +769,7 @@ let test_handling_backpressure_when_read_not_scheduled () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -801,7 +801,7 @@ let test_handling_backpressure_when_read_not_scheduled_early_yield () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -832,7 +832,7 @@ let test_eof_with_another_pipelined_request () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler continue_reading expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _buffer ~off:_ ~len:_ =
@@ -897,7 +897,7 @@ let test_eof_handler_response_body_not_closed () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _buffer ~off:_ ~len:_ = () in
@@ -939,7 +939,7 @@ let test_eof_handler_closed_response_body () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler continue_reading expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _buffer ~off:_ ~len:_ =
@@ -987,7 +987,7 @@ let test_exception_closes_reader () =
       ~headers:(Headers.of_list [ "connection", "close"; "content-length", "10" ])
       `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1017,7 +1017,7 @@ let test_exception_closes_reader_persistent_connection () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1047,7 +1047,7 @@ let test_exception_reading_response_body () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _ ~off:_ ~len:_ = failwith "something went wrong" in
@@ -1079,7 +1079,7 @@ let test_exception_reading_response_body_last_chunk () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_eof () = () in
@@ -1124,7 +1124,7 @@ let test_async_exception_reading_response_body () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "10" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _ ~off:_ ~len:_ =
@@ -1163,7 +1163,7 @@ let test_failed_response_parse () =
 
   let test response bytes_read expected_error =
     let error = ref None in
-    let t = create ?config:None in
+    let t = create () in
     let body =
       request
         t
@@ -1205,7 +1205,7 @@ let test_shutdown_hangs_response_body_read () =
     and on_eof () = got_eof := true in
   Body.Reader.schedule_read response_body ~on_eof ~on_read
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1237,7 +1237,7 @@ let test_response_arrives_before_body_uploaded () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler continue_response expected_response response body =
     Alcotest.check (module Response) "expected response" expected_response response;
     let on_read _buffer ~off:_ ~len:_ = ()
@@ -1320,7 +1320,7 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler expected_response response _body =
     Alcotest.check (module Response) "expected response" expected_response response;
   in
@@ -1358,7 +1358,7 @@ let test_multiple_responses_in_single_read () =
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "0"]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler _response _body =
     res_handled := !res_handled + 1;
   in
@@ -1401,7 +1401,7 @@ let test_chunked_error () =
   let request' =
    Request.create ~headers:(Headers.of_list [ "transfer-encoding", "chunked" ]) `GET "/"
   in
-  let t = create ?config:None in
+  let t = create () in
   let response_handler _response _body =
     assert false
   in
@@ -1423,7 +1423,7 @@ let test_chunked_error () =
   connection_is_shutdown t;
 
   error_handler_called := false;
-  let t = create ?config:None in
+  let t = create () in
   let response =
     Response.create ~headers:(Headers.of_list ["content-length", "10"]) `OK
   in
@@ -1455,7 +1455,7 @@ let test_304_not_modified () =
       `Not_modified
   in
 
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1476,7 +1476,7 @@ let test_304_not_modified () =
 let test_empty_content_length_body_closed () =
   let response = Response.create `OK in
   let request' = Request.create `GET "/" in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1499,7 +1499,7 @@ let test_empty_content_length_body_closed () =
 let test_schedule_read_with_data_available () =
   let request' = Request.create `GET "/" in
   let response = Response.create `OK ~headers:(Headers.encoding_fixed 6) in
-  let t = create ?config:None in
+  let t = create () in
 
   let body = ref None in
   let response_handler response' body' =
@@ -1553,7 +1553,7 @@ let test_dont_flush_headers_immediately () =
   in
 
   let response = Response.create `OK ~headers:Headers.encoding_chunked in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1583,7 +1583,7 @@ let test_pipelining_no_immediate_flush () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1633,7 +1633,7 @@ let test_flush_on_close () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "0" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
 
   writer_yielded t;
   yield_writer t (fun () -> writer_woken_up := true);
@@ -1661,7 +1661,7 @@ let test_request_pipelining_async () =
   let response =
     Response.create ~headers:(Headers.of_list [ "content-length", "5" ]) `OK
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1711,7 +1711,7 @@ let test_request_pipelining_single_read () =
     Body.Reader.schedule_read body ~on_read ~on_eof;
   in
 
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t
@@ -1758,7 +1758,7 @@ let test_flush_response_before_shutdown () =
   let response_handler _response _body =
     assert false
   in
-  let t = create ?config:None in
+  let t = create () in
   let body =
     request
       t

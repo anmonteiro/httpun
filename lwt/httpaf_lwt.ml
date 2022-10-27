@@ -69,7 +69,7 @@ module Client (Client_runtime: Gluten_lwt.Client) = struct
 
   let create_connection ?(config=Httpaf.Config.default) socket =
     let open Lwt.Infix in
-    let connection = Httpaf.Client_connection.create ~config in
+    let connection = Httpaf.Client_connection.create ~config () in
     Client_runtime.create
       ~read_buffer_size:config.read_buffer_size
       ~protocol:(module Httpaf.Client_connection)

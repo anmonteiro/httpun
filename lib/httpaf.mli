@@ -791,7 +791,7 @@ module Client_connection : sig
 
   type error_handler = error -> unit
 
-  val create : ?config:Config.t -> t
+  val create : ?config:Config.t -> unit -> t
 
   val request
     :  t

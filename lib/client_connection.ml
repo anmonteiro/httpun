@@ -70,7 +70,7 @@ let yield_writer t k = Writer.on_wakeup t.writer k
 
 let wakeup_writer t = Writer.wakeup t.writer
 
-let[@ocaml.warning "-16"] create ?(config=Config.default) =
+let create ?(config=Config.default) () =
   let request_queue = Queue.create () in
   { config
   ; reader = Reader.response request_queue
