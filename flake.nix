@@ -15,6 +15,6 @@
       rec {
         packages = pkgs.callPackage ./nix { nix-filter = nix-filter.lib; };
         defaultPackage = packages.httpaf;
-        devShell = pkgs.callPackage ./shell.nix { };
+        devShell = pkgs.callPackage ./shell.nix { inherit packages; };
       });
 }
