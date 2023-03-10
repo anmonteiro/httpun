@@ -60,7 +60,7 @@ module Client : sig
     -> response_handler : Httpaf.Client_connection.response_handler
     -> Httpaf.Body.Writer.t
 
-  val shutdown: t -> unit
+  val shutdown: t -> unit Eio.Promise.t
 
   val is_closed : t -> bool
 
