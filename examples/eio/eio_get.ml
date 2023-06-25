@@ -1,4 +1,4 @@
-module Arg = Caml.Arg
+module Arg = Stdlib.Arg
 
 open Httpaf
 
@@ -6,14 +6,15 @@ let handler ~on_eof response response_body =
   match response with
   | { Response.status = `OK; _ } as response ->
     Format.fprintf Format.std_formatter "%a\n%!" Response.pp_hum response;
-    let rec on_read _bs ~off:_ ~len:_ =
-      (* Bigstringaf.substring ~off ~len bs |> print_string; *)
+    let rec on_read bs ~off ~len =
+      Bigstringaf.substring ~off ~len bs |> print_string;
+      flush stdout;
       Body.Reader.schedule_read response_body ~on_read ~on_eof
     in
     Body.Reader.schedule_read response_body ~on_read ~on_eof;
   | response ->
     Format.fprintf Format.err_formatter "%a\n%!" Response.pp_hum response;
-    Caml.exit 124
+    Stdlib.exit 124
 ;;
 
 let main port host =
@@ -29,15 +30,17 @@ let main port host =
     in
     Eio_unix.run_in_systhread (fun () ->
       Unix.connect fd (List.hd addrs).ai_addr);
-    let socket = Eio_unix.FD.as_socket ~sw ~close_unix:true fd in
+    let socket = Eio_unix.Net.import_socket_stream ~sw ~close_unix:true fd in
     let headers = Headers.of_list [ "host", host ] in
     let connection =
       Httpaf_eio.Client.create_connection ~sw (socket :> Eio.Flow.two_way)
     in
+
+    let exit_cond = Eio.Condition.create () in
     let response_handler =
       handler ~on_eof:(fun () ->
-        Caml.Format.eprintf "eof@.";
-        Httpaf_eio.Client.shutdown connection)
+        Stdlib.Format.eprintf "eof@.";
+        Eio.Condition.broadcast exit_cond)
     in
     let request_body =
       Httpaf_eio.Client.request
@@ -47,7 +50,9 @@ let main port host =
         connection
         (Request.create ~headers `GET "/")
     in
-    Body.Writer.close request_body))
+    Body.Writer.close request_body;
+    Eio.Condition.await_no_mutex exit_cond;
+    Httpaf_eio.Client.shutdown connection |> Eio.Promise.await))
 
 let () =
   let host = ref None in
