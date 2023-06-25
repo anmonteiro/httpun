@@ -1,6 +1,6 @@
 open Base
 open Httpaf
-module Format = Caml.Format
+module Format = Stdlib.Format
 
 let print_string = Stdio.(Out_channel.output_string stdout)
 
@@ -32,7 +32,7 @@ module Client = struct
       Body.Reader.schedule_read response_body ~on_read ~on_eof;
     | response ->
       Format.fprintf Format.err_formatter "%a\n%!" Response.pp_hum response;
-      Caml.exit 1
+      Stdlib.exit 1
   ;;
 end
 

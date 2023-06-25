@@ -1,8 +1,8 @@
-module Arg = Caml.Arg
+module Arg = Stdlib.Arg
 
 open Httpaf
 
-module Client = Httpaf_eio.Client.SSL
+module Client = Httpaf_eio.Client
 
 let () =
   Ssl.init ~thread_safe:true ()
@@ -18,39 +18,59 @@ let handler ~on_eof response response_body =
     Body.Reader.schedule_read response_body ~on_read ~on_eof;
   | response ->
     Format.fprintf Format.err_formatter "%a\n%!" Response.pp_hum response;
-    Caml.exit 124
+    Stdlib.exit 124
 ;;
 
 let main port host =
-  Eio_main.run (fun _env ->
+  Eio_main.run (fun env ->
     Eio.Switch.run (fun sw ->
-    let fd = Unix.socket ~cloexec:true Unix.PF_INET Unix.SOCK_STREAM 0 in
-    let addrs =
-      Eio_unix.run_in_systhread (fun () ->
-          Unix.getaddrinfo
-            host
-            (Int.to_string port)
-            [ Unix.(AI_FAMILY PF_INET) ])
-    in
-    Eio_unix.run_in_systhread (fun () ->
-      Unix.connect fd (List.hd addrs).ai_addr);
-    let socket = Eio_unix.FD.as_socket ~sw ~close_unix:true fd in
-    let headers = Headers.of_list [ "host", host ] in
-    let connection = Client.create_connection_with_default ~sw socket in
-    let response_handler =
-      handler ~on_eof:(fun () ->
-        Caml.Format.eprintf "eof@.";
-        Client.shutdown connection)
-    in
-    let request_body =
-      Client.request
-        connection
-        ~flush_headers_immediately:true
-        ~error_handler:Httpaf_examples.Client.error_handler
-        ~response_handler
-        (Request.create ~headers `GET "/")
-    in
-    Body.Writer.close request_body));
+      let addrs =
+        let addrs =
+          Eio_unix.run_in_systhread (fun () ->
+              Unix.getaddrinfo
+                host
+                (string_of_int port)
+                [ Unix.(AI_FAMILY PF_INET) ])
+        in
+        List.filter_map
+          (fun (addr : Unix.addr_info) ->
+            match addr.ai_addr with
+            | Unix.ADDR_UNIX _ -> None
+            | ADDR_INET (addr, port) -> Some (addr, port))
+          addrs
+      in
+      let addr =
+        let inet, port = List.hd addrs in
+        `Tcp (Eio_unix.Net.Ipaddr.of_unix inet, port)
+      in
+      let socket = Eio.Net.connect ~sw (Eio.Stdenv.net env) addr in
+      let ctx = Ssl.create_context (Ssl.SSLv23 [@ocaml.warning "-3"]) Ssl.Client_context in
+      Ssl.disable_protocols ctx [ (Ssl.SSLv23 [@ocaml.warning "-3"]) ];
+      Ssl.honor_cipher_order ctx;
+      Ssl.set_context_alpn_protos ctx [ "h2" ];
+      let ssl_ctx = Eio_ssl.Context.create ~ctx socket in
+      let ssl_sock = Eio_ssl.Context.ssl_socket ssl_ctx in
+      Ssl.set_client_SNI_hostname ssl_sock host;
+      Ssl.set_hostflags ssl_sock [ No_partial_wildcards ];
+      Ssl.set_host ssl_sock host;
+      let ssl_sock = Eio_ssl.connect ssl_ctx in
+
+      let headers = Headers.of_list [ "host", host ] in
+      let connection = Client.create_connection ~sw (ssl_sock :> Eio.Flow.two_way) in
+      let response_handler =
+        handler ~on_eof:(fun () ->
+          Stdlib.Format.eprintf "eof@.";
+          Client.shutdown connection |> Eio.Promise.await)
+      in
+      let request_body =
+        Client.request
+          connection
+          ~flush_headers_immediately:true
+          ~error_handler:Httpaf_examples.Client.error_handler
+          ~response_handler
+          (Request.create ~headers `GET "/")
+      in
+      Body.Writer.close request_body));
 ;;
 
 let () =

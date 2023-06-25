@@ -1,5 +1,5 @@
 open Base
-module Arg = Caml.Arg
+module Arg = Stdlib.Arg
 
 open Httpaf_eio
 open Httpaf
@@ -28,7 +28,7 @@ let request_handler ~u (_ : Eio.Net.Sockaddr.stream) { Gluten.reqd; _ } =
         Body.Writer.write_bigstring response_body buffer ~off ~len;
         Body.Reader.schedule_read request_body ~on_eof ~on_read;
       and on_eof () =
-        Caml.Format.eprintf "EOF@.";
+        Stdlib.Format.eprintf "EOF@.";
         Body.Writer.close response_body;
         Eio.Promise.resolve_ok u ()
       in
@@ -61,14 +61,14 @@ let main port =
   Stdio.printf "  echo \"Testing echo POST\" | curl -XPOST --data @- http://localhost:%d\n\n%!" port;
   let domain_mgr = Eio.Stdenv.domain_mgr env in
   let p, _ = Eio.Promise.create () in
-  for _i = 1 to Caml.Domain.recommended_domain_count do
+  for _i = 1 to Stdlib.Domain.recommended_domain_count () do
     Eio.Fiber.fork_daemon ~sw (fun () ->
       Eio.Domain_manager.run domain_mgr (fun () ->
         Eio.Switch.run (fun sw ->
           while true do
             Eio.Net.accept_fork socket ~sw ~on_error:log_connection_error (fun client_sock client_addr ->
                 let p, u = Eio.Promise.create () in
-                handler ~u client_addr client_sock;
+                handler ~u client_addr (client_sock :> Eio.Flow.two_way);
                 Eio.Promise.await_exn p)
           done;
         `Stop_daemon)))

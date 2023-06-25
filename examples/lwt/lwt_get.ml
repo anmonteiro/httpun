@@ -1,6 +1,6 @@
 open Base
 open Lwt.Infix
-module Arg = Caml.Arg
+module Arg = Stdlib.Arg
 
 open Httpaf
 open Httpaf_lwt_unix

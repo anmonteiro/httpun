@@ -1,6 +1,6 @@
 open Base
 open Httpaf_lwt_unix
-module Arg = Caml.Arg
+module Arg = Stdlib.Arg
 
 let main port =
   let open Lwt.Infix in

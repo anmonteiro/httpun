@@ -11,7 +11,7 @@ let main port max_accepts_per_batch () =
     (Server.create_connection_handler ~request_handler ~error_handler)
   >>= fun server ->
   Deferred.forever () (fun () ->
-    Clock.after Time.Span.(of_sec 0.5) >>| fun () ->
+    Clock.after Time_float.Span.(of_sec 0.5) >>| fun () ->
       Log.Global.printf "conns: %d" (Tcp.Server.num_connections server));
   Deferred.never ()
 
