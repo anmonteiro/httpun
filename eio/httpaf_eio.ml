@@ -37,7 +37,8 @@ module Server = struct
   let create_connection_handler
     ?(config=Httpaf.Config.default)
     ~request_handler
-    ~error_handler =
+    ~error_handler
+    ~sw =
     fun client_addr socket ->
       let create_connection =
         Httpaf.Server_connection.create
@@ -47,6 +48,7 @@ module Server = struct
       Gluten_eio.Server.create_upgradable_connection_handler
         ~read_buffer_size:config.read_buffer_size
         ~protocol:(module Httpaf.Server_connection)
+        ~sw
         ~create_protocol:create_connection
         ~request_handler
         client_addr
