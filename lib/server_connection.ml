@@ -389,4 +389,5 @@ and _final_write_operation_for t reqd =
 let next_write_operation t = _next_write_operation t
 
 let report_write_result t result =
-  Writer.report_result t.writer result
+  Writer.report_result t.writer result;
+  wakeup_reader t
