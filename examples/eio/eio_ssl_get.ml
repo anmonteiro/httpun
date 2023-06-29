@@ -56,7 +56,7 @@ let main port host =
       let ssl_sock = Eio_ssl.connect ssl_ctx in
 
       let headers = Headers.of_list [ "host", host ] in
-      let connection = Client.create_connection ~sw (ssl_sock :> Eio.Flow.two_way) in
+      let connection = Client.create_connection ~sw ssl_sock in
       let response_handler =
         handler ~on_eof:(fun () ->
           Stdlib.Format.eprintf "eof@.";
