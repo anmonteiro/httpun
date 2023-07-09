@@ -33,7 +33,7 @@ let main port host =
     let socket = Eio_unix.Net.import_socket_stream ~sw ~close_unix:true fd in
     let headers = Headers.of_list [ "host", host ] in
     let connection =
-      Httpaf_eio.Client.create_connection ~sw (socket :> Eio.Flow.two_way)
+      Httpaf_eio.Client.create_connection ~sw socket
     in
 
     let exit_cond = Eio.Condition.create () in

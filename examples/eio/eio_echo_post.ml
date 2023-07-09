@@ -68,7 +68,7 @@ let main port =
           while true do
             Eio.Net.accept_fork socket ~sw ~on_error:log_connection_error (fun client_sock client_addr ->
                 let p, u = Eio.Promise.create () in
-                handler ~u client_addr (client_sock :> Eio.Flow.two_way);
+                handler ~sw ~u client_addr client_sock;
                 Eio.Promise.await_exn p)
           done;
         `Stop_daemon)))
