@@ -14,6 +14,15 @@ let
   } // args);
 
   httpunPkgs = rec {
+    httpun-types = buildHttpun {
+      pname = "httpun-types";
+      src = genSrc {
+        dirs = [ "types" ];
+        files = [ "httpun-types.opam" ];
+      };
+      propagatedBuildInputs = [ faraday ];
+    };
+
     httpun = buildHttpun {
       pname = "httpun";
       src = genSrc {
@@ -24,6 +33,7 @@ let
       propagatedBuildInputs = [
         angstrom
         faraday
+        httpun-types
       ];
     };
 
