@@ -1,14 +1,14 @@
 (test
- (libraries bigstringaf httpaf alcotest)
+ (libraries bigstringaf httpun alcotest)
  (modules
   helpers
   test_client_connection
   test_headers
-  test_httpaf
+  test_httpun
   test_iovec
   test_method
   test_request
   test_response
   test_server_connection
   test_version)
- (name test_httpaf))
+ (name test_httpun))

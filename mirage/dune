@@ -1,10 +1,10 @@
 (library
- (name httpaf_mirage)
- (public_name httpaf-mirage)
+ (name httpun_mirage)
+ (public_name httpun-mirage)
  (libraries
   faraday-lwt
-  httpaf
-  httpaf-lwt
+  httpun
+  httpun-lwt
   gluten-mirage
   lwt
   mirage-flow

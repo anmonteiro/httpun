@@ -30,47 +30,48 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *---------------------------------------------------------------------------*)
 
-open Async
-open Httpaf
+open Httpun
 
 module type Server = sig
-  type 'a socket constraint 'a = [< Socket.Address.t]
+  type socket
+
+  type addr
 
   val create_connection_handler
     :  ?config         : Config.t
-    -> request_handler : ('a -> Httpaf.Reqd.t Gluten.Server.request_handler)
-    -> error_handler   : ('a -> Server_connection.error_handler)
-    -> 'a
-    -> ([< Socket.Address.t] as 'a) socket
-    -> unit Deferred.t
+    -> request_handler : (addr -> Httpun.Reqd.t Gluten.reqd -> unit)
+    -> error_handler   : (addr -> Server_connection.error_handler)
+    -> addr
+    -> socket
+    -> unit Lwt.t
 end
 
 module type Client = sig
-  type 'a socket constraint 'a = [< Socket.Address.t]
+  type socket
 
-  type 'a runtime constraint 'a = [< Socket.Address.t]
+  type runtime
 
-  type 'a t =
-    { connection: Httpaf.Client_connection.t
-    ; runtime: 'a runtime
+  type t =
+    { connection: Httpun.Client_connection.t
+    ; runtime: runtime
     }
 
   val create_connection
-    : ?config: Config.t
-    -> 'a socket
-    -> 'a t Deferred.t
+    : ?config : Config.t
+    -> socket
+    -> t Lwt.t
 
   val request
-    :  'a t
-    -> ?flush_headers_immediately: bool
+    :  t
+    -> ?flush_headers_immediately:bool
     -> Request.t
     -> error_handler    : Client_connection.error_handler
     -> response_handler : Client_connection.response_handler
     -> Body.Writer.t
 
-  val shutdown: 'a t -> unit Deferred.t
+  val shutdown: t -> unit Lwt.t
 
-  val is_closed : 'a t -> bool
+  val is_closed : t -> bool
 
-  val upgrade : 'a t -> Gluten.impl -> unit
+  val upgrade : t -> Gluten.impl -> unit
 end

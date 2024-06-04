@@ -1,5 +1,3 @@
 (library
- (name httpaf_examples)
- (libraries httpaf base stdio gluten)
- (flags
-  (:standard -safe-string)))
+ (name httpun_examples)
+ (libraries httpun base stdio gluten))

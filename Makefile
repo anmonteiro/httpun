@@ -12,7 +12,7 @@ examples:
 	dune build @examples
 
 watch:
-	dune build {httpaf,httpaf-async,httpaf-lwt-unix}.install @runtest --watch
+	dune build {httpun,httpun-async,httpun-lwt-unix}.install @runtest --watch
 
 install:
 	dune install

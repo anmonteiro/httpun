@@ -1,12 +1,12 @@
 open Base
-open Httpaf_lwt_unix
+open Httpun_lwt_unix
 module Arg = Stdlib.Arg
 
 let main port =
   let open Lwt.Infix in
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, port)) in
-  let request_handler _ = Httpaf_examples.Server.benchmark in
-  let error_handler _ = Httpaf_examples.Server.error_handler in
+  let request_handler _ = Httpun_examples.Server.benchmark in
+  let error_handler _ = Httpun_examples.Server.error_handler in
   Lwt.async begin fun () ->
     Lwt_io.establish_server_with_client_socket
       ~backlog:11_000

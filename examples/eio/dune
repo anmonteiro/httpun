@@ -1,5 +1,5 @@
 (executables
- (libraries httpaf httpaf-eio httpaf_examples base stdio eio_main eio-ssl)
+ (libraries httpun httpun-eio httpun_examples base stdio eio_main eio-ssl)
  (names eio_echo_post eio_get eio_ssl_get)
  (flags :standard -warn-error -A))
 

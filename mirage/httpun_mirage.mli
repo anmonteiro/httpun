@@ -32,41 +32,21 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-open Async
+open Httpun
 
-open Httpaf
+module type Server = sig
+  type socket
 
-module Server : sig
-  include Httpaf_async_intf.Server
-    with type 'a socket = ([`Active], [< Socket.Address.t] as 'a) Socket.t
-
-  module SSL : sig
-    include Httpaf_async_intf.Server
-      with type 'a socket := 'a Gluten_async.Server.SSL.socket
-
-    val create_connection_handler_with_default
-      :  certfile       : string
-      -> keyfile        : string
-      -> ?config         : Config.t
-      -> request_handler : ('a -> Httpaf.Reqd.t Gluten.Server.request_handler)
-      -> error_handler   : ('a -> Server_connection.error_handler)
-      -> 'a
-      -> ([`Active], 'a) Socket.t
-      -> unit Deferred.t
-  end
+  val create_connection_handler
+    :  ?config : Config.t
+    -> request_handler : (Reqd.t Gluten.reqd -> unit)
+    -> error_handler : Server_connection.error_handler
+    -> (socket -> unit Lwt.t)
 end
 
-module Client : sig
-  include Httpaf_async_intf.Client
-    with type 'a socket = ([`Active], [< Socket.Address.t] as 'a) Socket.t
+module Server (Flow : Mirage_flow.S) :
+  Server with type socket = Flow.flow
 
-  module SSL : sig
-    include Httpaf_async_intf.Client
-      with type 'a socket = 'a Gluten_async.Client.SSL.socket
+module type Client = Httpun_lwt.Client
 
-    val create_connection_with_default
-      :  ?config : Config.t
-      -> ([`Active], [< Socket.Address.t] as 'a) Socket.t
-      -> 'a t Deferred.t
-  end
-end
+module Client (Flow : Mirage_flow.S) : Client with type socket = Flow.flow

@@ -1,5 +1,5 @@
 open Base
-open Httpaf
+open Httpun
 module Format = Stdlib.Format
 
 let print_string = Stdio.(Out_channel.output_string stdout)

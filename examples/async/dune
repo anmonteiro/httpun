@@ -1,8 +1,8 @@
 (executables
  (libraries
-  httpaf
-  httpaf-async
-  httpaf_examples
+  httpun
+  httpun-async
+  httpun_examples
   async
   core
   core_unix.command_unix)

@@ -2,11 +2,11 @@ open Base
 open Lwt.Infix
 module Arg = Stdlib.Arg
 
-open Httpaf_lwt_unix
+open Httpun_lwt_unix
 
-let error_handler (_ : Unix.sockaddr) = Httpaf_examples.Server.error_handler
+let error_handler (_ : Unix.sockaddr) = Httpun_examples.Server.error_handler
 let request_handler (_ : Unix.sockaddr)  =
-  Httpaf_examples.Server.echo_post
+  Httpun_examples.Server.echo_post
 
 let main port =
   let listen_address = Unix.(ADDR_INET (inet_addr_loopback, port)) in

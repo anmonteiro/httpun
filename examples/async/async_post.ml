@@ -1,15 +1,15 @@
 open Core
 open Async
 
-open Httpaf
-open Httpaf_async
+open Httpun
+open Httpun_async
 
 let main port host () =
   let where_to_connect = Tcp.Where_to_connect.of_host_and_port { host; port } in
   Tcp.connect_sock where_to_connect
   >>= fun socket ->
     let finished = Ivar.create () in
-    let response_handler = Httpaf_examples.Client.print ~on_eof:(Ivar.fill finished) in
+    let response_handler = Httpun_examples.Client.print ~on_eof:(Ivar.fill finished) in
     let headers =
       Headers.of_list
       [ "transfer-encoding", "chunked"
@@ -21,7 +21,7 @@ let main port host () =
     let request_body =
       Client.request
         connection
-        ~error_handler:Httpaf_examples.Client.error_handler
+        ~error_handler:Httpun_examples.Client.error_handler
         ~response_handler
         (Request.create ~headers `POST "/")
     in

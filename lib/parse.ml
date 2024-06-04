@@ -179,7 +179,7 @@ let body ~encoding body =
   | `Chunked ->
     (* XXX(seliopou): The [eol] in this parser should really parse a collection
      * of "chunk extensions", as defined in RFC7230§4.1. These do not show up
-     * in the wild very frequently, and the httpaf API has no way of exposing
+     * in the wild very frequently, and the httpun API has no way of exposing
      * them to the suer, so for now the parser does not attempt to recognize
      * them. This means that any chunked messages that contain chunk extensions
      * will fail to parse. *)
@@ -325,7 +325,7 @@ module Reader = struct
       committed
   and start t state =
       match state with
-      | AU.Done _         -> failwith "httpaf.Parse.unable to start parser"
+      | AU.Done _         -> failwith "httpun.Parse.unable to start parser"
       | AU.Fail(0, marks, msg) ->
         t.parse_state <- Fail (`Parse(marks, msg))
       | AU.Partial { committed = 0; continue } ->

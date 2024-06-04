@@ -1,4 +1,4 @@
-open Httpaf
+open Httpun
 open Helpers
 
 let trace fmt = Format.ksprintf (Format.printf "%s\n%!") fmt

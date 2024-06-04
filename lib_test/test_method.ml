@@ -1,4 +1,4 @@
-open Httpaf
+open Httpun
 open Method
 
 let test_is_safe () =

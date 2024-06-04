@@ -1,6 +1,6 @@
 module Arg = Stdlib.Arg
 
-open Httpaf
+open Httpun
 
 let handler ~on_eof response response_body =
   match response with
@@ -33,7 +33,7 @@ let main port host =
     let socket = Eio_unix.Net.import_socket_stream ~sw ~close_unix:true fd in
     let headers = Headers.of_list [ "host", host ] in
     let connection =
-      Httpaf_eio.Client.create_connection ~sw socket
+      Httpun_eio.Client.create_connection ~sw socket
     in
 
     let exit_cond = Eio.Condition.create () in
@@ -43,16 +43,16 @@ let main port host =
         Eio.Condition.broadcast exit_cond)
     in
     let request_body =
-      Httpaf_eio.Client.request
+      Httpun_eio.Client.request
         (* ~flush_headers_immediately:true *)
-        ~error_handler:Httpaf_examples.Client.error_handler
+        ~error_handler:Httpun_examples.Client.error_handler
         ~response_handler
         connection
         (Request.create ~headers `GET "/")
     in
     Body.Writer.close request_body;
     Eio.Condition.await_no_mutex exit_cond;
-    Httpaf_eio.Client.shutdown connection |> Eio.Promise.await))
+    Httpun_eio.Client.shutdown connection |> Eio.Promise.await))
 
 let () =
   let host = ref None in

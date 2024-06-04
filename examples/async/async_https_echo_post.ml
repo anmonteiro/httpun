@@ -1,8 +1,8 @@
 open Core
 open Async
 
-open Httpaf
-open Httpaf_async
+open Httpun
+open Httpun_async
 
 
 let error_handler _ ?request:_ error start_response =

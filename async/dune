@@ -1,6 +1,4 @@
 (library
- (name httpaf_async)
- (public_name httpaf-async)
- (libraries async core httpaf gluten-async)
- (flags
-  (:standard -safe-string)))
+ (name httpun_async)
+ (public_name httpun-async)
+ (libraries async core httpun gluten-async))

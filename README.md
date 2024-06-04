@@ -1,10 +1,11 @@
-_This work builds on top of httpaf by providing more features than the original
-work, as well as fixing some bugs in the original implementation. For a full
-list of changes and additions, please refer to [CHANGES.md](./CHANGES.md)._
+_This work builds on top of [httpaf](https://github.com/inhabitedtype/httpaf)
+by providing more features than the original work, as well as fixing some bugs
+in the original implementation. For a full list of changes and additions,
+please refer to [CHANGES.md](./CHANGES.md)._
 
-# http/af
+# http/un
 
-http/af is a high-performance, memory-efficient, and scalable web server for
+http/un is a high-performance, memory-efficient, and scalable web server for
 OCaml. It implements the HTTP 1.1 specification with respect to parsing,
 serialization, and connection pipelining as a state machine that is agnostic to
 the underlying IO mechanism, and is therefore portable across many platform.
@@ -13,7 +14,6 @@ the parsing and serialization layers of the HTTP standard, hence the name.
 
 [angstrom]: https://github.com/inhabitedtype/angstrom
 [faraday]: https://github.com/inhabitedtype/faraday
-[![Build Status](https://github.com/inhabitedtype/httpaf/workflows/build/badge.svg)](https://github.com/inhabitedtype/httpaf/actions?query=workflow%3A%22build%22)]
 
 ## Installation
 
@@ -22,20 +22,20 @@ Install the library and its dependencies via [OPAM][opam]:
 [opam]: http://opam.ocaml.org/
 
 ```bash
-opam install httpaf
+opam install httpun
 ```
 
 ## Usage
 
-Here is a Hello, World! program written using httpaf. It only responds to `GET`
+Here is a Hello, World! program written using httpun. It only responds to `GET`
 requests to the `/hello/*` target. As it does not itself do any IO, it can be
 used with both the Async and Lwt runtimes. See the [`examples`][examples] directory for
 usage of the individual runtimes.
 
-[examples]: https://github.com/inhabitedtype/httpaf/tree/master/examples
+[examples]: https://github.com/anmonteiro/httpun/tree/master/examples
 
 ```ocaml
-open Httpaf
+open Httpun
 module String = Caml.String
 
 let invalid_request reqd status body =
@@ -77,18 +77,18 @@ let request_handler reqd =
 
 ## Performance
 
-The reason for http/af's existence is [mirage/ocaml-cohttp#328][328], which
+The reason for http/un's existence is [mirage/ocaml-cohttp#328][328], which
 highlights the poor scalability of cohttp. This is due to a number of factors,
 including poor scheduling, excessive allocation, and starvation of the server's
 accept loop. Here is a comparison chart of the data from that issue, along with
-data from an async-based http/af server. This server was run on a VM with 3
+data from an async-based http/un server. This server was run on a VM with 3
 virtual cores, the host being circa 2015 MacBook Pro:
 
 [328]: https://github.com/mirage/ocaml-cohttp/issues/328
 
-![http/af comparsion to cohttp](https://raw.githubusercontent.com/inhabitedtype/httpaf/master/images/httpaf-comparison.png)
+![http/un comparsion to cohttp](https://raw.githubusercontent.com/inhabitedtype/httpaf/master/images/httpaf-comparison.png)
 
-The http/af latency histogram, relative to the cohttp histograms, is pretty
+The http/un latency histogram, relative to the cohttp histograms, is pretty
 much flat along the x-axis. Here are some additional statistics from that run
 (with latencies in milliseconds):
 
@@ -106,8 +106,8 @@ To install development dependencies, pin the package from the root of the
 repository:
 
 ```bash
-opam pin add -n httpaf .
-opam install --deps-only httpaf
+opam pin add -n httpun .
+opam install --deps-only httpun
 ```
 
 After this, you may install a development version of the library using the

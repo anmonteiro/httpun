@@ -1,5 +1,6 @@
 (*----------------------------------------------------------------------------
     Copyright (c) 2018 Inhabited Type LLC.
+    Copyright (c) 2018 Anton Bachin
     Copyright (c) 2019 António Nuno Monteiro
 
     All rights reserved.
@@ -32,40 +33,24 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-module Server (Flow : Mirage_flow.S) = struct
-  module Server_runtime = Httpaf_lwt.Server (Gluten_mirage.Server (Flow))
-  type socket = Flow.flow
+module type Server = Httpun_lwt_intf.Server
 
-  let create_connection_handler ?config ~request_handler ~error_handler =
-    fun flow ->
-      let request_handler () = request_handler in
-      let error_handler () = error_handler in
-      Server_runtime.create_connection_handler
-        ?config
-        ~request_handler
-        ~error_handler
-        ()
-        (Gluten_mirage.Buffered_flow.create flow)
-end
+module type Client = Httpun_lwt_intf.Client
 
-(* Almost like the `Httpaf_lwt.Server` module type but we don't need the client
- * address argument in Mirage. It's somewhere else. *)
-module type Server = sig
-  type socket
+(* The function that results from [create_connection_handler] should be passed
+   to [Lwt_io.establish_server_with_client_socket]. For an example, see
+   [examples/lwt_echo_server.ml]. *)
+module Server (Server_runtime: Gluten_lwt.Server) :
+  Server with type socket = Server_runtime.socket
+          and type addr := Server_runtime.addr
 
-  val create_connection_handler
-    :  ?config : Httpaf.Config.t
-    -> request_handler : (Httpaf.Reqd.t Gluten.reqd -> unit)
-    -> error_handler : Httpaf.Server_connection.error_handler
-    -> (socket -> unit Lwt.t)
-end
+(* For an example, see [examples/lwt_get.ml]. *)
+module Client (Client_runtime: Gluten_lwt.Client) : sig
+  include Client with type socket = Client_runtime.socket
+          and type runtime = Client_runtime.t
 
-module type Client = Httpaf_lwt.Client
-
-module Client (Flow : Mirage_flow.S) = struct
-  include Httpaf_lwt.Client (Gluten_mirage.Client (Flow))
-  type socket = Flow.flow
-
-  let create_connection ?config flow =
-    create_connection ?config (Gluten_mirage.Buffered_flow.create flow)
+  val create_connection
+    : ?config : Httpun.Config.t
+    -> Client_runtime.socket
+    -> t Lwt.t
 end

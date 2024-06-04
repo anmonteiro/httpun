@@ -1,6 +1,5 @@
 (*----------------------------------------------------------------------------
     Copyright (c) 2018 Inhabited Type LLC.
-    Copyright (c) 2018 Anton Bachin
     Copyright (c) 2019 António Nuno Monteiro
 
     All rights reserved.
@@ -33,56 +32,40 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-include Httpaf_lwt_intf
+module Server (Flow : Mirage_flow.S) = struct
+  module Server_runtime = Httpun_lwt.Server (Gluten_mirage.Server (Flow))
+  type socket = Flow.flow
 
-module Server (Server_runtime: Gluten_lwt.Server) = struct
-  type socket = Server_runtime.socket
-
-  let create_connection_handler
-    ?(config=Httpaf.Config.default)
-    ~request_handler
-    ~error_handler =
-    fun client_addr socket ->
-      let create_connection =
-        Httpaf.Server_connection.create
-          ~config
-          ~error_handler:(error_handler client_addr)
-      in
-      Server_runtime.create_upgradable_connection_handler
-        ~read_buffer_size:config.read_buffer_size
-        ~protocol:(module Httpaf.Server_connection)
-        ~create_protocol:create_connection
+  let create_connection_handler ?config ~request_handler ~error_handler =
+    fun flow ->
+      let request_handler () = request_handler in
+      let error_handler () = error_handler in
+      Server_runtime.create_connection_handler
+        ?config
         ~request_handler
-        client_addr
-        socket
+        ~error_handler
+        ()
+        (Gluten_mirage.Buffered_flow.create flow)
 end
 
-module Client (Client_runtime: Gluten_lwt.Client) = struct
-  type socket = Client_runtime.socket
+(* Almost like the `Httpun_lwt.Server` module type but we don't need the client
+ * address argument in Mirage. It's somewhere else. *)
+module type Server = sig
+  type socket
 
-  type runtime = Client_runtime.t
+  val create_connection_handler
+    :  ?config : Httpun.Config.t
+    -> request_handler : (Httpun.Reqd.t Gluten.reqd -> unit)
+    -> error_handler : Httpun.Server_connection.error_handler
+    -> (socket -> unit Lwt.t)
+end
 
-  type t =
-    { connection: Httpaf.Client_connection.t
-    ; runtime: runtime
-    }
+module type Client = Httpun_lwt.Client
 
-  let create_connection ?(config=Httpaf.Config.default) socket =
-    let open Lwt.Infix in
-    let connection = Httpaf.Client_connection.create ~config () in
-    Client_runtime.create
-      ~read_buffer_size:config.read_buffer_size
-      ~protocol:(module Httpaf.Client_connection)
-      connection
-      socket
-    >|= fun runtime ->
-      { runtime; connection }
+module Client (Flow : Mirage_flow.S) = struct
+  include Httpun_lwt.Client (Gluten_mirage.Client (Flow))
+  type socket = Flow.flow
 
-  let request t = Httpaf.Client_connection.request t.connection
-
-  let shutdown t = Client_runtime.shutdown t.runtime
-
-  let is_closed t = Client_runtime.is_closed t.runtime
-
-  let upgrade t protocol = Client_runtime.upgrade t.runtime protocol
+  let create_connection ?config flow =
+    create_connection ?config (Gluten_mirage.Buffered_flow.create flow)
 end

@@ -1,7 +1,7 @@
 open Lwt.Infix
-open Httpaf
+open Httpun
 
-module type HTTP = Httpaf_mirage.Server
+module type HTTP = httpun_mirage.Server
 
 module Dispatch (C: Mirage_console.S) (Http: HTTP) = struct
 
@@ -9,7 +9,7 @@ module Dispatch (C: Mirage_console.S) (Http: HTTP) = struct
 
   let get_content c path =
     log c "Replying: %s" path >|= fun () ->
-    "Hello from the httpaf unikernel"
+    "Hello from the httpun unikernel"
 
   let dispatcher c { Gluten.reqd; _ } =
     let {Request.target; _} = Reqd.request reqd in

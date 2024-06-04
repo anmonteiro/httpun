@@ -1,11 +1,11 @@
 open Core
 open Async
-open Httpaf_async
+open Httpun_async
 
 let main port max_accepts_per_batch () =
   let where_to_listen = Tcp.Where_to_listen.of_port port in
-  let request_handler _ = Httpaf_examples.Server.benchmark in
-  let error_handler _ = Httpaf_examples.Server.error_handler in
+  let request_handler _ = Httpun_examples.Server.benchmark in
+  let error_handler _ = Httpun_examples.Server.error_handler in
   Tcp.(Server.create_sock ~on_handler_error:`Ignore
       ~backlog:11_000 ~max_connections:10_000 ~max_accepts_per_batch where_to_listen)
     (Server.create_connection_handler ~request_handler ~error_handler)

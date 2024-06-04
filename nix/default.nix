@@ -8,17 +8,17 @@ let
       root = ./..;
       include = [ "dune-project" ] ++ files ++ (builtins.map inDirectory dirs);
     };
-  buildHttpaf = args: buildDunePackage ({
+  buildHttpun = args: buildDunePackage ({
     version = "0.6.5-dev";
     doCheck = doCheck;
   } // args);
 
-  httpafPkgs = rec {
-    httpaf = buildHttpaf {
-      pname = "httpaf";
+  httpunPkgs = rec {
+    httpun = buildHttpun {
+      pname = "httpun";
       src = genSrc {
         dirs = [ "lib" "lib_test" ];
-        files = [ "httpaf.opam" ];
+        files = [ "httpun.opam" ];
       };
       buildInputs = [ alcotest hex yojson ];
       propagatedBuildInputs = [
@@ -28,40 +28,40 @@ let
     };
 
     # These two don't have tests
-    httpaf-lwt = buildHttpaf {
-      pname = "httpaf-lwt";
+    httpun-lwt = buildHttpun {
+      pname = "httpun-lwt";
       src = genSrc {
         dirs = [ "lwt" ];
-        files = [ "httpaf-lwt.opam" ];
+        files = [ "httpun-lwt.opam" ];
       };
       doCheck = false;
-      propagatedBuildInputs = [ gluten-lwt httpaf lwt ];
+      propagatedBuildInputs = [ gluten-lwt httpun lwt ];
     };
 
-    httpaf-lwt-unix = buildHttpaf {
-      pname = "httpaf-lwt-unix";
+    httpun-lwt-unix = buildHttpun {
+      pname = "httpun-lwt-unix";
       src = genSrc {
         dirs = [ "lwt-unix" ];
-        files = [ "httpaf-lwt-unix.opam" ];
+        files = [ "httpun-lwt-unix.opam" ];
       };
       doCheck = false;
       propagatedBuildInputs = [
         gluten-lwt-unix
-        httpaf-lwt
+        httpun-lwt
         faraday-lwt-unix
         lwt_ssl
       ];
     };
 
-    httpaf-async = buildHttpaf {
-      pname = "httpaf-async";
+    httpun-async = buildHttpun {
+      pname = "httpun-async";
       src = genSrc {
         dirs = [ "async" ];
-        files = [ "httpaf-async.opam" ];
+        files = [ "httpun-async.opam" ];
       };
       doCheck = false;
       propagatedBuildInputs = [
-        httpaf
+        httpun
         async
         gluten-async
         faraday-async
@@ -69,17 +69,17 @@ let
       ];
     };
 
-    httpaf-mirage = buildHttpaf {
-      pname = "httpaf-mirage";
+    httpun-mirage = buildHttpun {
+      pname = "httpun-mirage";
       src = genSrc {
         dirs = [ "mirage" ];
-        files = [ "httpaf-mirage.opam" ];
+        files = [ "httpun-mirage.opam" ];
       };
       doCheck = false;
       propagatedBuildInputs = [
         faraday-lwt
         conduit-mirage
-        httpaf-lwt
+        httpun-lwt
         gluten-mirage
       ];
     };
@@ -87,18 +87,18 @@ let
 
 in
 
-with httpafPkgs;
+with httpunPkgs;
 
-httpafPkgs // (if lib.versionOlder "5.0" ocaml.version then {
-  httpaf-eio = buildHttpaf {
-    pname = "httpaf-eio";
+httpunPkgs // (if lib.versionOlder "5.0" ocaml.version then {
+  httpun-eio = buildHttpun {
+    pname = "httpun-eio";
     src = genSrc {
       dirs = [ "eio" ];
-      files = [ "httpaf-eio.opam" ];
+      files = [ "httpun-eio.opam" ];
     };
 
     propagatedBuildInputs = [
-      httpaf
+      httpun
       gluten-eio
       eio
     ];

@@ -1,10 +1,10 @@
 open Base
 module Arg = Stdlib.Arg
 
-open Httpaf_eio
-open Httpaf
+open Httpun_eio
+open Httpun
 
-let error_handler (_ : Eio.Net.Sockaddr.stream) = Httpaf_examples.Server.error_handler
+let error_handler (_ : Eio.Net.Sockaddr.stream) = Httpun_examples.Server.error_handler
 
 let request_handler ~u (_ : Eio.Net.Sockaddr.stream) { Gluten.reqd; _ } =
     match Reqd.request reqd  with

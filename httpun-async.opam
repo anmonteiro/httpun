@@ -1,11 +1,11 @@
 opam-version: "2.0"
-name: "httpaf-async"
+name: "httpun-async"
 maintainer: "Spiros Eliopoulos <spiros@inhabitedtype.com>"
 authors: [ "Spiros Eliopoulos <spiros@inhabitedtype.com>" ]
 license: "BSD-3-clause"
-homepage: "https://github.com/inhabitedtype/httpaf"
-bug-reports: "https://github.com/inhabitedtype/httpaf/issues"
-dev-repo: "git+https://github.com/inhabitedtype/httpaf.git"
+homepage: "https://github.com/inhabitedtype/httpun"
+bug-reports: "https://github.com/inhabitedtype/httpun/issues"
+dev-repo: "git+https://github.com/inhabitedtype/httpun.git"
 build: [
   ["dune" "subst"] {pinned}
   ["dune" "build" "-p" name "-j" jobs]
@@ -16,11 +16,11 @@ depends: [
   "dune" {>= "1.5.0"}
   "faraday-async" {>= "0.7.2"}
   "async" {>= "v0.14.0"}
-  "httpaf" {= version}
+  "httpun" {= version}
   "gluten-async" {>= "0.2.0"}
 ]
 depopts: ["async_ssl"]
 pin-depends: [
-  [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
+  [ "httpun.dev" "git+https://github.com/anmonteiro/httpun.git#fork" ]
 ]
 synopsis: "Async support for http/af"
