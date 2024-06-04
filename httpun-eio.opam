@@ -11,8 +11,8 @@ build: [
 ]
 depends: [
   "ocaml" {>= "5.0"}
-  "httpun" {>= "0.6.0"}
-  "dune" {>= "1.5"}
-  "gluten-eio"
+  "dune" {>= "3.0.0"}
+  "httpun" {= version}
+  "gluten-eio" {>= "0.5.0"}
 ]
 synopsis: "EIO support for httpun"

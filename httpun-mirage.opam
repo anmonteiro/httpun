@@ -10,14 +10,12 @@ build: [
   ["dune" "build" "-p" name]
 ]
 depends: [
-  "ocaml" {>= "4.03.0"}
-  "faraday-lwt"
-  "httpun"
-  "gluten-mirage" {>= "0.3.0"}
-  "conduit-mirage" {>= "2.0.2"}
+  "ocaml" {>= "4.08.0"}
+  "dune" {>= "3.0.0"}
+  "httpun" {= version}
+  "gluten-mirage" {>= "0.5.0"}
   "mirage-flow" {>= "2.0.0"}
   "cstruct"
-  "dune"
   "lwt"
 ]
 synopsis: "Mirage support for httpun"

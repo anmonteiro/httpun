@@ -2,7 +2,6 @@
  (name httpun_mirage)
  (public_name httpun-mirage)
  (libraries
-  faraday-lwt
   httpun
   httpun-lwt
   gluten-mirage

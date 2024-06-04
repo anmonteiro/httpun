@@ -15,11 +15,11 @@ build: [
 ]
 depends: [
   "ocaml" {>= "4.08.0"}
-  "dune" {>= "1.5.0"}
+  "dune" {>= "3.0.0"}
   "faraday-async" {>= "0.7.2"}
-  "async" {>= "v0.14.0"}
+  "async" {>= "v0.16.0"}
   "httpun" {= version}
-  "gluten-async" {>= "0.2.0"}
+  "gluten-async" {>= "0.5.0"}
 ]
 depopts: ["async_ssl"]
 synopsis: "Async support for httpun"

@@ -14,10 +14,10 @@ build: [
   ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
-  "ocaml" {>= "4.03.0"}
-  "httpun"
-  "dune"
+  "ocaml" {>= "4.08.0"}
+  "dune" {>= "3.0.0"}
+  "httpun" {= version}
   "lwt"
-  "gluten-lwt" {>= "0.2.0"}
+  "gluten-lwt" {>= "0.5.0"}
 ]
 synopsis: "Lwt support for httpun"

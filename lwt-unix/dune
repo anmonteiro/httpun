@@ -1,4 +1,4 @@
 (library
  (name httpun_lwt_unix)
  (public_name httpun-lwt-unix)
- (libraries faraday-lwt-unix httpun httpun-lwt gluten-lwt-unix lwt.unix))
+ (libraries httpun httpun-lwt gluten-lwt-unix lwt.unix))

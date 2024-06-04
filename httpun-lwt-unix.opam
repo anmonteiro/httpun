@@ -14,12 +14,10 @@ build: [
   ["dune" "build" "-p" name]
 ]
 depends: [
-  "ocaml" {>= "4.03.0"}
-  "faraday-lwt-unix"
-  "httpun" {>= "0.6.0"}
-  "dune" {>= "1.5.0"}
-  "httpun-lwt"
-  "lwt" {>= "2.4.7"}
-  "gluten-lwt-unix" {>= "0.2.0"}
+  "ocaml" {>= "4.08.0"}
+  "httpun" {= version}
+  "httpun-lwt" {= version}
+  "dune" {>= "3.0.0"}
+  "gluten-lwt-unix" {>= "0.5.0"}
 ]
 synopsis: "Lwt + Unix support for httpun"
