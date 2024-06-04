@@ -1,8 +1,8 @@
 open Core
 open Async
 
-open Httpaf
-open Httpaf_async
+open Httpun
+open Httpun_async
 
 let response_handler finished response response_body =
   match response with

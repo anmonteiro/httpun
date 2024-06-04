@@ -1,4 +1,4 @@
-open Httpaf
+open Httpun
 
 let maybe_serialize_body f body =
   match body with
@@ -7,13 +7,13 @@ let maybe_serialize_body f body =
 
 let request_to_string ?body r =
   let f = Faraday.create 0x1000 in
-  Httpaf_private.Serialize.write_request f r;
+  Httpun_private.Serialize.write_request f r;
   maybe_serialize_body f body;
   Faraday.serialize_to_string f
 
 let response_to_string ?body r =
   let f = Faraday.create 0x1000 in
-  Httpaf_private.Serialize.write_response f r;
+  Httpun_private.Serialize.write_response f r;
   maybe_serialize_body f body;
   Faraday.serialize_to_string f
 

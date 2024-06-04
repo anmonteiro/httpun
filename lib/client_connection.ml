@@ -87,7 +87,7 @@ let create_request_body ~request t =
       ~encoding
       ~writer:t.writer
   | `Error `Bad_request ->
-    failwith "Httpaf.Client_connection.request: invalid body length"
+    failwith "httpun.Client_connection.request: invalid body length"
 
 let request t ?(flush_headers_immediately=false) request ~error_handler ~response_handler =
   let request_body = create_request_body ~request t in

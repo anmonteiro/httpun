@@ -194,7 +194,7 @@ let set_error_and_handle ?request t error =
             match Response.body_length ~request_method response with
             | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
             | `Error (`Bad_gateway | `Internal_server_error) ->
-              failwith "httpaf.Server_connection.error_handler: invalid response body length"
+              failwith "httpun.Server_connection.error_handler: invalid response body length"
           in
           let response_body =
             (* The (shared) response body buffer can be used in this case

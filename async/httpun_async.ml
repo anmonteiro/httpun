@@ -38,18 +38,18 @@ module Server = struct
   type 'a socket = ([`Active], [< Socket.Address.t] as 'a) Socket.t
 
   let create_connection_handler
-    ?(config=Httpaf.Config.default)
+    ?(config=Httpun.Config.default)
     ~request_handler
     ~error_handler =
     fun client_addr socket ->
       let create_connection =
-        Httpaf.Server_connection.create
+        Httpun.Server_connection.create
           ~config
           ~error_handler:(error_handler client_addr)
       in
       Gluten_async.Server.create_upgradable_connection_handler
         ~read_buffer_size:config.read_buffer_size
-        ~protocol:(module Httpaf.Server_connection)
+        ~protocol:(module Httpun.Server_connection)
         ~create_protocol:create_connection
         ~request_handler
         client_addr
@@ -57,18 +57,18 @@ module Server = struct
 
   module SSL = struct
     let create_connection_handler
-      ?(config=Httpaf.Config.default)
+      ?(config=Httpun.Config.default)
       ~request_handler
       ~error_handler =
       fun client_addr socket ->
         let create_connection =
-          Httpaf.Server_connection.create
+          Httpun.Server_connection.create
             ~config
             ~error_handler:(error_handler client_addr)
         in
         Gluten_async.Server.SSL.create_upgradable_connection_handler
           ~read_buffer_size:config.read_buffer_size
-          ~protocol:(module Httpaf.Server_connection)
+          ~protocol:(module Httpun.Server_connection)
           ~create_protocol:create_connection
           ~request_handler
           client_addr
@@ -106,21 +106,21 @@ module Client = struct
   type 'a runtime = 'a Client_runtime.t
 
   type 'a t =
-    { connection: Httpaf.Client_connection.t
+    { connection: Httpun.Client_connection.t
     ; runtime: 'a runtime
     }
 
-  let create_connection ?(config=Httpaf.Config.default) socket =
-    let connection = Httpaf.Client_connection.create ~config () in
+  let create_connection ?(config=Httpun.Config.default) socket =
+    let connection = Httpun.Client_connection.create ~config () in
     Client_runtime.create
       ~read_buffer_size:config.read_buffer_size
-      ~protocol:(module Httpaf.Client_connection)
+      ~protocol:(module Httpun.Client_connection)
       connection
       socket
     >>| fun runtime ->
       { runtime; connection }
 
-  let request t = Httpaf.Client_connection.request t.connection
+  let request t = Httpun.Client_connection.request t.connection
 
   let shutdown t = Client_runtime.shutdown t.runtime
 
@@ -135,21 +135,21 @@ module Client = struct
     type 'a runtime = 'a Client_runtime.t
 
     type 'a t =
-      { connection: Httpaf.Client_connection.t
+      { connection: Httpun.Client_connection.t
       ; runtime: 'a runtime
       }
 
-    let create_connection ?(config=Httpaf.Config.default) socket =
-      let connection = Httpaf.Client_connection.create ~config () in
+    let create_connection ?(config=Httpun.Config.default) socket =
+      let connection = Httpun.Client_connection.create ~config () in
       Client_runtime.create
         ~read_buffer_size:config.read_buffer_size
-        ~protocol:(module Httpaf.Client_connection)
+        ~protocol:(module Httpun.Client_connection)
         connection
         socket
       >>| fun runtime ->
         { runtime; connection }
 
-    let request t = Httpaf.Client_connection.request t.connection
+    let request t = Httpun.Client_connection.request t.connection
 
     let shutdown t = Client_runtime.shutdown t.runtime
 

@@ -33,40 +33,56 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-module Server : sig
-  val create_connection_handler
-    :  ?config         : Httpaf.Config.t
-    -> request_handler : (Eio.Net.Sockaddr.stream  -> Httpaf.Reqd.t Gluten.reqd -> unit)
-    -> error_handler   : (Eio.Net.Sockaddr.stream -> Httpaf.Server_connection.error_handler)
-    -> sw:Eio.Switch.t
-    -> Eio.Net.Sockaddr.stream
-    -> _ Eio.Net.stream_socket
-    -> unit
+include Httpun_lwt_intf
+
+module Server (Server_runtime: Gluten_lwt.Server) = struct
+  type socket = Server_runtime.socket
+
+  let create_connection_handler
+    ?(config=Httpun.Config.default)
+    ~request_handler
+    ~error_handler =
+    fun client_addr socket ->
+      let create_connection =
+        Httpun.Server_connection.create
+          ~config
+          ~error_handler:(error_handler client_addr)
+      in
+      Server_runtime.create_upgradable_connection_handler
+        ~read_buffer_size:config.read_buffer_size
+        ~protocol:(module Httpun.Server_connection)
+        ~create_protocol:create_connection
+        ~request_handler
+        client_addr
+        socket
 end
 
-module Client : sig
+module Client (Client_runtime: Gluten_lwt.Client) = struct
+  type socket = Client_runtime.socket
+
+  type runtime = Client_runtime.t
+
   type t =
-    { connection: Httpaf.Client_connection.t
-    ; runtime: Gluten_eio.Client.t
+    { connection: Httpun.Client_connection.t
+    ; runtime: runtime
     }
 
-  val create_connection
-    :  ?config:Httpaf.Config.t
-    -> sw:Eio.Switch.t
-    -> Eio_unix.Net.stream_socket_ty Eio.Net.stream_socket
-    -> t
+  let create_connection ?(config=Httpun.Config.default) socket =
+    let open Lwt.Infix in
+    let connection = Httpun.Client_connection.create ~config () in
+    Client_runtime.create
+      ~read_buffer_size:config.read_buffer_size
+      ~protocol:(module Httpun.Client_connection)
+      connection
+      socket
+    >|= fun runtime ->
+      { runtime; connection }
 
-  val request
-    :  t
-    -> ?flush_headers_immediately:bool
-    -> Httpaf.Request.t
-    -> error_handler    : Httpaf.Client_connection.error_handler
-    -> response_handler : Httpaf.Client_connection.response_handler
-    -> Httpaf.Body.Writer.t
+  let request t = Httpun.Client_connection.request t.connection
 
-  val shutdown: t -> unit Eio.Promise.t
+  let shutdown t = Client_runtime.shutdown t.runtime
 
-  val is_closed : t -> bool
+  let is_closed t = Client_runtime.is_closed t.runtime
 
-  val upgrade : t -> Gluten.impl -> unit
+  let upgrade t protocol = Client_runtime.upgrade t.runtime protocol
 end

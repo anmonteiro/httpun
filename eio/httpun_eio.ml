@@ -35,19 +35,19 @@
 
 module Server = struct
   let create_connection_handler
-    ?(config=Httpaf.Config.default)
+    ?(config=Httpun.Config.default)
     ~request_handler
     ~error_handler
     ~sw =
     fun client_addr socket ->
       let create_connection =
-        Httpaf.Server_connection.create
+        Httpun.Server_connection.create
           ~config
           ~error_handler:(error_handler client_addr)
       in
       Gluten_eio.Server.create_upgradable_connection_handler
         ~read_buffer_size:config.read_buffer_size
-        ~protocol:(module Httpaf.Server_connection)
+        ~protocol:(module Httpun.Server_connection)
         ~sw
         ~create_protocol:create_connection
         ~request_handler
@@ -57,22 +57,22 @@ end
 
 module Client = struct
   type t =
-    { connection: Httpaf.Client_connection.t
+    { connection: Httpun.Client_connection.t
     ; runtime : Gluten_eio.Client.t
     }
 
-  let create_connection ?(config=Httpaf.Config.default) ~sw socket =
-    let connection = Httpaf.Client_connection.create ~config () in
+  let create_connection ?(config=Httpun.Config.default) ~sw socket =
+    let connection = Httpun.Client_connection.create ~config () in
     let runtime = Gluten_eio.Client.create
       ~sw
       ~read_buffer_size:config.read_buffer_size
-      ~protocol:(module Httpaf.Client_connection)
+      ~protocol:(module Httpun.Client_connection)
       connection
       socket
     in
       { runtime; connection }
 
-  let request t = Httpaf.Client_connection.request t.connection
+  let request t = Httpun.Client_connection.request t.connection
 
   let shutdown t = Gluten_eio.Client.shutdown t.runtime
 

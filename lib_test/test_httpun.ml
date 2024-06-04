@@ -1,5 +1,5 @@
 let () =
-  Alcotest.run "httpaf unit tests"
+  Alcotest.run "httpun unit tests"
     [ "version"          , Test_version.tests
     ; "method"           , Test_method.tests
     ; "iovec"            , Test_iovec.tests

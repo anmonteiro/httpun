@@ -1,4 +1,4 @@
 (library
- (name httpaf_eio)
- (public_name httpaf-eio)
- (libraries httpaf eio gluten gluten-eio))
+ (name httpun_eio)
+ (public_name httpun-eio)
+ (libraries httpun eio gluten gluten-eio))

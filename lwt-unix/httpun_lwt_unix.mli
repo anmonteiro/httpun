@@ -33,24 +33,74 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-module type Server = Httpaf_lwt_intf.Server
-
-module type Client = Httpaf_lwt_intf.Client
+open Httpun
 
 (* The function that results from [create_connection_handler] should be passed
    to [Lwt_io.establish_server_with_client_socket]. For an example, see
    [examples/lwt_echo_server.ml]. *)
-module Server (Server_runtime: Gluten_lwt.Server) :
-  Server with type socket = Server_runtime.socket
-          and type addr := Server_runtime.addr
+module Server : sig
+  include Httpun_lwt.Server
+    with type socket = Lwt_unix.file_descr
+     and type addr := Unix.sockaddr
+
+  module TLS : sig
+    include Httpun_lwt.Server
+      with type socket = Gluten_lwt_unix.Server.TLS.socket
+       and type addr := Unix.sockaddr
+
+    val create_connection_handler_with_default
+      :  certfile       : string
+      -> keyfile        : string
+      -> ?config         : Config.t
+      -> request_handler : (Unix.sockaddr -> Httpun.Reqd.t Gluten.reqd -> unit)
+      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
+      -> Unix.sockaddr
+      -> Lwt_unix.file_descr
+      -> unit Lwt.t
+  end
+
+  module SSL : sig
+    include Httpun_lwt.Server
+      with type socket = Gluten_lwt_unix.Server.SSL.socket
+       and type addr := Unix.sockaddr
+
+    val create_connection_handler_with_default
+      :  certfile       : string
+      -> keyfile        : string
+      -> ?config         : Config.t
+      -> request_handler : (Unix.sockaddr -> Httpun.Reqd.t Gluten.reqd -> unit)
+      -> error_handler   : (Unix.sockaddr -> Server_connection.error_handler)
+      -> Unix.sockaddr
+      -> Lwt_unix.file_descr
+      -> unit Lwt.t
+  end
+end
 
 (* For an example, see [examples/lwt_get.ml]. *)
-module Client (Client_runtime: Gluten_lwt.Client) : sig
-  include Client with type socket = Client_runtime.socket
-          and type runtime = Client_runtime.t
+module Client : sig
+  include Httpun_lwt.Client
+    with type socket = Lwt_unix.file_descr
+     and type runtime = Gluten_lwt_unix.Client.t
 
-  val create_connection
-    : ?config : Httpaf.Config.t
-    -> Client_runtime.socket
-    -> t Lwt.t
+  module TLS : sig
+    include Httpun_lwt.Client
+      with type socket = Gluten_lwt_unix.Client.TLS.socket
+       and type runtime = Gluten_lwt_unix.Client.TLS.t
+
+    val create_connection_with_default
+      :  ?config : Config.t
+      -> Lwt_unix.file_descr
+      -> t Lwt.t
+  end
+
+  module SSL : sig
+    include Httpun_lwt.Client
+      with type socket = Gluten_lwt_unix.Client.SSL.socket
+       and type runtime = Gluten_lwt_unix.Client.SSL.t
+
+    val create_connection_with_default
+      :  ?config : Config.t
+      -> Lwt_unix.file_descr
+      -> t Lwt.t
+  end
 end

@@ -2,8 +2,8 @@ open Base
 open Lwt.Infix
 module Arg = Stdlib.Arg
 
-open Httpaf
-open Httpaf_lwt_unix
+open Httpun
+open Httpun_lwt_unix
 
 let error_handler _ = assert false
 
@@ -15,7 +15,7 @@ let main port host =
   >>= fun () ->
   let finished, notify_finished = Lwt.wait () in
   let response_handler =
-    Httpaf_examples.Client.print ~on_eof:(Lwt.wakeup_later notify_finished)
+    Httpun_examples.Client.print ~on_eof:(Lwt.wakeup_later notify_finished)
   in
   let request_headers =
     Request.create ~headers:(Headers.of_list [ "host", host ]) `GET "/"
@@ -30,7 +30,7 @@ let main port host =
   in
   let finished', notify_finished' = Lwt.wait () in
   let response_handler' =
-    Httpaf_examples.Client.print ~on_eof:(Lwt.wakeup_later notify_finished')
+    Httpun_examples.Client.print ~on_eof:(Lwt.wakeup_later notify_finished')
   in
   let request_body' =
     Client.request

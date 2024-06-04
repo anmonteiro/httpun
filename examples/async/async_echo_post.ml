@@ -1,10 +1,10 @@
 open Core
 open Async
 
-open Httpaf_async
+open Httpun_async
 
-let request_handler (_ : [< Socket.Address.t]) = Httpaf_examples.Server.echo_post
-let error_handler (_ : [< Socket.Address.t]) = Httpaf_examples.Server.error_handler
+let request_handler (_ : [< Socket.Address.t]) = Httpun_examples.Server.echo_post
+let error_handler (_ : [< Socket.Address.t]) = Httpun_examples.Server.error_handler
 
 let main port max_accepts_per_batch () =
   let where_to_listen = Tcp.Where_to_listen.of_port port in

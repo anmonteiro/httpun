@@ -36,10 +36,10 @@
 open Lwt.Infix
 
 module Server = struct
-  include Httpaf_lwt.Server (Gluten_lwt_unix.Server)
+  include Httpun_lwt.Server (Gluten_lwt_unix.Server)
 
   module TLS = struct
-    include Httpaf_lwt.Server (Gluten_lwt_unix.Server.TLS)
+    include Httpun_lwt.Server (Gluten_lwt_unix.Server.TLS)
 
     let create_connection_handler_with_default
       ~certfile
@@ -62,7 +62,7 @@ module Server = struct
   end
 
   module SSL = struct
-    include Httpaf_lwt.Server (Gluten_lwt_unix.Server.SSL)
+    include Httpun_lwt.Server (Gluten_lwt_unix.Server.SSL)
 
     let create_connection_handler_with_default
       ~certfile
@@ -86,10 +86,10 @@ module Server = struct
 end
 
 module Client = struct
-  include Httpaf_lwt.Client (Gluten_lwt_unix.Client)
+  include Httpun_lwt.Client (Gluten_lwt_unix.Client)
 
   module TLS = struct
-    include Httpaf_lwt.Client (Gluten_lwt_unix.Client.TLS)
+    include Httpun_lwt.Client (Gluten_lwt_unix.Client.TLS)
 
     let create_connection_with_default ?config socket =
       Gluten_lwt_unix.Client.TLS.create_default
@@ -100,7 +100,7 @@ module Client = struct
   end
 
   module SSL = struct
-    include Httpaf_lwt.Client (Gluten_lwt_unix.Client.SSL)
+    include Httpun_lwt.Client (Gluten_lwt_unix.Client.SSL)
 
     let create_connection_with_default ?config socket =
       Gluten_lwt_unix.Client.SSL.create_default

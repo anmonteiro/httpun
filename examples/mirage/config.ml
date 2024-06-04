@@ -8,8 +8,8 @@ let stack = generic_stackv4 default_network
 
 let server =
  let packages =
-   [ package ~pin:"file://../../" "httpaf-lwt"
-   ; package ~pin:"file://../../" "httpaf-mirage"
+   [ package ~pin:"file://../../" "httpun-lwt"
+   ; package ~pin:"file://../../" "httpun-mirage"
    ]
   in
   foreign "Unikernel.Make"
@@ -17,8 +17,8 @@ let server =
     (console @-> pclock @-> http @-> job)
 
 let app =
-  httpaf_server @@ conduit_direct stack
+  httpun_server @@ conduit_direct stack
 
 let () =
-  register "httpaf_unikernel"
+  register "httpun_unikernel"
     [ server $ default_console $ default_posix_clock $ app ]

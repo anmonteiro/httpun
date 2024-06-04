@@ -1,0 +1,24 @@
+opam-version: "2.0"
+name: "httpun-lwt-unix"
+maintainer: "Spiros Eliopoulos <spiros@inhabitedtype.com>"
+authors: [
+  "Anton Bachin <antonbachin@yahoo.com>"
+  "Spiros Eliopoulos <spiros@inhabitedtype.com>"
+]
+license: "BSD-3-clause"
+homepage: "https://github.com/inhabitedtype/httpun"
+bug-reports: "https://github.com/inhabitedtype/httpun/issues"
+dev-repo: "git+https://github.com/inhabitedtype/httpun.git"
+build: [
+  ["dune" "build" "-p" name]
+]
+depends: [
+  "ocaml" {>= "4.03.0"}
+  "faraday-lwt-unix"
+  "httpun" {>= "0.6.0"}
+  "dune" {>= "1.5.0"}
+  "httpun-lwt"
+  "lwt" {>= "2.4.7"}
+  "gluten-lwt-unix" {>= "0.2.0"}
+]
+synopsis: "Lwt + Unix support for http/un"

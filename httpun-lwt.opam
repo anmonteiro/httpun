@@ -1,25 +1,22 @@
 opam-version: "2.0"
-name: "httpaf-lwt"
+name: "httpun-lwt"
 maintainer: "Spiros Eliopoulos <spiros@inhabitedtype.com>"
 authors: [
   "Anton Bachin <antonbachin@yahoo.com>"
   "Spiros Eliopoulos <spiros@inhabitedtype.com>"
 ]
 license: "BSD-3-clause"
-homepage: "https://github.com/inhabitedtype/httpaf"
-bug-reports: "https://github.com/inhabitedtype/httpaf/issues"
-dev-repo: "git+https://github.com/inhabitedtype/httpaf.git"
+homepage: "https://github.com/inhabitedtype/httpun"
+bug-reports: "https://github.com/inhabitedtype/httpun/issues"
+dev-repo: "git+https://github.com/inhabitedtype/httpun.git"
 build: [
   ["dune" "build" "-p" name "-j" jobs]
 ]
 depends: [
   "ocaml" {>= "4.03.0"}
-  "httpaf"
+  "httpun"
   "dune"
   "lwt"
   "gluten-lwt" {>= "0.2.0"}
-]
-pin-depends: [
-  [ "httpaf.dev" "git+https://github.com/anmonteiro/httpaf.git#fork" ]
 ]
 synopsis: "Lwt support for http/af"

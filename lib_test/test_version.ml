@@ -1,4 +1,4 @@
-open Httpaf
+open Httpun
 open Version
 
 let v1_0 = { major = 1; minor = 0 }

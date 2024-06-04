@@ -1,6 +1,4 @@
 (library
- (name httpaf_lwt)
- (public_name httpaf-lwt)
- (libraries httpaf lwt gluten gluten-lwt)
- (flags
-  (:standard -safe-string)))
+ (name httpun_lwt)
+ (public_name httpun-lwt)
+ (libraries httpun lwt gluten gluten-lwt))

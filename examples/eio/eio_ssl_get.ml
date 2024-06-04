@@ -1,8 +1,8 @@
 module Arg = Stdlib.Arg
 
-open Httpaf
+open Httpun
 
-module Client = Httpaf_eio.Client
+module Client = Httpun_eio.Client
 
 let () =
   Ssl.init ~thread_safe:true ()
@@ -66,7 +66,7 @@ let main port host =
         Client.request
           connection
           ~flush_headers_immediately:true
-          ~error_handler:Httpaf_examples.Client.error_handler
+          ~error_handler:Httpun_examples.Client.error_handler
           ~response_handler
           (Request.create ~headers `GET "/")
       in

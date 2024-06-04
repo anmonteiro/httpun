@@ -2,9 +2,9 @@ opam-version: "2.0"
 maintainer: "Spiros Eliopoulos <spiros@inhabitedtype.com>"
 authors: [ "Spiros Eliopoulos <spiros@inhabitedtype.com>" ]
 license: "BSD-3-clause"
-homepage: "https://github.com/inhabitedtype/httpaf"
-bug-reports: "https://github.com/inhabitedtype/httpaf/issues"
-dev-repo: "git+https://github.com/inhabitedtype/httpaf.git"
+homepage: "https://github.com/inhabitedtype/httpun"
+bug-reports: "https://github.com/inhabitedtype/httpun/issues"
+dev-repo: "git+https://github.com/inhabitedtype/httpun.git"
 build: [
   ["dune" "subst"] {pinned}
   ["dune" "build" "-p" name "-j" jobs]

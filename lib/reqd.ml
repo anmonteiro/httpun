@@ -99,14 +99,14 @@ let response { response_state; _ } =
 
 let response_exn { response_state; _ } =
   match response_state with
-  | Waiting -> failwith "httpaf.Reqd.response_exn: response has not started"
+  | Waiting -> failwith "httpun.Reqd.response_exn: response has not started"
   | Streaming(response, _)
   | Fixed response
   | Upgrade (response, _) -> response
 
 let respond_with_string t response str =
   if t.error_code <> `Ok then
-    failwith "httpaf.Reqd.respond_with_string: invalid state, currently handling error";
+    failwith "httpun.Reqd.respond_with_string: invalid state, currently handling error";
   match t.response_state with
   | Waiting ->
     (* XXX(seliopou): check response body length *)
@@ -117,13 +117,13 @@ let respond_with_string t response str =
     t.response_state <- Fixed response;
     Writer.wakeup t.writer;
   | Streaming _ | Upgrade _ ->
-    failwith "httpaf.Reqd.respond_with_string: response already started"
+    failwith "httpun.Reqd.respond_with_string: response already started"
   | Fixed _ ->
-    failwith "httpaf.Reqd.respond_with_string: response already complete"
+    failwith "httpun.Reqd.respond_with_string: response already complete"
 
 let respond_with_bigstring t response (bstr:Bigstringaf.t) =
   if t.error_code <> `Ok then
-    failwith "httpaf.Reqd.respond_with_bigstring: invalid state, currently handling error";
+    failwith "httpun.Reqd.respond_with_bigstring: invalid state, currently handling error";
   match t.response_state with
   | Waiting ->
     (* XXX(seliopou): check response body length *)
@@ -134,9 +134,9 @@ let respond_with_bigstring t response (bstr:Bigstringaf.t) =
     t.response_state <- Fixed response;
     Writer.wakeup t.writer;
   | Streaming _ | Upgrade _ ->
-    failwith "httpaf.Reqd.respond_with_bigstring: response already started"
+    failwith "httpun.Reqd.respond_with_bigstring: response already started"
   | Fixed _ ->
-    failwith "httpaf.Reqd.respond_with_bigstring: response already complete"
+    failwith "httpun.Reqd.respond_with_bigstring: response already complete"
 
 let unsafe_respond_with_streaming ~flush_headers_immediately t response =
   match t.response_state with
@@ -145,7 +145,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
       match Response.body_length ~request_method:t.request.meth response with
       | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
       | `Error (`Bad_gateway | `Internal_server_error) ->
-        failwith "httpaf.Reqd.respond_with_streaming: invalid response body length"
+        failwith "httpun.Reqd.respond_with_streaming: invalid response body length"
     in
     let response_body =
       Body.Writer.create
@@ -161,13 +161,13 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
     then Writer.wakeup t.writer;
     response_body
   | Streaming _ | Upgrade _ ->
-    failwith "httpaf.Reqd.respond_with_streaming: response already started"
+    failwith "httpun.Reqd.respond_with_streaming: response already started"
   | Fixed _ ->
-    failwith "httpaf.Reqd.respond_with_streaming: response already complete"
+    failwith "httpun.Reqd.respond_with_streaming: response already complete"
 
 let respond_with_streaming ?(flush_headers_immediately=false) t response =
   if t.error_code <> `Ok then
-    failwith "httpaf.Reqd.respond_with_streaming: invalid state, currently handling error";
+    failwith "httpun.Reqd.respond_with_streaming: invalid state, currently handling error";
   unsafe_respond_with_streaming ~flush_headers_immediately t response
 
 let unsafe_respond_with_upgrade t headers upgrade_handler =
@@ -182,13 +182,13 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     Body.Reader.close t.request_body;
     Writer.wakeup t.writer
   | Streaming _ | Upgrade _ ->
-    failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already started"
+    failwith "httpun.Reqd.unsafe_respond_with_upgrade: response already started"
   | Fixed _ ->
-    failwith "httpaf.Reqd.unsafe_respond_with_upgrade: response already complete"
+    failwith "httpun.Reqd.unsafe_respond_with_upgrade: response already complete"
 
 let respond_with_upgrade t response upgrade_handler =
   if t.error_code <> `Ok then
-    failwith "httpaf.Reqd.respond_with_streaming: invalid state, currently handling error";
+    failwith "httpun.Reqd.respond_with_streaming: invalid state, currently handling error";
   unsafe_respond_with_upgrade t response upgrade_handler
 
 let report_error t error =
@@ -222,7 +222,7 @@ let report_error t error =
       (* XXX(seliopou): Decide what to do in this unlikely case. There is an
        * outstanding call to the [error_handler], but an intervening exception
        * has been reported as well. *)
-      failwith "httpaf.Reqd.report_exn: NYI"
+      failwith "httpun.Reqd.report_exn: NYI"
     | Streaming (_response, response_body), `Ok ->
       Body.Writer.force_close response_body;
       Reader.wakeup t.reader;
@@ -241,7 +241,7 @@ let report_exn t exn =
 let try_with t f : (unit, exn) result =
   try f (); Ok () with exn -> report_exn t exn; Error exn
 
-(* Private API, not exposed to the user through httpaf.mli *)
+(* Private API, not exposed to the user through httpun.mli *)
 
 let close_request_body { request_body; _ } =
   Body.Reader.close request_body
