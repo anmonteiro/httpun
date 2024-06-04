@@ -32,18 +32,11 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-(** Http/af is a high-performance, memory-efficient, and scalable web server
-    for OCaml. It implements the HTTP 1.1 specification with respect to
-    parsing, serialization, and connection pipelining. For compatibility,
-    http/af respects the imperatives of the [Server_connection] header when handling
-    HTTP 1.0 connections.
-
-    To use this library effectively, the user must be familiar with the HTTP
-    1.1 specification, and the basic principles of memory management and
-    vectorized IO. *)
+(** httpun is a high-performance, memory-efficient, and scalable HTTP/1.x
+    library for OCaml. It implements the HTTP 1.1 specification with respect to
+    parsing, serialization, and pipelining. *)
 
 (** {2 Basic HTTP Types} *)
-
 
 module IOVec : module type of Httpun_types.IOVec
 module Version : module type of Httpun_types.Version
