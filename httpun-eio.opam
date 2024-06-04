@@ -1,15 +1,11 @@
 opam-version: "2.0"
-name: "httpun-lwt-unix"
+name: "httpun-eio"
 maintainer: "Antonio Monteiro <anmonteiro@gmail.com>"
-authors: [
-  "Antonio Monteiro <anmonteiro@gmail.com>"
-  "Anton Bachin <antonbachin@yahoo.com>"
-  "Spiros Eliopoulos <spiros@inhabitedtype.com>"
-]
+authors: [ "Antonio Monteiro <anmonteiro@gmail.com>" ]
 license: "BSD-3-clause"
-homepage: "https://github.com/inhabitedtype/httpun"
-bug-reports: "https://github.com/inhabitedtype/httpun/issues"
-dev-repo: "git+https://github.com/inhabitedtype/httpun.git"
+homepage: "https://github.com/anmonteiro/httpun"
+bug-reports: "https://github.com/anmonteiro/httpun/issues"
+dev-repo: "git+https://github.com/anmonteiro/httpun.git"
 build: [
   ["dune" "build" "-p" name]
 ]
@@ -19,7 +15,4 @@ depends: [
   "dune" {>= "1.5"}
   "gluten-eio"
 ]
-pin-depends: [
-  [ "httpun.dev" "git+https://github.com/anmonteiro/httpun.git#fork" ]
-]
-synopsis: "EIO support for http/af"
+synopsis: "EIO support for httpun"

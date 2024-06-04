@@ -8,6 +8,4 @@
   gluten-mirage
   lwt
   mirage-flow
-  cstruct)
- (flags
-  (:standard -safe-string)))
+  cstruct))

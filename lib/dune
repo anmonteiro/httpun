@@ -2,5 +2,5 @@
  (name httpun)
  (public_name httpun)
  (libraries
-   angstrom faraday bigstringaf)
- (flags (:standard -safe-string)))
+   angstrom faraday bigstringaf httpun-types)
+ (flags :standard -open Httpun_types))

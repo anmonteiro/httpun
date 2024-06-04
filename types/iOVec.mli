@@ -31,36 +31,15 @@
     POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-
 type 'a t = 'a Faraday.iovec =
   { buffer : 'a
   ; off : int
   ; len : int }
 
-let length { len; _ } = len
-let lengthv iovs = List.fold_left (fun acc { len; _ } -> acc + len) 0 iovs
+val length  : _ t -> int
+val lengthv : _ t list -> int
 
-let shift { buffer; off; len } n =
-  assert (n <= len);
-  { buffer; off = off + n; len = len - n }
+val shift  : 'a t -> int -> 'a t
+val shiftv : 'a t list -> int -> 'a t list
 
-let shiftv iovecs n =
-  if n < 0 then failwith (Printf.sprintf "IOVec.shiftv: %d is a negative number" n);
-  let rec loop iovecs n =
-    if n = 0
-    then iovecs
-    else match iovecs with
-    | []            -> failwith "shiftv: n > lengthv iovecs"
-    | iovec::iovecs ->
-      let iovec_len = length iovec in
-      if iovec_len <= n
-      then loop iovecs (n - iovec_len)
-      else (shift iovec n)::iovecs
-  in
-  loop iovecs n
-
-let add_len { buffer; off; len } n =
-  { buffer; off; len = len + n }
-
-let pp_hum fmt t =
-  Format.fprintf fmt "{ buffer = <opaque>; off = %d; len = %d }" t.off t.len
+val pp_hum : Format.formatter -> _ t -> unit [@@ocaml.toplevel_printer]

@@ -1,0 +1,4 @@
+(library
+  (public_name httpun-types)
+  (name httpun_types)
+  (libraries faraday))

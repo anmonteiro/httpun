@@ -14,12 +14,8 @@ build: [
 ]
 depends: [
   "ocaml" {>= "4.03.0"}
-  "dune" {>= "1.5.0"}
-  "alcotest" {with-test}
-  "httpun-types" {= version}
-  "bigstringaf" {>= "0.4.0"}
-  "angstrom" {>= "0.14.0"}
-  "faraday"  {>= "0.6.1"}
+  "dune" {>= "3.0.0"}
+  "faraday"  {>= "0.7.1"}
 ]
 synopsis:
-  "A high-performance, memory-efficient, and scalable HTTP library for OCaml"
+  "Common HTTP/1.x types"
