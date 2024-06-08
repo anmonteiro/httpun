@@ -13,6 +13,6 @@ depends: [
   "ocaml" {>= "5.0"}
   "dune" {>= "3.0.0"}
   "httpun" {= version}
-  "gluten-eio" {>= "0.5.0"}
+  "gluten-eio" {>= "0.5.1"}
 ]
 synopsis: "EIO support for httpun"
