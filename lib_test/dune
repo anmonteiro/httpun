@@ -1,4 +1,5 @@
 (test
+ (package httpun)
  (libraries bigstringaf httpun alcotest)
  (modules
   helpers
