@@ -1,14 +1,25 @@
-{ pkgs, stdenv, lib }:
+{ pkgs
+, packages
+, stdenv
+, lib
+, release-mode ? false
+}:
 
 let
-  httpunPkgs = pkgs.recurseIntoAttrs (import ./nix { inherit pkgs; doCheck = false; });
-  httpunDrvs = lib.filterAttrs (_: value: lib.isDerivation value) httpunPkgs;
+  httpunDrvs = lib.filterAttrs (_: value: lib.isDerivation value) packages;
 
 in
 with pkgs;
 
 (mkShell {
   OCAMLRUNPARAM = "b";
+  nativeBuildInputs =
+    lib.optionals release-mode [
+      cacert
+      curl
+      ocamlPackages.dune-release
+      git
+    ];
   inputsFrom = lib.attrValues httpunDrvs;
   buildInputs = with ocamlPackages; [ merlin utop ];
 }).overrideAttrs (o: {

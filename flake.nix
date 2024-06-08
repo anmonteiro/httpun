@@ -16,6 +16,12 @@
       rec {
         packages = pkgs.callPackage ./nix { nix-filter = nix-filter.lib; };
         defaultPackage = packages.httpun;
-        devShell = pkgs.callPackage ./shell.nix { inherit packages; };
+        devShells = {
+          default = pkgs.callPackage ./nix/shell.nix { inherit packages; };
+          release = pkgs.callPackage ./nix/shell.nix {
+            inherit packages;
+            release-mode = true;
+          };
+        };
       });
 }
