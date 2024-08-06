@@ -122,7 +122,7 @@ module Writer = struct
     { faraday             : Faraday.t
     ; encoding            : encoding
     ; writer              : Serialize.Writer.t
-    ; buffered_bytes      : int ref
+    ; mutable buffered_bytes : int
     }
 
   let of_faraday faraday ~encoding ~writer =
@@ -134,7 +134,7 @@ module Writer = struct
     { faraday
     ; encoding
     ; writer
-    ; buffered_bytes = ref 0
+    ; buffered_bytes = 0
     }
 
   let create buffer ~encoding =
@@ -213,19 +213,18 @@ module Writer = struct
            Serialize.Writer.schedule_chunk t.writer [];
          end);
     | `Writev iovecs ->
-      let buffered = t.buffered_bytes in
-      begin match IOVec.shiftv iovecs !buffered with
+      begin match IOVec.shiftv iovecs t.buffered_bytes with
       | []     -> ()
       | iovecs ->
         let lengthv  = IOVec.lengthv iovecs in
-        buffered := !buffered + lengthv;
+        t.buffered_bytes <- t.buffered_bytes + lengthv;
         begin match t.encoding with
         | Identity  -> Serialize.Writer.schedule_fixed t.writer iovecs
         | Chunked _ -> Serialize.Writer.schedule_chunk t.writer iovecs
         end;
         Serialize.Writer.flush t.writer (fun () ->
           Faraday.shift faraday lengthv;
-          buffered := !buffered - lengthv)
+          t.buffered_bytes <- t.buffered_bytes - lengthv)
       end
     end
 end
