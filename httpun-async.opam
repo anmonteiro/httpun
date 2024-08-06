@@ -1,5 +1,4 @@
 opam-version: "2.0"
-name: "httpun-async"
 maintainer: "Antonio Nuno Monteiro <anmonteiro@gmail.com>"
 authors: [
   "Spiros Eliopoulos <spiros@inhabitedtype.com>"
@@ -16,7 +15,6 @@ build: [
 depends: [
   "ocaml" {>= "4.08.0"}
   "dune" {>= "3.0.0"}
-  "faraday-async" {>= "0.7.2"}
   "async" {>= "v0.16.0"}
   "httpun" {= version}
   "gluten-async" {>= "0.5.0"}
