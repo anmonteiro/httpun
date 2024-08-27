@@ -264,7 +264,8 @@ let input_state t : Input_state.t =
     then Ready
     else Wait
 
-let output_state t = Response_state.output_state t.response_state
+let output_state { response_state; writer; _ } =
+  Response_state.output_state response_state ~writer
 
 let flush_request_body t =
   if Body.Reader.has_pending_output t.request_body

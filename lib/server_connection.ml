@@ -339,7 +339,7 @@ let rec _next_write_operation t =
       then shutdown t;
       Writer.next t.writer
     | Error { response_state; _ } ->
-      match Response_state.output_state response_state with
+      match Response_state.output_state response_state ~writer:t.writer with
       | Waiting -> `Yield
       | Ready ->
         flush_response_error_body response_state;

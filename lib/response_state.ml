@@ -4,12 +4,15 @@ type t =
   | Streaming of Response.t * Body.Writer.t
   | Upgrade of Response.t * (unit -> unit)
 
-let output_state t : Output_state.t =
+let output_state t ~writer : Output_state.t =
   match t with
   | Fixed _ -> Complete
-  | Waiting -> Waiting
+  | Waiting ->
+    if Serialize.Writer.is_closed writer then Complete
+    else Waiting
   | Streaming(_, response_body) ->
-    if Body.Writer.requires_output response_body
+    if Serialize.Writer.is_closed writer then Complete
+    else if Body.Writer.requires_output response_body
     then Ready
     else Complete
   | Upgrade _ -> Ready
