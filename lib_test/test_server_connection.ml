@@ -2060,9 +2060,10 @@ let test_flush_response_before_shutdown () =
   write_response t response;
   !continue ();
   shutdown t;
-  raises_writer_closed (fun () ->
-    write_string t "b\r\nhello world\r\n";
-    connection_is_shutdown t);
+
+  writer_ready t;
+  write_string t "b\r\nhello world\r\n";
+  connection_is_shutdown t
 ;;
 
 let test_schedule_read_with_data_available () =
@@ -2358,11 +2359,11 @@ let test_can_read_more_requests_after_write_eof () =
   writer_closed ~unread:47 t;
   reader_ready t;
   read_request t request;
-  Reqd.respond_with_streaming (Option.get !reqd) response ~flush_headers_immediately:true
-  |> (ignore : Body.Writer.t -> unit);
+  raises_writer_closed (fun () ->
+    Reqd.respond_with_streaming (Option.get !reqd) response ~flush_headers_immediately:true
+    |> (ignore : Body.Writer.t -> unit));
   Alcotest.(check bool) "request handler fired" true (Option.is_some !reqd)
 ;;
-
 
 let test_can_read_more_requests_after_write_eof_before_send_response () =
   let request = Request.create `GET "/" ~headers:(Headers.encoding_fixed 0) in
@@ -2381,9 +2382,38 @@ let test_can_read_more_requests_after_write_eof_before_send_response () =
     (`Close 0) !write_op;
   reader_ready t;
   read_request t request;
-  Reqd.respond_with_streaming (Option.get !reqd) response ~flush_headers_immediately:true
-  |> (ignore : Body.Writer.t -> unit);
+  raises_writer_closed (fun () ->
+    Reqd.respond_with_streaming (Option.get !reqd) response ~flush_headers_immediately:true
+    |> (ignore : Body.Writer.t -> unit));
   Alcotest.(check bool) "request handler fired" true (Option.is_some !reqd)
+;;
+
+let test_write_response_after_read_eof () =
+  let reqd = ref None in
+  let t = create (fun _reqd -> reqd := Some _reqd) in
+  let request_line = "GET / HTTP/1.1\r\n" in
+  let single_header = "Links: /path/to/some/website\r\n" in
+  let r =
+    (* Each header is 30 bytes *)
+    request_line ^ single_header ^ single_header ^ "connection: close\r\n\r\n"
+  in
+  let bs = Bigstringaf.of_string r ~off:0 ~len:(String.length r) in
+  let c = read t bs ~off:0 ~len:30 in
+  Alcotest.(check int) "only reads the request line" (String.length request_line) c;
+
+  let c' =
+    read t bs ~off:c ~len:(String.length single_header)
+  in
+  Alcotest.(check int) "parser can read a single header and commit" (String.length single_header) c';
+
+  let c'' = read_eof t bs ~off:(c + c') ~len:(String.length r - (c + c')) in
+  Alcotest.(check int) "read_eof with the rest of the input is accepted" (String.length r - (c + c')) c'';
+  writer_yielded t;
+  let body = Reqd.respond_with_streaming ~flush_headers_immediately:true (Option.get !reqd) (Response.create `OK);
+  in
+  write_response t (Response.create `OK);
+  Body.Writer.close body;
+  connection_is_shutdown t;
 ;;
 
 let tests =
@@ -2467,4 +2497,5 @@ let tests =
   ; "input consumed before closing request body", `Quick, test_input_consumed_before_closing_req_body
   ; "can read more requests after write eof", `Quick, test_can_read_more_requests_after_write_eof
   ; "can read more requests after write eof (before response sent)", `Quick, test_can_read_more_requests_after_write_eof_before_send_response
+  ; "write response after reader EOF", `Quick,test_write_response_after_read_eof
   ]
