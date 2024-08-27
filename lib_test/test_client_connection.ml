@@ -1770,7 +1770,7 @@ let test_flush_response_before_shutdown () =
     (Body.Writer.is_closed body);
 
   writer_closed t;
-  connection_is_shutdown t;
+  connection_is_shutdown t
 ;;
 
 let test_report_exn_during_body_read () =

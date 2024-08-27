@@ -158,13 +158,19 @@ module Writer = struct
   ;;
 
   let flush t f =
-    flush t.encoder f
+    flush_with_reason t.encoder (fun reason ->
+      let result =
+        match reason with
+        | Nothing_pending | Shift -> `Written
+        | Drain -> `Closed
+      in
+      f result)
 
   let unyield t =
     (* This would be better implemented by a function that just takes the
        encoder out of a yielded state if it's in that state. Requires a change
        to the faraday library. *)
-    flush t (fun () -> ())
+    flush t (fun _reason -> ())
 
   let yield t =
     Faraday.yield t.encoder
