@@ -326,8 +326,9 @@ let echo_handler response reqd =
   let response_body = Reqd.respond_with_streaming reqd response in
   let rec on_read buffer ~off ~len =
     Body.Writer.write_string response_body (Bigstringaf.substring ~off ~len buffer);
-    Body.Writer.flush response_body (fun () ->
-      Body.Reader.schedule_read request_body ~on_eof ~on_read)
+    Body.Writer.flush response_body (function
+      | `Closed -> assert false
+      | `Written -> Body.Reader.schedule_read request_body ~on_eof ~on_read)
   and on_eof () =
     print_endline "echo handler eof";
     Body.Writer.close response_body
@@ -340,17 +341,20 @@ let streaming_handler ?(flush=false) ?(error=false) response writes reqd =
   let request_body = Reqd.request_body reqd in
   Body.Reader.close request_body;
   let body = Reqd.respond_with_streaming ~flush_headers_immediately:flush reqd response in
-  let rec write () =
-    match !writes with
-    | [] -> (match error with
-      | false -> Body.Writer.close body
-      | true -> Reqd.report_exn reqd (Failure "exn"))
-    | w :: ws ->
-      Body.Writer.write_string body w;
-      writes := ws;
-      Body.Writer.flush body write
+  let rec write reason =
+    match reason with
+    | `Closed -> assert false
+    | `Written ->
+      match !writes with
+      | [] -> (match error with
+        | false -> Body.Writer.close body
+        | true -> Reqd.report_exn reqd (Failure "exn"))
+      | w :: ws ->
+        Body.Writer.write_string body w;
+        writes := ws;
+        Body.Writer.flush body write
   in
-  write ();
+  write `Written;
 ;;
 
 let synchronous_raise reqd =
@@ -875,9 +879,11 @@ let test_chunked_encoding () =
     let response = Response.create `OK ~headers:Headers.encoding_chunked in
     let resp_body = Reqd.respond_with_streaming reqd response in
     Body.Writer.write_string resp_body "First chunk";
-    Body.Writer.flush resp_body (fun () ->
-      Body.Writer.write_string resp_body "Second chunk";
-      Body.Writer.close resp_body);
+    Body.Writer.flush resp_body (function
+      | `Closed -> assert false
+      | `Written ->
+        Body.Writer.write_string resp_body "Second chunk";
+        Body.Writer.close resp_body);
   in
   let t = create ~error_handler request_handler in
   writer_yielded t;
@@ -903,9 +909,11 @@ let test_chunked_encoding_for_error () =
       `Bad_request error;
     let body = start_response Headers.encoding_chunked in
     Body.Writer.write_string body "Bad";
-    Body.Writer.flush body (fun () ->
-      Body.Writer.write_string body " request";
-      Body.Writer.close body);
+    Body.Writer.flush body (function
+      | `Closed -> assert false
+      | `Written ->
+        Body.Writer.write_string body " request";
+        Body.Writer.close body);
   in
   let t = create ~error_handler (fun _ -> assert false) in
   let c = feed_string t "  X\r\n\r\n" in
@@ -1079,10 +1087,12 @@ let streaming_error_handler
   let resp_body = start_response headers in
   continue_error := (fun () ->
     Body.Writer.write_string resp_body "got an error\n";
-    Body.Writer.flush resp_body (fun () ->
-      continue_error := (fun () ->
-          Body.Writer.write_string resp_body "more output";
-          Body.Writer.close resp_body)))
+    Body.Writer.flush resp_body (function
+      | `Closed -> assert false
+      | `Written ->
+        continue_error := (fun () ->
+            Body.Writer.write_string resp_body "more output";
+            Body.Writer.close resp_body)))
 ;;
 
 let test_malformed_request_streaming_error_response () =
@@ -1119,13 +1129,17 @@ let chunked_error_handler continue_error ?request:_ _error start_response =
     start_response (Headers.of_list ["transfer-encoding", "chunked"])
   in
   Body.Writer.write_string resp_body "chunk 1\n";
-  Body.Writer.flush resp_body (fun () ->
-    continue_error := (fun () ->
-      Body.Writer.write_string resp_body "chunk 2\n";
-      Body.Writer.flush resp_body (fun () ->
-        continue_error := (fun () ->
-          Body.Writer.write_string resp_body "chunk 3\n";
-          Body.Writer.close resp_body))))
+  Body.Writer.flush resp_body (function
+    | `Closed -> assert false
+    | `Written ->
+      continue_error := (fun () ->
+        Body.Writer.write_string resp_body "chunk 2\n";
+        Body.Writer.flush resp_body (function
+          | `Closed -> assert false
+          | `Written ->
+            continue_error := (fun () ->
+              Body.Writer.write_string resp_body "chunk 3\n";
+              Body.Writer.close resp_body))))
 ;;
 
 let test_malformed_request_chunked_error_response () =
@@ -1475,9 +1489,11 @@ let test_streaming_response_before_reading_entire_body_no_error () =
       let resp_body = Reqd.respond_with_streaming reqd response in
       continue_response := (fun () ->
         Body.Writer.write_string resp_body "hello";
-        Body.Writer.flush resp_body (fun () ->
-          continue_response := (fun () ->
-            Body.Writer.close resp_body))))
+        Body.Writer.flush resp_body (function
+          | `Closed -> assert false
+          | `Written ->
+            continue_response := (fun () ->
+              Body.Writer.close resp_body))))
   in
   let error_handler ?request:_ _error _start_response = assert false in
   let t = create ~error_handler request_handler in
@@ -1748,9 +1764,11 @@ let test_race_condition_writer_issues_yield_after_reader_eof () =
          ~on_eof:(fun () ->
            let resp_body = Reqd.respond_with_streaming reqd response in
            Body.Writer.write_string resp_body (String.make 10 'a');
-           Body.Writer.flush resp_body (fun () ->
-             continue_response := (fun () ->
-                 Body.Writer.close resp_body))))
+           Body.Writer.flush resp_body (function
+             | `Closed -> assert false
+             | `Written ->
+               continue_response := (fun () ->
+                   Body.Writer.close resp_body))))
   in
   let t = create ~error_handler response_handler in
   let request =
@@ -1870,9 +1888,11 @@ let test_errored_chunked_streaming_response_async () =
     Body.Reader.close request_body;
     let body = Reqd.respond_with_streaming reqd response in
     Body.Writer.write_string body "hello";
-    Body.Writer.flush body (fun () ->
-    continue := (fun () ->
-      Reqd.report_exn reqd (Failure "heh")))
+    Body.Writer.flush body (function
+      | `Closed -> assert false
+      | `Written ->
+        continue := (fun () ->
+          Reqd.report_exn reqd (Failure "heh")))
   in
 
   let t = create request_handler in
@@ -2061,7 +2081,6 @@ let test_flush_response_before_shutdown () =
   !continue ();
   shutdown t;
 
-  writer_ready t;
   write_string t "b\r\nhello world\r\n";
   connection_is_shutdown t
 ;;
@@ -2287,7 +2306,10 @@ let test_body_flush_after_bytes_in_the_wire () =
     Response.create ~headers:(Headers.of_list ["content-length", "5"]) `OK
   in
   let callback_called = ref false in
-  let callback () = callback_called := true in
+  let callback = function
+    | `Closed -> assert false
+    | `Written -> callback_called := true
+  in
   let request_handler ~flush_headers_immediately reqd =
     let response_body =
       Reqd.respond_with_streaming

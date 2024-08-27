@@ -151,26 +151,40 @@ module Writer = struct
     t
 
   let write_char t c =
-    Faraday.write_char t.faraday c
+    if not (Faraday.is_closed t.faraday) then
+      Faraday.write_char t.faraday c
 
   let write_string t ?off ?len s =
-    Faraday.write_string ?off ?len t.faraday s
+    if not (Faraday.is_closed t.faraday) then
+      Faraday.write_string ?off ?len t.faraday s
 
   let write_bigstring t ?off ?len b =
-    Faraday.write_bigstring ?off ?len t.faraday b
+    if not (Faraday.is_closed t.faraday) then
+      Faraday.write_bigstring ?off ?len t.faraday b
 
   let schedule_bigstring t ?off ?len (b:Bigstringaf.t) =
-    Faraday.schedule_bigstring ?off ?len t.faraday b
+    if not (Faraday.is_closed t.faraday) then
+      Faraday.schedule_bigstring ?off ?len t.faraday b
 
   let ready_to_write t = Serialize.Writer.wakeup t.writer
 
   let flush t kontinue =
-    Faraday.flush t.faraday (fun () ->
-      Serialize.Writer.flush t.writer kontinue);
-    ready_to_write t
+    if Serialize.Writer.is_closed t.writer then
+      kontinue `Closed
+    else begin
+      Faraday.flush_with_reason t.faraday (function
+        | Drain -> kontinue `Closed
+        | Nothing_pending | Shift -> Serialize.Writer.flush t.writer kontinue);
+      ready_to_write t
+    end
 
   let is_closed t =
     Faraday.is_closed t.faraday
+
+  let close_and_drain t =
+    Faraday.close t.faraday;
+    (* Resolve all pending flushes *)
+    ignore (Faraday.drain t.faraday : int)
 
   let close t =
     Serialize.Writer.unyield t.writer;
@@ -202,6 +216,9 @@ module Writer = struct
 
   let transfer_to_writer t =
     let faraday = t.faraday in
+    if Serialize.Writer.is_closed t.writer then
+      close_and_drain t
+    else
     begin match Faraday.operation faraday with
     | `Yield -> ()
     | `Close ->
@@ -222,9 +239,11 @@ module Writer = struct
         | Identity  -> Serialize.Writer.schedule_fixed t.writer iovecs
         | Chunked _ -> Serialize.Writer.schedule_chunk t.writer iovecs
         end;
-        Serialize.Writer.flush t.writer (fun () ->
-          Faraday.shift faraday lengthv;
-          t.buffered_bytes <- t.buffered_bytes - lengthv)
+        Serialize.Writer.flush t.writer (function
+          | `Closed -> close_and_drain t
+          | `Written ->
+            Faraday.shift faraday lengthv;
+            t.buffered_bytes <- t.buffered_bytes - lengthv)
       end
     end
 end
