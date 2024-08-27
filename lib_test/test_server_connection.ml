@@ -41,7 +41,7 @@ module Runtime : sig
 
   val report_exn : t -> exn -> unit
 
-  val do_force_read : t -> (Server_connection.t -> 'a) -> 'a
+  val with_server_connection : t -> (Server_connection.t -> 'a) -> 'a
   val shutdown : t -> unit
   val is_closed : t -> bool
 end = struct
@@ -147,7 +147,7 @@ end = struct
         Read_operation.pp_hum op
   ;;
 
-  let do_force_read t f = f t.server_connection
+  let with_server_connection t f = f t.server_connection
 
   let do_write t f =
     match current_write_operation t with
@@ -195,7 +195,7 @@ let read ?(eof=false) t str ~off ~len =
 let read_eof = read ~eof:true
 
 let force_read_eof t str ~off ~len =
-  do_force_read t (fun conn -> Server_connection.read_eof conn str ~off ~len)
+  with_server_connection t (fun conn -> Server_connection.read_eof conn str ~off ~len)
 ;;
 
 let feed_string ?eof t str =
@@ -210,7 +210,7 @@ let read_string ?eof t str =
 ;;
 
 let force_read t str ~off ~len =
-  do_force_read t (fun conn -> Server_connection.read conn str ~off ~len)
+  with_server_connection t (fun conn -> Server_connection.read conn str ~off ~len)
 ;;
 
 let force_feed_string t str =
@@ -1420,7 +1420,7 @@ let test_finish_response_after_read_eof () =
   Alcotest.(check int) "malformed chunked encoding read completely" len just_read;
 
   let (_ : Read_operation.t) =
-    do_force_read t (fun t -> Server_connection.next_read_operation t)
+    with_server_connection t (fun t -> Server_connection.next_read_operation t)
   in
   reader_errored t;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
@@ -2337,6 +2337,54 @@ let test_input_consumed_before_closing_req_body () =
   write_string t "0\r\n\r\n";
 ;;
 
+let test_can_read_more_requests_after_write_eof () =
+  let request = Request.create `GET "/" ~headers:(Headers.encoding_fixed 0) in
+  let reqd = ref None in
+  let request_handler reqd' = reqd := Some reqd' in
+  let t = create request_handler in
+  let response = Response.create `OK ~headers:Headers.encoding_chunked in
+  read_request t request;
+  Reqd.respond_with_streaming (Option.get !reqd) response ~flush_headers_immediately:true
+  |> (ignore : Body.Writer.t -> unit);
+  write_eof t;
+  (* In many runtimes, there are separate reader and writer threads that drive
+     the reading and writing from httpaf independently. So just because the
+     writer thread has told us that the socket is closed doesn't mean we won't
+     get a bunch more requests delivered to us from the reader thread. We
+     should be ready to receive them, and call the request handler for them,
+     even if there is no possibility of writing responses (e.g. those requests
+     might be side-effecting requests like POST requests). *)
+  reqd := None;
+  writer_closed ~unread:47 t;
+  reader_ready t;
+  read_request t request;
+  Reqd.respond_with_streaming (Option.get !reqd) response ~flush_headers_immediately:true
+  |> (ignore : Body.Writer.t -> unit);
+  Alcotest.(check bool) "request handler fired" true (Option.is_some !reqd)
+;;
+
+
+let test_can_read_more_requests_after_write_eof_before_send_response () =
+  let request = Request.create `GET "/" ~headers:(Headers.encoding_fixed 0) in
+  let reqd = ref None in
+  let request_handler reqd' = reqd := Some reqd' in
+  let t = create request_handler in
+  let response = Response.create `OK ~headers:Headers.encoding_chunked in
+  read_request t request;
+
+  let write_op = ref (current_write_operation t) in
+  with_server_connection t (fun t ->
+    Server_connection.report_write_result t `Closed;
+    write_op := Server_connection.next_write_operation t;
+  );
+  Alcotest.check write_operation "Writer is closed"
+    (`Close 0) !write_op;
+  reader_ready t;
+  read_request t request;
+  Reqd.respond_with_streaming (Option.get !reqd) response ~flush_headers_immediately:true
+  |> (ignore : Body.Writer.t -> unit);
+  Alcotest.(check bool) "request handler fired" true (Option.is_some !reqd)
+;;
 
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
@@ -2417,4 +2465,6 @@ let tests =
   ; "multiple pipelined requests", `Quick, test_multiple_pipelined_requests
   ; "Body.Writer.flush waits for bytes to have been written to the wire", `Quick, test_body_flush_after_bytes_in_the_wire
   ; "input consumed before closing request body", `Quick, test_input_consumed_before_closing_req_body
+  ; "can read more requests after write eof", `Quick, test_can_read_more_requests_after_write_eof
+  ; "can read more requests after write eof (before response sent)", `Quick, test_can_read_more_requests_after_write_eof_before_send_response
   ]
