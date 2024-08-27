@@ -1747,12 +1747,6 @@ let test_request_pipelining_single_read () =
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
 ;;
 
-let raises_writer_closed f =
-  (* This is raised when you write to a closed [Faraday.t] *)
-  Alcotest.check_raises "raises because writer is closed"
-    (Failure "cannot write to closed writer") f
-;;
-
 let test_flush_response_before_shutdown () =
   let request' = Request.create `GET "/" ~headers:Headers.encoding_chunked in
   let response_handler _response _body =
@@ -1775,9 +1769,8 @@ let test_flush_response_before_shutdown () =
     true
     (Body.Writer.is_closed body);
 
-  raises_writer_closed (fun () ->
-    write_string t "b\r\nhello world\r\n");
-  connection_is_shutdown t
+  writer_closed t;
+  connection_is_shutdown t;
 ;;
 
 let test_report_exn_during_body_read () =
@@ -1812,6 +1805,65 @@ let test_report_exn_during_body_read () =
     (Some "something went wrong")
     !error_message;
   Alcotest.(check bool) "body is complete" true !body_done;
+;;
+
+let test_can_read_response_after_write_eof () =
+  let request' = Request.create `GET "/" ~headers:Headers.encoding_chunked in
+  let resp = ref None in
+  let response_handler response body =
+    resp := Some response;
+    Body.Reader.close body;
+  in
+  let t = create () in
+  let _body' =
+    request
+      t
+      request'
+      ~flush_headers_immediately:true
+      ~response_handler
+      ~error_handler:no_error_handler
+  in
+  write_request t request';
+
+  let response = Response.create `OK ~headers:(Headers.encoding_fixed 0) in
+
+  report_write_result t `Closed;
+  writer_closed t;
+
+  read_response t response;
+  reader_ready t;
+  Alcotest.(check bool) "response read and handler called" true (Option.is_some !resp);
+;;
+
+let test_read_response_before_shutdown () =
+  let request' = Request.create `GET "/" ~headers:Headers.encoding_chunked in
+  let response_received = ref false in
+  let response_handler _response _body =
+    response_received := true;
+  in
+  let t = create () in
+  let body =
+    request
+      t
+      request'
+      ~flush_headers_immediately:true
+      ~response_handler
+      ~error_handler:no_error_handler
+  in
+  write_request t request';
+
+  Body.Writer.write_string body "hello world";
+
+  read_response t (Response.create ~headers:(Headers.encoding_fixed 0) `OK);
+  Alcotest.(check bool) "Response handler called" true !response_received;
+
+  shutdown t;
+  Alcotest.(check bool) "Shutting down closes the request body"
+    true
+    (Body.Writer.is_closed body);
+
+  writer_closed t;
+  connection_is_shutdown t;
 ;;
 
 let tests =
@@ -1859,5 +1911,7 @@ let tests =
   ; "request pipelining flushes request body", `Quick, test_request_pipelining_async
   ; "request pipelining both responses in single buffer", `Quick, test_request_pipelining_single_read
   ; "shutting down closes request bodies", `Quick, test_flush_response_before_shutdown
+  ; "shut down closes request body ", `Quick, test_read_response_before_shutdown
   ; "report exn during body read", `Quick, test_report_exn_during_body_read
+  ; "read response after write eof", `Quick, test_can_read_response_after_write_eof
   ]
