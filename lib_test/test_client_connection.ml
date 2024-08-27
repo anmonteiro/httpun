@@ -1780,6 +1780,39 @@ let test_flush_response_before_shutdown () =
   connection_is_shutdown t
 ;;
 
+let test_report_exn_during_body_read () =
+  let request' = Request.create `GET "/" in
+  let response = Response.create `OK in
+
+  let body_done = ref false in
+  let error_message = ref None in
+  let t = create () in
+  let body =
+    request
+      t
+      request'
+      ~response_handler:(fun _ body ->
+        let on_read _ ~off:_ ~len:_ = () in
+        let on_eof () = body_done := true in
+        Body.Reader.schedule_read body ~on_read ~on_eof)
+      ~error_handler:(function
+        | `Exn (Failure msg) ->
+            Alcotest.(check bool) "body is not complete" false !body_done;
+            error_message := Some msg
+        | _ -> assert false)
+  in
+  Body.Writer.close body;
+  write_request t request';
+  writer_yielded t;
+  reader_ready t;
+  read_response t response;
+  report_exn t (Failure "something went wrong");
+  connection_is_shutdown t;
+  Alcotest.(check (option string)) "something went wrong"
+    (Some "something went wrong")
+    !error_message;
+  Alcotest.(check bool) "body is complete" true !body_done;
+;;
 
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
@@ -1826,4 +1859,5 @@ let tests =
   ; "request pipelining flushes request body", `Quick, test_request_pipelining_async
   ; "request pipelining both responses in single buffer", `Quick, test_request_pipelining_single_read
   ; "shutting down closes request bodies", `Quick, test_flush_response_before_shutdown
+  ; "report exn during body read", `Quick, test_report_exn_during_body_read
   ]

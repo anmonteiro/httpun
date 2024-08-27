@@ -70,9 +70,9 @@ let report_error t error =
     (* TODO(anmonteiro): Not entirely sure this is possible in the client. *)
     assert false
   | Received_response (_, response_body), `Ok ->
-     Body.Reader.close response_body;
      t.error_code <- (error :> [`Ok | error]);
-     t.error_handler error
+     t.error_handler error;
+     Body.Reader.close response_body;
   | (Uninitialized | Awaiting_response | Received_response _ | Closed | Upgraded _), _ ->
     (* XXX(seliopou): Once additional logging support is added, log the error
      * in case it is not spurious. *)
