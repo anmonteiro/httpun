@@ -108,7 +108,7 @@ let input_state t : Input_state.t =
   | Upgraded _
   | Closed -> Complete
 
-let output_state { request_body; state; _ } : Output_state.t =
+let output_state { request_body; state; writer; _ } : Output_state.t =
   match state with
   | Upgraded _ ->
     (* XXX(anmonteiro): Connections that have been upgraded "require output"
@@ -117,7 +117,8 @@ let output_state { request_body; state; _ } : Output_state.t =
      * transition the response descriptor to the `Closed` state. *)
     Waiting
   | state ->
-    if state = Uninitialized || Body.Writer.requires_output request_body
+    if Writer.is_closed writer then Complete
+    else if state = Uninitialized || Body.Writer.requires_output request_body
     then Ready
     else Complete
 
