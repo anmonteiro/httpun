@@ -11,7 +11,9 @@ let main port host () =
   Tcp.connect_sock where_to_connect
   >>= fun socket ->
     let finished = Ivar.create () in
-    let response_handler = Httpun_examples.Client.print ~on_eof:(Ivar.fill finished) in
+    let response_handler =
+      Httpun_examples.Client.print
+        ~on_eof:((Ivar.fill [@ocaml.alert "-deprecated"]) finished) in
     let request_headers =
       Request.create ~headers:(Headers.of_list [ "host", host ]) `GET "/"
     in
@@ -25,7 +27,7 @@ let main port host () =
     in
     let finished' = Ivar.create () in
     let response_handler' =
-      Httpun_examples.Client.print ~on_eof:(Ivar.fill finished')
+      Httpun_examples.Client.print ~on_eof:((Ivar.fill [@ocaml.alert "-deprecated"]) finished')
     in
     let request_body' =
       Client.request

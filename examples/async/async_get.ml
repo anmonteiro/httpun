@@ -9,7 +9,9 @@ let main port host () =
   Tcp.connect_sock where_to_connect
   >>= fun socket ->
     let finished = Ivar.create () in
-    let response_handler = Httpun_examples.Client.print ~on_eof:(Ivar.fill finished) in
+    let response_handler =
+      Httpun_examples.Client.print
+        ~on_eof:((Ivar.fill [@ocaml.alert "-deprecated"]) finished) in
     let headers = Headers.of_list [ "host", host ] in
     Client.create_connection socket >>= fun connection ->
     let request_body =

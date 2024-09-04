@@ -9,7 +9,9 @@ let main port host () =
   Tcp.connect_sock where_to_connect
   >>= fun socket ->
     let finished = Ivar.create () in
-    let response_handler = Httpun_examples.Client.print ~on_eof:(Ivar.fill finished) in
+    let response_handler =
+      Httpun_examples.Client.print
+        ~on_eof:((Ivar.fill [@alert "-deprecated"]) finished) in
     let headers =
       Headers.of_list
       [ "transfer-encoding", "chunked"
@@ -29,7 +31,7 @@ let main port host () =
     don't_wait_for (
       Reader.read_one_chunk_at_a_time stdin ~handle_chunk:(fun bs ~pos:off ~len ->
         Body.Writer.write_bigstring request_body bs ~off ~len;
-        Body.Writer.flush request_body (fun () -> ());
+        Body.Writer.flush request_body (fun _reason -> ());
         return (`Consumed(len, `Need_unknown)))
       >>| function
         | `Eof_with_unconsumed_data s -> Body.Writer.write_string request_body s;

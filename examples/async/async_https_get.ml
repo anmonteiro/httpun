@@ -10,7 +10,7 @@ let response_handler finished response response_body =
     let rec on_read bs ~off ~len =
       Bigstring.to_string ~pos:off ~len bs |> print_endline;
       Body.Reader.schedule_read response_body ~on_read ~on_eof
-    and on_eof () = Ivar.fill finished () in
+    and on_eof () = (Ivar.fill [@ocaml.alert "-deprecated"]) finished () in
     Body.Reader.schedule_read response_body ~on_read ~on_eof;
   | response ->
     Format.fprintf Format.std_formatter "%a\n%!" Response.pp_hum response;
