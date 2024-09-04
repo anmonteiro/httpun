@@ -1,4 +1,4 @@
-Unreleased
+0.2.0 2024-09-04
 --------------
 
 - client: report exceptions before closing the response body
