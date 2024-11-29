@@ -256,7 +256,7 @@ let error_code t =
 let persistent_connection t =
   t.persistent
 
-let input_state t : Input_state.t =
+let input_state t : Io_state.t =
   match t.response_state with
   | Upgrade _ -> Ready
   | _ ->
