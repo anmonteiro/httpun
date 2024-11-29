@@ -25,21 +25,24 @@ let proxy_handler _env ~sw ~headers flow ~on_eof response _response_body =
        We'll be boring and use HTTP/1.1 again. *)
     let connection = Httpun_eio.Client.create_connection ~sw flow in
     let exit_cond = Eio.Condition.create () in
-    let response_handler =
-      http_handler ~on_eof:(fun () ->
-        Stdlib.Format.eprintf "http eof@.";
-        Eio.Condition.broadcast exit_cond;
-        on_eof ())
-    in
-    let request_body =
-      Httpun_eio.Client.request
-        ~flush_headers_immediately:true
-        ~error_handler:Httpun_examples.Client.error_handler
-        ~response_handler
-        connection
-        (Request.create ~headers `GET "/")
-    in
-    Body.Writer.close request_body
+    Eio.Fiber.fork ~sw (fun () ->
+      let response_handler =
+        http_handler ~on_eof:(fun () ->
+          Stdlib.Format.eprintf "http eof@.";
+          Eio.Condition.broadcast exit_cond;
+          on_eof ())
+      in
+      let request_body =
+        Httpun_eio.Client.request
+          ~flush_headers_immediately:true
+          ~error_handler:Httpun_examples.Client.error_handler
+          ~response_handler
+          connection
+          (Request.create ~headers `GET "/")
+      in
+      Body.Writer.close request_body);
+    Eio.Condition.await_no_mutex exit_cond;
+    Httpun_eio.Client.shutdown connection |> Eio.Promise.await
   | _response -> Stdlib.exit 124
 
 let main port proxy_host =
@@ -61,10 +64,15 @@ let main port proxy_host =
       let connection = Httpun_eio.Client.create_connection ~sw socket in
 
       let exit_cond = Eio.Condition.create () in
+      Eio.Fiber.fork ~sw (fun ()->
       let response_handler =
-        proxy_handler _env ~sw socket ~headers ~on_eof:(fun () ->
-          Stdlib.Format.eprintf "(connect) eof@.";
-          Eio.Condition.broadcast exit_cond)
+        fun response response_body ->
+          Eio.Fiber.fork ~sw @@ fun () ->
+          proxy_handler _env ~sw socket ~headers ~on_eof:(fun () ->
+            Stdlib.Format.eprintf "(connect) eof@.";
+            Eio.Condition.broadcast exit_cond)
+          response
+          response_body
       in
       let request_body =
         Httpun_eio.Client.request
@@ -77,7 +85,7 @@ let main port proxy_host =
       Body.Writer.close request_body;
       Eio.Condition.await_no_mutex exit_cond;
 
-      Httpun_eio.Client.shutdown connection |> Eio.Promise.await))
+      Httpun_eio.Client.shutdown connection |> Eio.Promise.await)))
 
 let () =
   let host = ref None in

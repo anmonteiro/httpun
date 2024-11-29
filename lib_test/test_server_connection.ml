@@ -2438,6 +2438,24 @@ let test_write_response_after_read_eof () =
   connection_is_shutdown t;
 ;;
 
+let test_connect_method () =
+  let upgraded = ref false in
+  let upgrade_handler reqd =
+    Reqd.respond_with_upgrade reqd Headers.empty (fun () ->
+     upgraded := true)
+  in
+  let t = create ~error_handler upgrade_handler in
+  read_request
+    t
+    (Request.create
+      ~headers:(Headers.of_list [ "host", "example.com:80" ])
+      `CONNECT
+      "/");
+  write_response ~msg:"Upgrade response written" t (Response.create `Switching_protocols);
+  Alcotest.(check bool) "Callback was called" true !upgraded;
+  reader_yielded t;
+;;
+
 let tests =
   [ "initial reader state"  , `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -2520,4 +2538,5 @@ let tests =
   ; "can read more requests after write eof", `Quick, test_can_read_more_requests_after_write_eof
   ; "can read more requests after write eof (before response sent)", `Quick, test_can_read_more_requests_after_write_eof_before_send_response
   ; "write response after reader EOF", `Quick,test_write_response_after_read_eof
+  ; "CONNECT method", `Quick, test_connect_method
   ]
