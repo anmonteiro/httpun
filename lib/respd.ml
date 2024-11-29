@@ -93,7 +93,7 @@ let close_response_body t =
     Body.Reader.close response_body
   | Upgraded _ -> t.state <- Closed
 
-let input_state t : Input_state.t =
+let input_state t : Io_state.t =
   match t.state with
   | Uninitialized
   | Awaiting_response -> Ready
@@ -108,14 +108,14 @@ let input_state t : Input_state.t =
   | Upgraded _
   | Closed -> Complete
 
-let output_state { request_body; state; writer; _ } : Output_state.t =
+let output_state { request_body; state; writer; _ } : Io_state.t =
   match state with
   | Upgraded _ ->
     (* XXX(anmonteiro): Connections that have been upgraded "require output"
      * forever, but outside the HTTP layer, meaning they're permanently
      * "yielding". For now they need to be explicitly shutdown in order to
      * transition the response descriptor to the `Closed` state. *)
-    Waiting
+    Wait
   | state ->
     if Writer.is_closed writer then Complete
     else if state = Uninitialized || Body.Writer.requires_output request_body

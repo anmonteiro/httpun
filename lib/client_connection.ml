@@ -206,7 +206,7 @@ let rec _next_read_operation t =
     let respd = current_respd_exn t in
     match Respd.input_state respd with
     | Wait -> `Yield
-    | Ready  -> Reader.next t.reader
+    | Ready -> Reader.next t.reader
     | Complete -> _final_read_operation_for t respd
   )
 
@@ -217,7 +217,7 @@ and _final_read_operation_for t respd =
       Reader.next t.reader;
     ) else (
       match Respd.output_state respd with
-      | Waiting | Ready -> `Yield
+      | Wait | Ready -> `Yield
       | Complete       ->
          match Reader.next t.reader with
          | `Error _ | `Read as operation ->
@@ -271,7 +271,7 @@ let rec _next_write_operation t =
   ) else (
     let respd = current_respd_exn t in
     match Respd.output_state respd with
-    | Waiting -> `Yield
+    | Wait -> `Yield
     | Ready ->
       Respd.flush_request_body respd;
       Writer.next t.writer

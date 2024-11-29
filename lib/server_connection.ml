@@ -259,7 +259,7 @@ let rec _next_read_operation t =
            and there are still bytes remaining to be read in the request body.
          *)
         Reader.next t.reader
-      | Waiting | Ready ->
+      | Wait | Ready ->
         (* `Wait` signals that we should add backpressure to the read channel,
          * meaning the reader should tell the runtime to yield.
          *
@@ -281,7 +281,7 @@ and _final_read_operation_for t reqd =
     Reader.next t.reader;
   ) else
     match Reqd.output_state reqd with
-    | Waiting | Ready -> `Yield
+    | Wait | Ready -> `Yield
     | Complete       ->
       (* The "final read" operation for a request descriptor that is
        * `Complete` from both input and output perspectives needs to account
@@ -340,7 +340,7 @@ let rec _next_write_operation t =
       Writer.next t.writer
     | Error { response_state; _ } ->
       match Response_state.output_state response_state ~writer:t.writer with
-      | Waiting -> `Yield
+      | Wait -> `Yield
       | Ready ->
         flush_response_error_body response_state;
         Writer.next t.writer
@@ -350,7 +350,7 @@ let rec _next_write_operation t =
   ) else (
     let reqd = current_reqd_exn t in
     match Reqd.output_state reqd with
-    | Waiting -> Writer.next t.writer
+    | Wait -> Writer.next t.writer
     | Ready ->
       Reqd.flush_response_body reqd;
       Writer.next t.writer
