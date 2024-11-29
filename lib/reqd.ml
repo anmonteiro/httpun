@@ -95,14 +95,14 @@ let response { response_state; _ } =
   | Waiting -> None
   | Streaming (response, _)
   | Fixed response
-  | Upgrade (response, _) -> Some response
+  | Upgrade response -> Some response
 
 let response_exn { response_state; _ } =
   match response_state with
   | Waiting -> failwith "httpun.Reqd.response_exn: response has not started"
   | Streaming(response, _)
   | Fixed response
-  | Upgrade (response, _) -> response
+  | Upgrade response -> response
 
 let respond_with_string t response str =
   if t.error_code <> `Ok then
@@ -177,7 +177,7 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     Writer.write_response t.writer response;
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    t.response_state <- Upgrade (response, upgrade_handler);
+    t.response_state <- Upgrade response;
     Writer.flush t.writer (fun _reason ->
       (* TODO(anmonteiro): probably need to check `Closed here? *)
       upgrade_handler ());
