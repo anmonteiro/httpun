@@ -338,8 +338,18 @@ let rec _next_write_operation t =
       if Reader.is_closed t.reader
       then shutdown t;
       Writer.next t.writer
-    | Error { response_state; _ } ->
-      match Response_state.output_state response_state ~writer:t.writer with
+    | Error { request; response_state } ->
+      match
+        let request_method =
+          Option.value
+            ~default:`GET
+            (Option.map (fun (t: Request.t) -> t.meth) request)
+        in
+        Response_state.output_state
+          response_state
+          ~request_method
+          ~writer:t.writer
+      with
       | Wait -> `Yield
       | Ready ->
         flush_response_error_body response_state;

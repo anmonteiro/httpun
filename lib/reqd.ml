@@ -257,8 +257,8 @@ let persistent_connection t =
   t.persistent
 
 let input_state t : Io_state.t =
-  match t.response_state with
-  | Upgrade _ -> Wait
+  match t.response_state, t.request.meth with
+  | Upgrade _,_ | _, `CONNECT -> Wait
   | _ ->
     if Body.Reader.is_closed t.request_body
     then Complete
@@ -266,8 +266,11 @@ let input_state t : Io_state.t =
     then Ready
     else Wait
 
-let output_state { response_state; writer; _ } =
-  Response_state.output_state response_state ~writer
+let output_state { request; response_state; writer; _ } =
+  Response_state.output_state
+    response_state
+    ~request_method:request.meth
+    ~writer
 
 let flush_request_body t =
   if Body.Reader.has_pending_output t.request_body

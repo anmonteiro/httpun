@@ -25,13 +25,14 @@ type t =
   ; mutable persistent : bool
   }
 
-let create error_handler request request_body writer response_handler =
+let create error_handler (request: Request.t) request_body writer response_handler =
   let rec handler response body =
     let t = Lazy.force t in
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    let next_state : Request_state.t = match response.status with
-      | `Switching_protocols ->
+    let next_state : Request_state.t = match request.meth, response.status with
+      | `CONNECT, `OK
+      | _, `Switching_protocols ->
         Upgraded response
       | _ ->
         Received_response (response, body)
@@ -103,9 +104,12 @@ let input_state t : Io_state.t =
     else if Body.Reader.is_read_scheduled response_body
     then Ready
     else Wait
+  | Upgraded _ ->
     (* Upgraded is "Complete" because the descriptor doesn't wish to receive
-     * any more input. *)
-  | Upgraded _
+     * any more input.
+     * XXX(anmonteiro): not true for `CONNECT
+     *)
+    Wait
   | Closed -> Complete
 
 let output_state { request_body; state; writer; _ } : Io_state.t =

@@ -43,7 +43,7 @@ let proxy_handler _env ~sw ~headers flow ~on_eof response _response_body =
   | _response -> Stdlib.exit 124
 
 let main port proxy_host =
-  let real_host = "example.com:443" in
+  let real_host = "example.com:80" in
   Eio_main.run (fun _env ->
     Eio.Switch.run (fun sw ->
       let fd = Unix.socket ~cloexec:true Unix.PF_INET Unix.SOCK_STREAM 0 in
