@@ -2,7 +2,7 @@ type t =
   | Waiting
   | Fixed  of Response.t
   | Streaming of Response.t * Body.Writer.t
-  | Upgrade of Response.t * (unit -> unit)
+  | Upgrade of Response.t
 
 let output_state =
   let response_sent_state = function
