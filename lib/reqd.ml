@@ -191,15 +191,15 @@ let unsafe_respond_with_upgrade t headers upgrade_handler =
     let response = Response.create ~headers `Switching_protocols in
     Writer.write_response t.writer response;
     if t.persistent then t.persistent <- Response.persistent_connection response;
-    t.response_state <- Upgrade response;
     Writer.flush t.writer (fun _reason ->
+      t.response_state <- Upgrade response;
       (* TODO(anmonteiro): probably need to check `Closed here? *)
       upgrade_handler ());
     Body.Reader.close t.request_body;
     Writer.wakeup t.writer
-  | Streaming _ | Upgrade _ ->
+  | Streaming _ ->
     failwith "httpun.Reqd.unsafe_respond_with_upgrade: response already started"
-  | Fixed _ ->
+  | Fixed _ | Upgrade _ ->
     failwith
       "httpun.Reqd.unsafe_respond_with_upgrade: response already complete"
 
