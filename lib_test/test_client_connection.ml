@@ -1866,6 +1866,41 @@ let test_read_response_before_shutdown () =
   connection_is_shutdown t;
 ;;
 
+let test_client_connect () =
+  let writer_woken_up = ref false in
+  let reader_woken_up = ref false in
+  let request' = Request.create
+    ~headers:(Headers.of_list ["host", "example.com:80"])
+    `CONNECT "/"
+  in
+  let t = create () in
+  let response = Response.create `OK in
+  let body =
+    request
+      t
+      request'
+      ~flush_headers_immediately:true
+      ~response_handler:(default_response_handler response)
+      ~error_handler:no_error_handler
+  in
+  write_request t request';
+  writer_yielded t;
+  Body.Writer.close body;
+  reader_ready t;
+  read_response t response;
+  reader_yielded t;
+  yield_reader t (fun () -> reader_woken_up := true);
+  writer_yielded t;
+  yield_writer t (fun () -> writer_woken_up := true);
+  Alcotest.(check bool) "Reader hasn't woken up yet" false !reader_woken_up;
+  Alcotest.(check bool) "Writer hasn't woken up yet" false !writer_woken_up;
+  shutdown t;
+  Alcotest.(check bool) "Reader woken up" true !reader_woken_up;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  connection_is_shutdown t;
+;;
+
+
 let tests =
   [ "commit parse after every header line", `Quick, test_commit_parse_after_every_header
   ; "GET"         , `Quick, test_get
@@ -1914,4 +1949,5 @@ let tests =
   ; "shut down closes request body ", `Quick, test_read_response_before_shutdown
   ; "report exn during body read", `Quick, test_report_exn_during_body_read
   ; "read response after write eof", `Quick, test_can_read_response_after_write_eof
+  ; "Client support for CONNECT", `Quick, test_client_connect
   ]

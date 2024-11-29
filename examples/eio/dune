@@ -1,6 +1,11 @@
 (executables
  (libraries httpun httpun-eio httpun_examples base stdio eio_main eio-ssl)
- (names eio_echo_post eio_get eio_ssl_get)
+ (names
+  eio_echo_post
+  eio_get
+  eio_ssl_get
+  eio_connect_server
+  eio_connect_client)
  (flags :standard -warn-error -A))
 
 (alias

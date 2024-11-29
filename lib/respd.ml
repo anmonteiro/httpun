@@ -25,13 +25,18 @@ type t =
   ; mutable persistent : bool
   }
 
-let create error_handler request request_body writer response_handler =
+let create error_handler (request: Request.t) request_body writer response_handler =
   let rec handler response body =
     let t = Lazy.force t in
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
-    let next_state : Request_state.t = match response.status with
-      | `Switching_protocols ->
+    let next_state : Request_state.t = match request.meth, response.status with
+      (* From RFC9110§6.4.1:
+       *   2xx (Successful) responses to a CONNECT request method (Section
+       *   9.3.6) switch the connection to tunnel mode instead of having
+       *   content. *)
+      | `CONNECT, #Status.successful
+      | _, `Switching_protocols ->
         Upgraded response
       | _ ->
         Received_response (response, body)
@@ -103,9 +108,7 @@ let input_state t : Io_state.t =
     else if Body.Reader.is_read_scheduled response_body
     then Ready
     else Wait
-    (* Upgraded is "Complete" because the descriptor doesn't wish to receive
-     * any more input. *)
-  | Upgraded _
+  | Upgraded _ -> Wait
   | Closed -> Complete
 
 let output_state { request_body; state; writer; _ } : Io_state.t =
