@@ -31,7 +31,11 @@ let create error_handler (request: Request.t) request_body writer response_handl
     if t.persistent then
       t.persistent <- Response.persistent_connection response;
     let next_state : Request_state.t = match request.meth, response.status with
-      | `CONNECT, `OK
+      (* From RFC9110§6.4.1:
+       *   2xx (Successful) responses to a CONNECT request method (Section
+       *   9.3.6) switch the connection to tunnel mode instead of having
+       *   content. *)
+      | `CONNECT, #Status.successful
       | _, `Switching_protocols ->
         Upgraded response
       | _ ->
