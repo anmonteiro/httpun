@@ -258,7 +258,7 @@ let persistent_connection t =
 
 let input_state t : Io_state.t =
   match t.response_state with
-  | Upgrade _ -> Ready
+  | Upgrade _ -> Wait
   | _ ->
     if Body.Reader.is_closed t.request_body
     then Complete

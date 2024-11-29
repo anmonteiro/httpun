@@ -957,7 +957,7 @@ let test_respond_with_upgrade () =
   read_request t (Request.create `GET "/");
   write_response ~msg:"Upgrade response written" t (Response.create `Switching_protocols);
   Alcotest.(check bool) "Callback was called" true !upgraded;
-  reader_ready t;
+  reader_yielded t;
 ;;
 
 let test_unexpected_eof () =

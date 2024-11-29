@@ -15,7 +15,7 @@ let output_state t ~writer : Io_state.t =
     else if Body.Writer.requires_output response_body
     then Ready
     else Complete
-  | Upgrade _ -> Ready
+  | Upgrade _ -> Waiting
 
 let flush_response_body t =
   match t with
