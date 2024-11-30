@@ -123,7 +123,7 @@ let respond_with_string t response str =
     Writer.write_response t.writer response;
     Writer.write_string t.writer str;
     if t.persistent then t.persistent <- Response.persistent_connection response;
-    t.response_state <- Fixed response;
+    if response.status <> `Continue then t.response_state <- Fixed response;
     Writer.wakeup t.writer
   | Streaming _ | Upgrade _ ->
     failwith "httpun.Reqd.respond_with_string: response already started"
