@@ -68,6 +68,7 @@ type value = string
 val ci_equal : string -> string -> bool
 
 val empty : t
+val singleton : (name * value) -> t
 
 val of_list     : (name * value) list -> t
 val of_rev_list : (name * value) list -> t
