@@ -5,6 +5,8 @@ Unreleased
   ([#140](https://github.com/anmonteiro/httpun/pull/140))
 - types: add `Headers.singleton`
   ([#146](https://github.com/anmonteiro/httpun/pull/146))
+- server: only set response to upgraded after flushing response bytes
+  ([#143](https://github.com/anmonteiro/httpun/pull/143))
 
 0.2.0 2024-09-04
 --------------
