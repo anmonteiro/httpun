@@ -2504,6 +2504,42 @@ let test_connect_method () =
   Alcotest.(check bool) "Callback was called" true !upgraded;
   reader_yielded t
 
+let test_100_continue () =
+  let final_response =
+    Response.create ~headers:(Headers.singleton ("content-length", "0")) `OK
+  in
+  let t =
+    let request_handler reqd =
+      let { Request.headers; _ } = Reqd.request reqd in
+      Alcotest.(check string)
+        "expect: 100-continue"
+        (Headers.get_exn headers "expect")
+        "100-continue";
+      Reqd.respond_with_string reqd (Response.create `Continue) "";
+      let request_body = Reqd.request_body reqd in
+      let rec on_read _buffer ~off:_ ~len:_ =
+        Body.Reader.schedule_read request_body ~on_eof ~on_read
+      and on_eof () =
+        Stdlib.Format.eprintf "EOF@.";
+        Reqd.respond_with_string reqd final_response ""
+      in
+      Body.Reader.schedule_read (Reqd.request_body reqd) ~on_eof ~on_read
+    in
+    create ~error_handler request_handler
+  in
+  read_request
+    t
+    (Request.create
+       ~headers:(Headers.of_list [ "expect", "100-continue" ])
+       `POST
+       "/");
+  write_response
+    ~msg:"100 continue response written"
+    t
+    (Response.create `Continue);
+  write_response ~msg:"Final response written" t final_response;
+  reader_ready t
+
 let tests =
   [ "initial reader state", `Quick, test_initial_reader_state
   ; "shutdown reader closed", `Quick, test_reader_is_closed_after_eof
@@ -2691,6 +2727,7 @@ let tests =
     , `Quick
     , test_write_response_after_read_eof )
   ; "CONNECT method", `Quick, test_connect_method
+  ; "100 Continue", `Quick, test_100_continue
   ]
 
 (*
