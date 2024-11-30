@@ -75,7 +75,13 @@ type t =
   ; mutable error_code      : [`Ok | error ]
   }
 
-let create error_handler request request_body reader writer response_body_buffer =
+let create
+  ~error_handler
+  ~reader
+  ~writer
+  ~response_body_buffer
+  request
+  request_body =
   { request
   ; request_body
   ; reader

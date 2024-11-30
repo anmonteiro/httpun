@@ -92,7 +92,13 @@ let create_request_body ~request t =
 let request t ?(flush_headers_immediately=false) request ~error_handler ~response_handler =
   let request_body = create_request_body ~request t in
   let respd =
-    Respd.create error_handler request request_body t.writer response_handler in
+    Respd.create
+      ~error_handler
+      ~writer:t.writer
+      ~response_handler
+      request
+      request_body
+  in
   let handle_now = Queue.is_empty t.request_queue in
   Queue.push respd t.request_queue;
   if handle_now then
