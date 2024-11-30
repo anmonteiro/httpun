@@ -73,6 +73,7 @@ type t =
   ; mutable persistent      : bool
   ; mutable response_state  : Response_state.t
   ; mutable error_code      : [`Ok | error ]
+  ; proxy: bool
   }
 
 let create
@@ -80,6 +81,7 @@ let create
   ~reader
   ~writer
   ~response_body_buffer
+  ~proxy
   request
   request_body =
   { request
@@ -91,6 +93,7 @@ let create
   ; persistent              = Request.persistent_connection request
   ; response_state          = Waiting
   ; error_code              = `Ok
+  ; proxy
   }
 
 let request { request; _ } = request
@@ -148,7 +151,7 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
   match t.response_state with
   | Waiting ->
     let encoding =
-      match Response.body_length ~request_method:t.request.meth response with
+      match Response.body_length ~proxy:t.proxy ~request_method:t.request.meth response with
       | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
       | `Error (`Bad_gateway | `Internal_server_error) ->
         failwith "httpun.Reqd.respond_with_streaming: invalid response body length"

@@ -52,7 +52,8 @@ type error_code =
     }
 
 type t =
-  { reader                 : Reader.request
+  { config : Config.t
+  ; reader                 : Reader.request
   ; writer                 : Writer.t
   ; response_body_buffer   : Bigstringaf.t
   ; request_handler        : request_handler
@@ -124,6 +125,7 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
         ~reader:(Lazy.force reader)
         ~writer
         ~response_body_buffer
+        ~proxy:config.proxy
         request
         request_body
     in
@@ -140,6 +142,7 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
     ; error_handler   = error_handler
     ; request_queue
     ; error_code = No_error
+    ; config
     }
   in
   Lazy.force t
@@ -197,7 +200,7 @@ let set_error_and_handle ?request t error =
               | None -> `GET
               | Some (request: Request.t) -> request.meth
             in
-            match Response.body_length ~request_method response with
+            match Response.body_length ~proxy:t.config.proxy ~request_method response with
             | `Fixed _ | `Close_delimited | `Chunked as encoding -> encoding
             | `Error (`Bad_gateway | `Internal_server_error) ->
               failwith "httpun.Server_connection.error_handler: invalid response body length"
