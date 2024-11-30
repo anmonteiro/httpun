@@ -1,11 +1,8 @@
 module Arg = Stdlib.Arg
-
 open Httpun
-
 module Client = Httpun_eio.Client
 
-let () =
-  Ssl.init ~thread_safe:true ()
+let () = Ssl.init ~thread_safe:true ()
 
 let handler ~on_eof response response_body =
   match response with
@@ -15,11 +12,10 @@ let handler ~on_eof response response_body =
       (* Bigstringaf.substring ~off ~len bs |> print_string; *)
       Body.Reader.schedule_read response_body ~on_read ~on_eof
     in
-    Body.Reader.schedule_read response_body ~on_read ~on_eof;
+    Body.Reader.schedule_read response_body ~on_read ~on_eof
   | response ->
     Format.fprintf Format.err_formatter "%a\n%!" Response.pp_hum response;
     Stdlib.exit 124
-;;
 
 let main port host =
   Eio_main.run (fun env ->
@@ -27,16 +23,16 @@ let main port host =
       let addrs =
         let addrs =
           Eio_unix.run_in_systhread (fun () ->
-              Unix.getaddrinfo
-                host
-                (string_of_int port)
-                [ Unix.(AI_FAMILY PF_INET) ])
+            Unix.getaddrinfo
+              host
+              (string_of_int port)
+              [ Unix.(AI_FAMILY PF_INET) ])
         in
         List.filter_map
           (fun (addr : Unix.addr_info) ->
-            match addr.ai_addr with
-            | Unix.ADDR_UNIX _ -> None
-            | ADDR_INET (addr, port) -> Some (addr, port))
+             match addr.ai_addr with
+             | Unix.ADDR_UNIX _ -> None
+             | ADDR_INET (addr, port) -> Some (addr, port))
           addrs
       in
       let addr =
@@ -44,7 +40,9 @@ let main port host =
         `Tcp (Eio_unix.Net.Ipaddr.of_unix inet, port)
       in
       let socket = Eio.Net.connect ~sw (Eio.Stdenv.net env) addr in
-      let ctx = Ssl.create_context (Ssl.SSLv23 [@ocaml.warning "-3"]) Ssl.Client_context in
+      let ctx =
+        Ssl.create_context (Ssl.SSLv23 [@ocaml.warning "-3"]) Ssl.Client_context
+      in
       Ssl.disable_protocols ctx [ (Ssl.SSLv23 [@ocaml.warning "-3"]) ];
       Ssl.honor_cipher_order ctx;
       Ssl.set_context_alpn_protos ctx [ "h2" ];
@@ -70,14 +68,13 @@ let main port host =
           ~response_handler
           (Request.create ~headers `GET "/")
       in
-      Body.Writer.close request_body));
-;;
+      Body.Writer.close request_body))
 
 let () =
   let host = ref None in
   let port = ref 443 in
   Arg.parse
-    ["-p", Set_int port, " Port number (80 by default)"]
+    [ "-p", Set_int port, " Port number (80 by default)" ]
     (fun host_argument -> host := Some host_argument)
     "lwt_get.exe [-p N] HOST";
   let host =
@@ -86,4 +83,3 @@ let () =
     | Some host -> host
   in
   main !port host
-;;

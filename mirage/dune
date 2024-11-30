@@ -1,10 +1,4 @@
 (library
  (name httpun_mirage)
  (public_name httpun-mirage)
- (libraries
-  httpun
-  httpun-lwt
-  gluten-mirage
-  lwt
-  mirage-flow
-  cstruct))
+ (libraries httpun httpun-lwt gluten-mirage lwt mirage-flow cstruct))

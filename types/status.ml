@@ -1,44 +1,41 @@
 (*----------------------------------------------------------------------------
-    Copyright (c) 2017 Inhabited Type LLC.
+  Copyright (c) 2017 Inhabited Type LLC.
 
-    All rights reserved.
+  All rights reserved.
 
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions
-    are met:
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
 
-    1. Redistributions of source code must retain the above copyright
-       notice, this list of conditions and the following disclaimer.
+  1. Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
 
-    2. Redistributions in binary form must reproduce the above copyright
-       notice, this list of conditions and the following disclaimer in the
-       documentation and/or other materials provided with the distribution.
+  2. Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
 
-    3. Neither the name of the author nor the names of his contributors
-       may be used to endorse or promote products derived from this software
-       without specific prior written permission.
+  3. Neither the name of the author nor the names of his contributors may be
+  used to endorse or promote products derived from this software without
+  specific prior written permission.
 
-    THIS SOFTWARE IS PROVIDED BY THE CONTRIBUTORS ``AS IS'' AND ANY EXPRESS
-    OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-    WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-    DISCLAIMED.  IN NO EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR
-    ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-    DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
-    OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-    HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
-    STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
-    ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-    POSSIBILITY OF SUCH DAMAGE.
+  THIS SOFTWARE IS PROVIDED BY THE CONTRIBUTORS ``AS IS'' AND ANY EXPRESS OR
+  IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+  EVENT SHALL THE AUTHORS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+  INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+  PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+  LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+  EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   ----------------------------------------------------------------------------*)
 
-
-type informational = [
-  | `Continue
+type informational =
+  [ `Continue
   | `Switching_protocols
   ]
 
-type successful = [
-  | `OK
+type successful =
+  [ `OK
   | `Created
   | `Accepted
   | `Non_authoritative_information
@@ -47,8 +44,8 @@ type successful = [
   | `Partial_content
   ]
 
-type redirection = [
-  | `Multiple_choices
+type redirection =
+  [ `Multiple_choices
   | `Moved_permanently
   | `Found
   | `See_other
@@ -57,8 +54,8 @@ type redirection = [
   | `Temporary_redirect
   ]
 
-type client_error = [
-  | `Bad_request
+type client_error =
+  [ `Bad_request
   | `Unauthorized
   | `Payment_required
   | `Forbidden
@@ -84,8 +81,8 @@ type client_error = [
   | `Request_header_fields_too_large
   ]
 
-type server_error = [
-  | `Internal_server_error
+type server_error =
+  [ `Internal_server_error
   | `Not_implemented
   | `Bad_gateway
   | `Service_unavailable
@@ -94,23 +91,24 @@ type server_error = [
   | `Network_authentication_required
   ]
 
-type standard = [
-  | informational
+type standard =
+  [ informational
   | successful
   | redirection
   | client_error
   | server_error
   ]
 
-type t = [
-  | standard
-  | `Code of int ]
+type t =
+  [ standard
+  | `Code of int
+  ]
 
 let default_reason_phrase = function
- (* Informational *)
+  (* Informational *)
   | `Continue -> "Continue"
   | `Switching_protocols -> "Switching Protocols"
- (* Successful *)
+  (* Successful *)
   | `OK -> "OK"
   | `Created -> "Created"
   | `Accepted -> "Accepted"
@@ -118,7 +116,7 @@ let default_reason_phrase = function
   | `No_content -> "No Content"
   | `Reset_content -> "Reset Content"
   | `Partial_content -> "Partial Content"
- (* Redirection *)
+  (* Redirection *)
   | `Multiple_choices -> "Multiple Choices"
   | `Moved_permanently -> "Moved Permanently"
   | `Found -> "Found"
@@ -126,14 +124,14 @@ let default_reason_phrase = function
   | `Not_modified -> "Not Modified"
   | `Use_proxy -> "Use Proxy"
   | `Temporary_redirect -> "Temporary Redirect"
- (* Client error *)
+  (* Client error *)
   | `Bad_request -> "Bad Request"
   | `Unauthorized -> "Unauthorized"
   | `Payment_required -> "Payment Required"
   | `Forbidden -> "Forbidden"
   | `Not_found -> "Not Found"
   | `Method_not_allowed -> "Method Not Allowed"
-  | `Not_acceptable-> "Not Acceptable"
+  | `Not_acceptable -> "Not Acceptable"
   | `Proxy_authentication_required -> "Proxy Authentication Required"
   | `Request_timeout -> "Request Timeout"
   | `Conflict -> "Conflict"
@@ -151,20 +149,20 @@ let default_reason_phrase = function
   | `Precondition_required -> "Precondition Required"
   | `Too_many_requests -> "Too Many Requests"
   | `Request_header_fields_too_large -> "Request Header Fields Too Large"
- (* Server error *)
+  (* Server error *)
   | `Internal_server_error -> "Internal Server Error"
   | `Not_implemented -> "Not Implemented"
   | `Bad_gateway -> "Bad Gateway"
-  | `Service_unavailable-> "Service Unavailable"
+  | `Service_unavailable -> "Service Unavailable"
   | `Gateway_timeout -> "Gateway Timeout"
   | `Http_version_not_supported -> "HTTP Version Not Supported"
   | `Network_authentication_required -> "Network Authentication Required"
 
 let to_code = function
- (* Informational *)
+  (* Informational *)
   | `Continue -> 100
   | `Switching_protocols -> 101
- (* Successful *)
+  (* Successful *)
   | `OK -> 200
   | `Created -> 201
   | `Accepted -> 202
@@ -172,7 +170,7 @@ let to_code = function
   | `No_content -> 204
   | `Reset_content -> 205
   | `Partial_content -> 206
- (* Redirection *)
+  (* Redirection *)
   | `Multiple_choices -> 300
   | `Moved_permanently -> 301
   | `Found -> 302
@@ -180,7 +178,7 @@ let to_code = function
   | `Not_modified -> 304
   | `Use_proxy -> 305
   | `Temporary_redirect -> 307
- (* Client error *)
+  (* Client error *)
   | `Bad_request -> 400
   | `Unauthorized -> 401
   | `Payment_required -> 402
@@ -205,21 +203,21 @@ let to_code = function
   | `Precondition_required -> 428
   | `Too_many_requests -> 429
   | `Request_header_fields_too_large -> 431
- (* Server error *)
+  (* Server error *)
   | `Internal_server_error -> 500
   | `Not_implemented -> 501
   | `Bad_gateway -> 502
-  | `Service_unavailable-> 503
+  | `Service_unavailable -> 503
   | `Gateway_timeout -> 504
   | `Http_version_not_supported -> 505
   | `Network_authentication_required -> 511
   | `Code c -> c
 
 let really_unsafe_of_code = function
- (* Informational *)
+  (* Informational *)
   | 100 -> `Continue
   | 101 -> `Switching_protocols
- (* Successful *)
+  (* Successful *)
   | 200 -> `OK
   | 201 -> `Created
   | 202 -> `Accepted
@@ -227,7 +225,7 @@ let really_unsafe_of_code = function
   | 204 -> `No_content
   | 205 -> `Reset_content
   | 206 -> `Partial_content
- (* Redirection *)
+  (* Redirection *)
   | 300 -> `Multiple_choices
   | 301 -> `Moved_permanently
   | 302 -> `Found
@@ -235,7 +233,7 @@ let really_unsafe_of_code = function
   | 304 -> `Not_modified
   | 305 -> `Use_proxy
   | 307 -> `Temporary_redirect
- (* Client error *)
+  (* Client error *)
   | 400 -> `Bad_request
   | 401 -> `Unauthorized
   | 402 -> `Payment_required
@@ -260,7 +258,7 @@ let really_unsafe_of_code = function
   | 428 -> `Precondition_required
   | 429 -> `Too_many_requests
   | 431 -> `Request_header_fields_too_large
- (* Server error *)
+  (* Server error *)
   | 500 -> `Internal_server_error
   | 501 -> `Not_implemented
   | 502 -> `Bad_gateway
@@ -268,7 +266,7 @@ let really_unsafe_of_code = function
   | 504 -> `Gateway_timeout
   | 505 -> `Http_version_not_supported
   | 511 -> `Network_authentication_required
-  | c   -> `Code c
+  | c -> `Code c
 
 let unsafe_of_code c =
   match really_unsafe_of_code c with
@@ -282,49 +280,50 @@ let of_code c =
   match really_unsafe_of_code c with
   | `Code c ->
     if c < 100 || c > 999
-    then failwith (Printf.sprintf "Status.of_code: %d is not a three-digit number" c)
+    then
+      failwith
+        (Printf.sprintf "Status.of_code: %d is not a three-digit number" c)
     else `Code c
   | s -> s
 
 let is_informational t =
   match t with
   | #informational -> true
-  | `Code n        -> n >= 100 && n <= 199
-  | _              -> false
+  | `Code n -> n >= 100 && n <= 199
+  | _ -> false
 
 let is_successful t =
   match t with
   | #successful -> true
-  | `Code n     -> n >= 200 && n <= 299
-  | _           -> false
+  | `Code n -> n >= 200 && n <= 299
+  | _ -> false
 
 let is_redirection t =
   match t with
   | #redirection -> true
-  | `Code n      -> n >= 300 && n <= 399
-  | _            -> false
+  | `Code n -> n >= 300 && n <= 399
+  | _ -> false
 
 let is_client_error t =
   match t with
   | #client_error -> true
-  | `Code n       -> n >= 400 && n <= 499
-  | _             -> false
+  | `Code n -> n >= 400 && n <= 499
+  | _ -> false
 
 let is_server_error t =
   match t with
   | #server_error -> true
-  | `Code n       -> n >= 500 && n <= 599
-  | _             -> false
+  | `Code n -> n >= 500 && n <= 599
+  | _ -> false
 
-let is_error t =
-  is_client_error t || is_server_error t
+let is_error t = is_client_error t || is_server_error t
 
-
-let to_string = function (* don't allocate *)
- (* Informational *)
+let to_string = function
+  (* don't allocate *)
+  (* Informational *)
   | `Continue -> "100"
   | `Switching_protocols -> "101"
- (* Successful *)
+  (* Successful *)
   | `OK -> "200"
   | `Created -> "201"
   | `Accepted -> "202"
@@ -332,7 +331,7 @@ let to_string = function (* don't allocate *)
   | `No_content -> "204"
   | `Reset_content -> "205"
   | `Partial_content -> "206"
- (* Redirection *)
+  (* Redirection *)
   | `Multiple_choices -> "300"
   | `Moved_permanently -> "301"
   | `Found -> "302"
@@ -340,7 +339,7 @@ let to_string = function (* don't allocate *)
   | `Not_modified -> "304"
   | `Use_proxy -> "305"
   | `Temporary_redirect -> "307"
- (* Client error *)
+  (* Client error *)
   | `Bad_request -> "400"
   | `Unauthorized -> "401"
   | `Payment_required -> "402"
@@ -365,18 +364,15 @@ let to_string = function (* don't allocate *)
   | `Precondition_required -> "428"
   | `Too_many_requests -> "429"
   | `Request_header_fields_too_large -> "431"
- (* Server error *)
+  (* Server error *)
   | `Internal_server_error -> "500"
   | `Not_implemented -> "501"
   | `Bad_gateway -> "502"
-  | `Service_unavailable-> "503"
+  | `Service_unavailable -> "503"
   | `Gateway_timeout -> "504"
   | `Http_version_not_supported -> "505"
-  | `Network_authentication_required-> "511"
+  | `Network_authentication_required -> "511"
   | `Code c -> string_of_int c (* except for this *)
 
-let of_string x =
-  of_code (int_of_string x)
-
-let pp_hum fmt t =
-  Format.fprintf fmt "%u" (to_code t)
+let of_string x = of_code (int_of_string x)
+let pp_hum fmt t = Format.fprintf fmt "%u" (to_code t)

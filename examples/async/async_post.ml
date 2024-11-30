@@ -1,54 +1,54 @@
 open Core
 open Async
-
 open Httpun
 open Httpun_async
 
 let main port host () =
   let where_to_connect = Tcp.Where_to_connect.of_host_and_port { host; port } in
-  Tcp.connect_sock where_to_connect
-  >>= fun socket ->
-    let finished = Ivar.create () in
-    let response_handler =
-      Httpun_examples.Client.print
-        ~on_eof:((Ivar.fill [@alert "-deprecated"]) finished) in
-    let headers =
-      Headers.of_list
-      [ "transfer-encoding", "chunked"
-      ; "connection"       , "close"
-      ; "host"             , host
-      ]
-    in
-    Client.create_connection socket >>= fun connection ->
-    let request_body =
-      Client.request
-        connection
-        ~error_handler:Httpun_examples.Client.error_handler
-        ~response_handler
-        (Request.create ~headers `POST "/")
-    in
-    let stdin = Lazy.force Reader.stdin in
-    don't_wait_for (
-      Reader.read_one_chunk_at_a_time stdin ~handle_chunk:(fun bs ~pos:off ~len ->
-        Body.Writer.write_bigstring request_body bs ~off ~len;
-        Body.Writer.flush request_body (fun _reason -> ());
-        return (`Consumed(len, `Need_unknown)))
-      >>| function
-        | `Eof_with_unconsumed_data s -> Body.Writer.write_string request_body s;
-                                         Body.Writer.close request_body
-        | `Eof                        -> Body.Writer.close request_body
-        | `Stopped ()                 -> assert false);
-    Ivar.read finished
-;;
+  Tcp.connect_sock where_to_connect >>= fun socket ->
+  let finished = Ivar.create () in
+  let response_handler =
+    Httpun_examples.Client.print
+      ~on_eof:((Ivar.fill [@alert "-deprecated"]) finished)
+  in
+  let headers =
+    Headers.of_list
+      [ "transfer-encoding", "chunked"; "connection", "close"; "host", host ]
+  in
+  Client.create_connection socket >>= fun connection ->
+  let request_body =
+    Client.request
+      connection
+      ~error_handler:Httpun_examples.Client.error_handler
+      ~response_handler
+      (Request.create ~headers `POST "/")
+  in
+  let stdin = Lazy.force Reader.stdin in
+  don't_wait_for
+    ( Reader.read_one_chunk_at_a_time
+        stdin
+        ~handle_chunk:(fun bs ~pos:off ~len ->
+          Body.Writer.write_bigstring request_body bs ~off ~len;
+          Body.Writer.flush request_body (fun _reason -> ());
+          return (`Consumed (len, `Need_unknown)))
+    >>| function
+      | `Eof_with_unconsumed_data s ->
+        Body.Writer.write_string request_body s;
+        Body.Writer.close request_body
+      | `Eof -> Body.Writer.close request_body
+      | `Stopped () -> assert false );
+  Ivar.read finished
 
 let () =
   Command.async
     ~summary:"Start a hello world Async client"
     Command.Param.(
-      map (both
-          (flag "-p" (optional_with_default 80 int)
-            ~doc:"int destination port")
-          (anon ("host" %: string)))
-        ~f:(fun (port, host) ->
-              (fun () -> main port host ())))
+      map
+        (both
+           (flag
+              "-p"
+              (optional_with_default 80 int)
+              ~doc:"int destination port")
+           (anon ("host" %: string)))
+        ~f:(fun (port, host) -> fun () -> main port host ()))
   |> Command_unix.run
