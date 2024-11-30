@@ -38,6 +38,8 @@ type t = (name * value) list
 
 let empty : t = []
 
+let singleton nv = [ nv ]
+
 let of_rev_list t = t
 let of_list t = of_rev_list (List.rev t)
 let to_rev_list t = t
