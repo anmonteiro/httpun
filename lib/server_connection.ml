@@ -119,7 +119,13 @@ let create ?(config=Config.default) ?(error_handler=default_error_handler) reque
   let rec reader = lazy (Reader.request handler)
   and handler request request_body =
     let reqd =
-      Reqd.create error_handler request request_body (Lazy.force reader) writer response_body_buffer
+      Reqd.create
+        ~error_handler
+        ~reader:(Lazy.force reader)
+        ~writer
+        ~response_body_buffer
+        request
+        request_body
     in
     let call_handler = Queue.is_empty request_queue in
     Queue.push reqd request_queue;
@@ -307,8 +313,12 @@ and _final_read_operation_for t reqd =
 
 let next_read_operation t =
   match _next_read_operation t with
-  | `Error (`Parse _)             -> set_error_and_handle          t `Bad_request; `Close
-  | `Error (`Bad_request request) -> set_error_and_handle ~request t `Bad_request; `Close
+  | `Error (`Parse _) ->
+    set_error_and_handle t `Bad_request;
+    `Close
+  | `Error (`Bad_request request) ->
+    set_error_and_handle ~request t `Bad_request;
+    `Close
   | `Start | `Read -> `Read
   | (`Yield | `Close) as operation -> operation
 
@@ -327,9 +337,6 @@ let read t bs ~off ~len =
 
 let read_eof t bs ~off ~len =
   read_with_more t bs ~off ~len Complete
-
-let flush_response_error_body response_state =
-  Response_state.flush_response_body response_state
 
 let rec _next_write_operation t =
   if not (is_active t) then (
@@ -352,7 +359,7 @@ let rec _next_write_operation t =
       with
       | Wait -> `Yield
       | Ready ->
-        flush_response_error_body response_state;
+        Response_state.flush_response_body response_state;
         Writer.next t.writer
       | Complete ->
         shutdown_writer t;

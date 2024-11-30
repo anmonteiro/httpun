@@ -2540,3 +2540,10 @@ let tests =
   ; "write response after reader EOF", `Quick,test_write_response_after_read_eof
   ; "CONNECT method", `Quick, test_connect_method
   ]
+
+
+(*
+https://httpwg.org/specs/rfc9110.html
+ For example, a CONNECT request (Section 9.3.6) or a request with the Upgrade header field (Section 7.8) can occur at any time, not just in the first message on a connection.
+ todo(anmonteiro): add test for this
+ *)
