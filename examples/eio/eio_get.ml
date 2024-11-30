@@ -1,5 +1,4 @@
 module Arg = Stdlib.Arg
-
 open Httpun
 
 let handler ~on_eof response response_body =
@@ -11,54 +10,50 @@ let handler ~on_eof response response_body =
       flush stdout;
       Body.Reader.schedule_read response_body ~on_read ~on_eof
     in
-    Body.Reader.schedule_read response_body ~on_read ~on_eof;
+    Body.Reader.schedule_read response_body ~on_read ~on_eof
   | response ->
     Format.fprintf Format.err_formatter "%a\n%!" Response.pp_hum response;
     Stdlib.exit 124
-;;
 
 let main port host =
   Eio_main.run (fun _env ->
     Eio.Switch.run (fun sw ->
-    let fd = Unix.socket ~cloexec:true Unix.PF_INET Unix.SOCK_STREAM 0 in
-    let addrs =
-      Eio_unix.run_in_systhread (fun () ->
+      let fd = Unix.socket ~cloexec:true Unix.PF_INET Unix.SOCK_STREAM 0 in
+      let addrs =
+        Eio_unix.run_in_systhread (fun () ->
           Unix.getaddrinfo
             host
             (Int.to_string port)
             [ Unix.(AI_FAMILY PF_INET) ])
-    in
-    Eio_unix.run_in_systhread (fun () ->
-      Unix.connect fd (List.hd addrs).ai_addr);
-    let socket = Eio_unix.Net.import_socket_stream ~sw ~close_unix:true fd in
-    let headers = Headers.of_list [ "host", host ] in
-    let connection =
-      Httpun_eio.Client.create_connection ~sw socket
-    in
+      in
+      Eio_unix.run_in_systhread (fun () ->
+        Unix.connect fd (List.hd addrs).ai_addr);
+      let socket = Eio_unix.Net.import_socket_stream ~sw ~close_unix:true fd in
+      let headers = Headers.of_list [ "host", host ] in
+      let connection = Httpun_eio.Client.create_connection ~sw socket in
 
-    let exit_cond = Eio.Condition.create () in
-    let response_handler =
-      handler ~on_eof:(fun () ->
-        Stdlib.Format.eprintf "eof@.";
-        Eio.Condition.broadcast exit_cond)
-    in
-    let request_body =
-      Httpun_eio.Client.request
-        (* ~flush_headers_immediately:true *)
-        ~error_handler:Httpun_examples.Client.error_handler
-        ~response_handler
-        connection
-        (Request.create ~headers `GET "/")
-    in
-    Body.Writer.close request_body;
-    Eio.Condition.await_no_mutex exit_cond;
-    Httpun_eio.Client.shutdown connection |> Eio.Promise.await))
+      let exit_cond = Eio.Condition.create () in
+      let response_handler =
+        handler ~on_eof:(fun () ->
+          Stdlib.Format.eprintf "eof@.";
+          Eio.Condition.broadcast exit_cond)
+      in
+      let request_body =
+        Httpun_eio.Client.request (* ~flush_headers_immediately:true *)
+          ~error_handler:Httpun_examples.Client.error_handler
+          ~response_handler
+          connection
+          (Request.create ~headers `GET "/")
+      in
+      Body.Writer.close request_body;
+      Eio.Condition.await_no_mutex exit_cond;
+      Httpun_eio.Client.shutdown connection |> Eio.Promise.await))
 
 let () =
   let host = ref None in
   let port = ref 80 in
   Arg.parse
-    ["-p", Set_int port, " Port number (80 by default)"]
+    [ "-p", Set_int port, " Port number (80 by default)" ]
     (fun host_argument -> host := Some host_argument)
     "lwt_get.exe [-p N] HOST";
   let host =
@@ -67,4 +62,3 @@ let () =
     | Some host -> host
   in
   main !port host
-;;

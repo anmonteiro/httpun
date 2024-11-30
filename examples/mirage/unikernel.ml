@@ -1,31 +1,31 @@
 open Lwt.Infix
 open Httpun
 
-module type HTTP = httpun_mirage.Server
+module type HTTP = Httpun_mirage.Server
 
-module Dispatch (C: Mirage_console.S) (Http: HTTP) = struct
-
+module Dispatch (C : Mirage_console.S) (Http : HTTP) = struct
   let log c fmt = Printf.ksprintf (C.log c) fmt
 
   let get_content c path =
-    log c "Replying: %s" path >|= fun () ->
-    "Hello from the httpun unikernel"
+    log c "Replying: %s" path >|= fun () -> "Hello from the httpun unikernel"
 
   let dispatcher c { Gluten.reqd; _ } =
-    let {Request.target; _} = Reqd.request reqd in
+    let { Request.target; _ } = Reqd.request reqd in
     Lwt.catch
       (fun () ->
          get_content c target >|= fun body ->
-         let response = Response.create
-          ~headers:(Headers.of_list ["Content-Length", body
-            |> String.length
-            |> string_of_int])
-          `OK
+         let response =
+           Response.create
+             ~headers:
+               (Headers.of_list
+                  [ "Content-Length", body |> String.length |> string_of_int ])
+             `OK
          in
          Reqd.respond_with_string reqd response body)
       (fun exn ->
          let response = Response.create `Internal_server_error in
-         Lwt.return (Reqd.respond_with_string reqd response (Printexc.to_string exn)))
+         Lwt.return
+           (Reqd.respond_with_string reqd response (Printexc.to_string exn)))
     |> ignore
 
   let serve c dispatch =
@@ -41,11 +41,12 @@ module Dispatch (C: Mirage_console.S) (Http: HTTP) = struct
 end
 
 (** Server boilerplate *)
-module Make (C : Mirage_console.S) (Clock : Mirage_clock.PCLOCK) (Http: HTTP) = struct
-
-  module D  = Dispatch (C) (Http)
+module Make (C : Mirage_console.S) (Clock : Mirage_clock.PCLOCK) (Http : HTTP) =
+struct
+  module D = Dispatch (C) (Http)
 
   let log c fmt = Printf.ksprintf (C.log c) fmt
+
   let start c _clock http =
     log c "started unikernel listen on port 8001" >>= fun () ->
     http (`TCP 8001) @@ D.serve c D.dispatcher

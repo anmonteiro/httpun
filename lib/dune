@@ -1,6 +1,5 @@
 (library
  (name httpun)
  (public_name httpun)
- (libraries
-   angstrom faraday bigstringaf httpun-types)
+ (libraries angstrom faraday bigstringaf httpun-types)
  (flags :standard -open Httpun_types))

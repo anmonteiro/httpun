@@ -64,28 +64,33 @@ let main port proxy_host =
       let connection = Httpun_eio.Client.create_connection ~sw socket in
 
       let exit_cond = Eio.Condition.create () in
-      Eio.Fiber.fork ~sw (fun ()->
-      let response_handler =
-        fun response response_body ->
+      Eio.Fiber.fork ~sw (fun () ->
+        let response_handler =
+         fun response response_body ->
           Eio.Fiber.fork ~sw @@ fun () ->
-          proxy_handler _env ~sw socket ~headers ~on_eof:(fun () ->
-            Stdlib.Format.eprintf "(connect) eof@.";
-            Eio.Condition.broadcast exit_cond)
-          response
-          response_body
-      in
-      let request_body =
-        Httpun_eio.Client.request
-          ~flush_headers_immediately:true
-          ~error_handler:Httpun_examples.Client.error_handler
-          ~response_handler
-          connection
-          (Request.create ~headers `CONNECT real_host)
-      in
-      Body.Writer.close request_body;
-      Eio.Condition.await_no_mutex exit_cond;
+          proxy_handler
+            _env
+            ~sw
+            socket
+            ~headers
+            ~on_eof:(fun () ->
+              Stdlib.Format.eprintf "(connect) eof@.";
+              Eio.Condition.broadcast exit_cond)
+            response
+            response_body
+        in
+        let request_body =
+          Httpun_eio.Client.request
+            ~flush_headers_immediately:true
+            ~error_handler:Httpun_examples.Client.error_handler
+            ~response_handler
+            connection
+            (Request.create ~headers `CONNECT real_host)
+        in
+        Body.Writer.close request_body;
+        Eio.Condition.await_no_mutex exit_cond;
 
-      Httpun_eio.Client.shutdown connection |> Eio.Promise.await)))
+        Httpun_eio.Client.shutdown connection |> Eio.Promise.await)))
 
 let () =
   let host = ref None in
