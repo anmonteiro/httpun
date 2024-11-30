@@ -265,6 +265,7 @@ module Config : sig
     ; request_body_buffer_size  : int (** Default is [4096] *)
     ; response_buffer_size      : int (** Default is [1024] *)
     ; response_body_buffer_size : int (** Default is [4096] *)
+    ; proxy : bool
     }
 
   val default : t
