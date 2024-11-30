@@ -1,3 +1,9 @@
+Unreleased
+--------------
+
+- client, server: support tunnels with `` `CONNECT ``
+  ([#140](https://github.com/anmonteiro/httpun/pull/40))
+
 0.2.0 2024-09-04
 --------------
 
