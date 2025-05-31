@@ -15,3 +15,4 @@ depends: [
   "gluten-eio" {>= "0.5.1"}
 ]
 synopsis: "EIO support for httpun"
+x-maintenance-intent: [ "(latest)" ]

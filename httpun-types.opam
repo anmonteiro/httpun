@@ -19,3 +19,4 @@ depends: [
 ]
 synopsis:
   "Common HTTP/1.x types"
+x-maintenance-intent: [ "(latest)" ]

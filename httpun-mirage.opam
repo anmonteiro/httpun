@@ -19,3 +19,4 @@ depends: [
   "lwt"
 ]
 synopsis: "Mirage support for httpun"
+x-maintenance-intent: [ "(latest)" ]

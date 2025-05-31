@@ -23,3 +23,4 @@ depends: [
 ]
 synopsis:
   "A high-performance, memory-efficient, and scalable HTTP library for OCaml"
+x-maintenance-intent: [ "(latest)" ]
