@@ -21,3 +21,4 @@ depends: [
 ]
 depopts: ["async_ssl"]
 synopsis: "Async support for httpun"
+x-maintenance-intent: [ "(latest)" ]
