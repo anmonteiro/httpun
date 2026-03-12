@@ -92,6 +92,10 @@ let version =
        (fun major minor -> { Version.major; minor })
        (digit <* char '.')
        digit
+  >>= function
+  | ({ Version.major = 1; minor = 0 } | { Version.major = 1; minor = 1 })
+    as version -> return version
+  | _ -> fail "unsupported http version"
 
 let header =
   (* From RFC7230§3.2.4:
