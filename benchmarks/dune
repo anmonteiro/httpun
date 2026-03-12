@@ -14,6 +14,11 @@
  (modules Wrk_lwt_benchmark)
  (libraries httpun httpun_examples httpun-lwt-unix lwt.unix base))
 
+(executable
+ (name large_transfer_lwt_benchmark)
+ (modules large_transfer_lwt_benchmark)
+ (libraries httpun httpun-lwt-unix lwt.unix base))
+
 (alias
  (name benchmarks)
  (deps
