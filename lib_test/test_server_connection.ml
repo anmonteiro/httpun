@@ -1603,6 +1603,31 @@ let test_bad_request () =
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   write_response t (Response.create `Bad_request)
 
+let assert_raw_request_bad_request ?(request = None) raw_request =
+  let error_handler_fired = ref false in
+  let error_handler ?request:actual_request error start_response =
+    error_handler_fired := true;
+    Alcotest.(check (option request)) "Parsed request" request actual_request;
+    Alcotest.(check request_error) "Request error" `Bad_request error;
+    start_response Headers.empty |> Body.Writer.close
+  in
+  let t = create ~error_handler (fun _ -> assert false) in
+  reader_ready t;
+  writer_yielded t;
+  let writer_woken_up = on_writer_unyield t ignore in
+  ignore (feed_string t raw_request);
+  reader_closed t;
+  Alcotest.(check bool) "Error handler fired" true !error_handler_fired;
+  Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
+  write_response t (Response.create `Bad_request)
+
+let test_invalid_header_name_characters () =
+  assert_raw_request_bad_request
+    "GET / HTTP/1.1\r\n\
+     Host: example.com\r\n\
+     X-Invalid[]: test\r\n\
+     \r\n"
+
 let test_shutdown_hangs_request_body_read () =
   let got_eof = ref false in
   let request_handler reqd =
@@ -2604,6 +2629,7 @@ let tests =
     , test_streaming_response_before_reading_entire_body_no_error )
   ; "failed request parse", `Quick, test_failed_request_parse
   ; "bad request", `Quick, test_bad_request
+  ; "invalid header name characters", `Quick, test_invalid_header_name_characters
   ; ( "shutdown delivers eof to request bodies"
     , `Quick
     , test_shutdown_hangs_request_body_read )
