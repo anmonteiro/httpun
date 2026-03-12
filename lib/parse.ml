@@ -58,6 +58,10 @@ module P = struct
     | '"' | '/' | '[' | ']' | '?' | '=' | '{' | '}' ->
       false
     | _ -> true
+
+  let is_header_value = function
+    | '\t' | '\032' .. '\126' | '\128' .. '\255' -> true
+    | _ -> false
 end
 
 let unit = return ()
@@ -105,7 +109,7 @@ let header =
   lift2
     (fun key value -> key, value)
     (token <* char ':' <* spaces)
-    (take_till P.is_cr <* eol >>| String.trim)
+    (take_while P.is_header_value <* eol >>| String.trim)
   <* commit
   <?> "header"
 
