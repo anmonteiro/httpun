@@ -268,7 +268,10 @@ module Reader = struct
   let request handler =
     let rec parser t handler =
       request <* commit >>= fun request ->
-      match Request.body_length request with
+      match Request.validate_headers request with
+      | `Error `Bad_request -> return (Error (`Bad_request request))
+      | `Ok ->
+        (match Request.body_length request with
       | `Error `Bad_request -> return (Error (`Bad_request request))
       | `Fixed 0L ->
         handler request (Body.Reader.create_empty ());
@@ -281,7 +284,7 @@ module Reader = struct
               (Optional_thunk.some (fun () -> wakeup (Lazy.force t)))
         in
         handler request request_body;
-        body ~encoding request_body *> ok
+        body ~encoding request_body *> ok)
     and t = lazy (create (parser t handler)) in
     Lazy.force t
 
