@@ -3,6 +3,7 @@
  (names
   lwt_get
   lwt_get_pipelined
+  lwt_h1spec_server
   lwt_post
   lwt_echo_post
   lwt_https_get
