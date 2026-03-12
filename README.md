@@ -21,6 +21,12 @@ opam install httpun
 
 Check the [`examples`][examples] folder.
 
+To run the black-box HTTP/1.1 `h1spec` suite from the Nix dev shell:
+
+```bash
+nix develop -c make h1spec
+```
+
 [examples]: https://github.com/anmonteiro/httpun/tree/master/examples
 
 ## License

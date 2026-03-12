@@ -1,8 +1,25 @@
-{ nix-filter, lib, stdenv, ocamlPackages, doCheck ? true }:
+{
+  nix-filter,
+  lib,
+  stdenv,
+  ocamlPackages,
+  fetchFromGitHub,
+  writeShellApplication,
+  deno,
+  lsof,
+  doCheck ? true,
+}:
 
 with ocamlPackages;
 
 let
+  h1specSrc = fetchFromGitHub {
+    owner = "uNetworking";
+    repo = "h1spec";
+    rev = "f0a5650a20c575fbea0f7179a3a9cfa50f20ba6e";
+    hash = "sha256-a71IlHg9oofIQ8wEu9JeQbgoJZ+RAwZKFp4uEXiALhw=";
+  };
+
   genSrc = { dirs, files }:
     with nix-filter; filter {
       root = ./..;
@@ -14,6 +31,20 @@ let
   } // args);
 
   httpunPkgs = rec {
+    h1spec = writeShellApplication {
+      name = "h1spec";
+      runtimeInputs = [ deno ];
+      text = ''
+        exec deno run --allow-net ${h1specSrc}/http_test.ts "$@"
+      '';
+    };
+
+    httpun-h1spec = writeShellApplication {
+      name = "httpun-h1spec";
+      runtimeInputs = [ h1spec lsof ocamlPackages.dune ];
+      text = builtins.readFile ../scripts/run-h1spec.sh;
+    };
+
     httpun-types = buildHttpun {
       pname = "httpun-types";
       src = genSrc {

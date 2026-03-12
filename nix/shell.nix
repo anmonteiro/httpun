@@ -13,7 +13,8 @@ with pkgs;
 
 (mkShell {
   OCAMLRUNPARAM = "b";
-  nativeBuildInputs =
+  nativeBuildInputs = [ packages.h1spec ]
+  ++
     lib.optionals release-mode [
       cacert
       curl
