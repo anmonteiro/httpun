@@ -63,7 +63,10 @@ let wakeup_writer t = Writer.wakeup t.writer
 let create ?(config = Config.default) () =
   let request_queue = Queue.create () in
   { config
-  ; reader = Reader.response request_queue
+  ; reader =
+      Reader.response
+        ~body_buffer_size:config.response_body_buffer_size
+        request_queue
   ; writer = Writer.create ()
   ; request_queue
   }

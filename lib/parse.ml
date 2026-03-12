@@ -150,12 +150,11 @@ let finish body =
 
 let schedule_size body n =
   let faraday = Body.Reader.unsafe_faraday body in
-  (* XXX(seliopou): performance regression due to switching to a single output *
-     format in Farady. Once a specialized operation is exposed to avoid the *
-     intemediate copy, this should be back to the original performance. *)
   (if Faraday.is_closed faraday
    then advance n
-   else take_bigstring n >>| fun s -> Faraday.schedule_bigstring faraday s)
+   else
+     Unsafe.take n (fun buffer ~off ~len ->
+       Faraday.write_bigstring faraday buffer ~off ~len))
   *> commit
 
 let body ~encoding body =
@@ -252,7 +251,7 @@ module Reader = struct
     t.wakeup <- Optional_thunk.none;
     Optional_thunk.call_if_some f
 
-  let request handler =
+  let request ~body_buffer_size handler =
     let rec parser t handler =
       request <* commit >>= fun request ->
       match Request.body_length request with
@@ -263,7 +262,7 @@ module Reader = struct
       | (`Fixed _ | `Chunked) as encoding ->
         let request_body =
           Body.Reader.create
-            Bigstringaf.empty
+            (Bigstringaf.create body_buffer_size)
             ~when_ready_to_read:
               (Optional_thunk.some (fun () -> wakeup (Lazy.force t)))
         in
@@ -272,7 +271,7 @@ module Reader = struct
     and t = lazy (create (parser t handler)) in
     Lazy.force t
 
-  let response request_queue =
+  let response ~body_buffer_size request_queue =
     let parser t request_queue =
       response <* commit >>= fun response ->
       assert (not (Queue.is_empty request_queue));
@@ -303,7 +302,7 @@ module Reader = struct
            client could DOS easily. *)
         let response_body =
           Body.Reader.create
-            Bigstringaf.empty
+            (Bigstringaf.create body_buffer_size)
             ~when_ready_to_read:
               (Optional_thunk.some (fun () -> wakeup (Lazy.force t)))
         in

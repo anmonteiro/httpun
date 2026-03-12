@@ -102,11 +102,19 @@ let create
       ?(error_handler = default_error_handler)
       request_handler
   =
-  let { Config.response_buffer_size; response_body_buffer_size; _ } = config in
+  let
+    { Config.response_buffer_size
+    ; response_body_buffer_size
+    ; request_body_buffer_size
+    ; _
+    }
+    =
+    config
+  in
   let writer = Writer.create ~buffer_size:response_buffer_size () in
   let request_queue = Queue.create () in
   let response_body_buffer = Bigstringaf.create response_body_buffer_size in
-  let rec reader = lazy (Reader.request handler)
+  let rec reader = lazy (Reader.request ~body_buffer_size:request_body_buffer_size handler)
   and handler request request_body =
     let reqd =
       Reqd.create
