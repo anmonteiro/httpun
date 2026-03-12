@@ -1643,6 +1643,13 @@ let test_multiple_host_headers () =
      Host: example.org\r\n\
      \r\n"
 
+let test_header_value_control_characters () =
+  assert_raw_request_bad_request
+    "GET / HTTP/1.1\r\n\
+     Host: example.com\r\n\
+     X-Bad-Control-Char: test\007\r\n\
+     \r\n"
+
 let test_shutdown_hangs_request_body_read () =
   let got_eof = ref false in
   let request_handler reqd =
@@ -2646,6 +2653,7 @@ let tests =
   ; "bad request", `Quick, test_bad_request
   ; "invalid header name characters", `Quick, test_invalid_header_name_characters
   ; "multiple Host headers", `Quick, test_multiple_host_headers
+  ; "header value control characters", `Quick, test_header_value_control_characters
   ; ( "shutdown delivers eof to request bodies"
     , `Quick
     , test_shutdown_hangs_request_body_read )
