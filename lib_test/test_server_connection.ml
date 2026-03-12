@@ -1656,6 +1656,9 @@ let test_invalid_http_version () =
      Host: example.com\r\n\
      \r\n"
 
+let test_missing_http_version () =
+  assert_raw_request_bad_request "GET / \r\n\r\n"
+
 let test_shutdown_hangs_request_body_read () =
   let got_eof = ref false in
   let request_handler reqd =
@@ -2661,6 +2664,7 @@ let tests =
   ; "multiple Host headers", `Quick, test_multiple_host_headers
   ; "header value control characters", `Quick, test_header_value_control_characters
   ; "invalid HTTP version", `Quick, test_invalid_http_version
+  ; "missing HTTP version", `Quick, test_missing_http_version
   ; ( "shutdown delivers eof to request bodies"
     , `Quick
     , test_shutdown_hangs_request_body_read )
