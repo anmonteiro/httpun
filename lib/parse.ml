@@ -54,8 +54,8 @@ module P = struct
        * the top of the match. *)
     function
     | '\000' .. '\031'
-    | '\127' | ')' | '(' | '<' | '>' | '@' | ',' | ';' | ':' | '\\' | '"' | '/'
-    | '[' | ']' | '?' | '=' | '{' | '}' (* | ' ' | '\t' *) ->
+    | ' ' | '\127' | ')' | '(' | '<' | '>' | '@' | ',' | ';' | ':' | '\\'
+    | '"' | '/' | '[' | ']' | '?' | '=' | '{' | '}' ->
       false
     | _ -> true
 end
@@ -104,7 +104,7 @@ let header =
      which should look like this when serialized "... > header > :". *)
   lift2
     (fun key value -> key, value)
-    (take_till P.is_space_or_colon <* char ':' <* spaces)
+    (token <* char ':' <* spaces)
     (take_till P.is_cr <* eol >>| String.trim)
   <* commit
   <?> "header"
