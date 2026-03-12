@@ -55,22 +55,25 @@ module Body_length = struct
     | `Error `Bad_request -> Format.pp_print_string fmt "Error: Bad request"
 end
 
+let validate_headers { version; headers; _ } =
+  match version, Headers.get_multi headers "host" with
+  | { Version.major = 1; minor = 1 }, [] -> bad_request
+  | _, _ :: _ :: _ -> bad_request
+  | _ -> `Ok
+
 let body_length { headers; _ } : Body_length.t =
-  match Headers.get_multi headers "host" with
-  | _ :: _ :: _ -> bad_request
-  | _ ->
   (* The last entry in transfer-encoding is the correct entry. We only accept
      chunked transfer-encodings. *)
-    (match List.rev (Headers.get_multi headers "transfer-encoding") with
-    | value :: _ when Headers.ci_equal value "chunked" -> `Chunked
-    | _ :: _ -> bad_request
-    | [] ->
-      (match Message.unique_content_length_values headers with
-      | [] -> `Fixed 0L
-      | [ len ] ->
-        let len = Message.content_length_of_string len in
-        if len >= 0L then `Fixed len else bad_request
-      | _ -> bad_request))
+  match List.rev (Headers.get_multi headers "transfer-encoding") with
+  | value :: _ when Headers.ci_equal value "chunked" -> `Chunked
+  | _ :: _ -> bad_request
+  | [] ->
+    (match Message.unique_content_length_values headers with
+    | [] -> `Fixed 0L
+    | [ len ] ->
+      let len = Message.content_length_of_string len in
+      if len >= 0L then `Fixed len else bad_request
+    | _ -> bad_request)
 
 let persistent_connection ?proxy { version; headers; _ } =
   Message.persistent_connection ?proxy version headers

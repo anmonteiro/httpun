@@ -225,8 +225,21 @@ let force_read_string t str =
   let c = force_feed_string t str in
   Alcotest.(check int) "read consumes all input" (String.length str) c
 
+let request_to_server_string (request : Request.t) =
+  let request =
+    if Version.compare request.version Version.v1_1 = 0
+       && not (Headers.mem request.headers "host")
+    then
+      { request with
+        headers =
+          Headers.add_unless_exists request.headers "host" "example.com"
+      }
+    else request
+  in
+  request_to_string request
+
 let read_request ?eof t r =
-  let request_string = request_to_string r in
+  let request_string = request_to_server_string r in
   read_string ?eof t request_string
 
 let reader_ready ?(msg = "Reader is ready") t =
@@ -382,7 +395,11 @@ let test_commit_parse_after_every_header () =
   let single_header = "Links: /path/to/some/website\r\n" in
   let r =
     (* Each header is 30 bytes *)
-    request_line ^ single_header ^ single_header ^ "connection: close\r\n\r\n"
+    request_line
+    ^ single_header
+    ^ single_header
+    ^ "Host: example.com\r\n"
+    ^ "connection: close\r\n\r\n"
   in
   let bs = Bigstringaf.of_string r ~off:0 ~len:(String.length r) in
   let c = read t bs ~off:0 ~len:30 in
@@ -1583,7 +1600,10 @@ let test_bad_request () =
   (* A `Bad_request is returned in a number of cases surrounding
      transfer-encoding or content-length headers. *)
   let request =
-    Request.create `GET "/" ~headers:(Headers.encoding_fixed (-1))
+    Request.create
+      `GET
+      "/"
+      ~headers:(Headers.of_list [ "host", "example.com"; "content-length", "-1" ])
   in
   let error_handler_fired = ref false in
   let error_handler ?request:request' error start_response =
@@ -1658,6 +1678,19 @@ let test_invalid_http_version () =
 
 let test_missing_http_version () =
   assert_raw_request_bad_request "GET / \r\n\r\n"
+
+let test_missing_host_header () =
+  let request =
+    Request.create
+      `GET
+      "/"
+      ~headers:(Headers.of_list [ "Content-Length", "5" ])
+  in
+  assert_raw_request_bad_request
+    ~request:(Some request)
+    "GET / HTTP/1.1\r\n\
+     Content-Length: 5\r\n\
+     \r\n"
 
 let test_shutdown_hangs_request_body_read () =
   let got_eof = ref false in
@@ -1908,8 +1941,8 @@ let test_multiple_requests_in_single_read () =
   let response = Response.create `OK in
   let t = create (fun reqd -> Reqd.respond_with_string reqd response "") in
   let reqs =
-    request_to_string (Request.create `GET "/")
-    ^ request_to_string (Request.create `GET "/")
+    request_to_server_string (Request.create `GET "/")
+    ^ request_to_server_string (Request.create `GET "/")
   in
   read_string t reqs;
 
@@ -1926,8 +1959,8 @@ let test_multiple_async_requests_in_single_read () =
       finish_handler := fun () -> Reqd.respond_with_string reqd response "")
   in
   let reqs =
-    request_to_string (Request.create `GET "/")
-    ^ request_to_string (Request.create `GET "/")
+    request_to_server_string (Request.create `GET "/")
+    ^ request_to_server_string (Request.create `GET "/")
   in
   read_string t reqs;
   reader_yielded t;
@@ -1957,8 +1990,8 @@ let test_multiple_requests_in_single_read_with_close () =
   let response = Response.create `OK ~headers:Headers.connection_close in
   let t = create (fun reqd -> Reqd.respond_with_string reqd response "") in
   let reqs =
-    request_to_string (Request.create `GET "/")
-    ^ request_to_string (Request.create `GET "/")
+    request_to_server_string (Request.create `GET "/")
+    ^ request_to_server_string (Request.create `GET "/")
   in
   read_string t reqs;
   write_response t response;
@@ -2008,8 +2041,8 @@ let test_multiple_requests_in_single_read_with_eof () =
   let response = Response.create `OK in
   let t = create (fun reqd -> Reqd.respond_with_string reqd response "") in
   let reqs =
-    request_to_string (Request.create `GET "/")
-    ^ request_to_string (Request.create `GET "/")
+    request_to_server_string (Request.create `GET "/")
+    ^ request_to_server_string (Request.create `GET "/")
   in
   read_string t reqs ~eof:true;
   write_string t (response_to_string response);
@@ -2348,7 +2381,9 @@ let test_pipelined_requests_in_single_buffer_partial_body () =
   in
   let t = create request_handler in
   let req = Request.create `POST "/" ~headers:(Headers.encoding_fixed 5) in
-  let reqs = request_to_string req ^ "hello" ^ request_to_string req in
+  let reqs =
+    request_to_server_string req ^ "hello" ^ request_to_server_string req
+  in
   read_string t reqs;
   reader_yielded t;
   write_response t ~body:"hello" response;
@@ -2376,7 +2411,7 @@ let test_multiple_pipelined_requests () =
   in
   let t = create request_handler in
   let req = Request.create `POST "/" ~headers:(Headers.encoding_fixed 5) in
-  read_string t (request_to_string req ^ "hello");
+  read_string t (request_to_server_string req ^ "hello");
   reader_yielded t;
 
   write_response t ~body:"hello" response;
@@ -2388,7 +2423,7 @@ let test_multiple_pipelined_requests () =
   in
   reader_ready t;
 
-  let reqs = "hello" ^ request_to_string req ^ "hello" in
+  let reqs = "hello" ^ request_to_server_string req ^ "hello" in
   read_string t reqs;
   Alcotest.(check bool) "Writer woken up" true !writer_woken_up;
   reader_yielded t;
@@ -2510,7 +2545,11 @@ let test_write_response_after_read_eof () =
   let single_header = "Links: /path/to/some/website\r\n" in
   let r =
     (* Each header is 30 bytes *)
-    request_line ^ single_header ^ single_header ^ "connection: close\r\n\r\n"
+    request_line
+    ^ single_header
+    ^ single_header
+    ^ "Host: example.com\r\n"
+    ^ "connection: close\r\n\r\n"
   in
   let bs = Bigstringaf.of_string r ~off:0 ~len:(String.length r) in
   let c = read t bs ~off:0 ~len:30 in
@@ -2665,6 +2704,7 @@ let tests =
   ; "header value control characters", `Quick, test_header_value_control_characters
   ; "invalid HTTP version", `Quick, test_invalid_http_version
   ; "missing HTTP version", `Quick, test_missing_http_version
+  ; "missing Host header", `Quick, test_missing_host_header
   ; ( "shutdown delivers eof to request bodies"
     , `Quick
     , test_shutdown_hangs_request_body_read )
