@@ -251,7 +251,7 @@ module Reader = struct
     t.wakeup <- Optional_thunk.none;
     Optional_thunk.call_if_some f
 
-  let request ~body_buffer_size handler =
+  let request ~body_buffer handler =
     let rec parser t handler =
       request <* commit >>= fun request ->
       match Request.body_length request with
@@ -262,7 +262,7 @@ module Reader = struct
       | (`Fixed _ | `Chunked) as encoding ->
         let request_body =
           Body.Reader.create
-            (Bigstringaf.create body_buffer_size)
+            body_buffer
             ~when_ready_to_read:
               (Optional_thunk.some (fun () -> wakeup (Lazy.force t)))
         in
@@ -271,7 +271,7 @@ module Reader = struct
     and t = lazy (create (parser t handler)) in
     Lazy.force t
 
-  let response ~body_buffer_size request_queue =
+  let response ~body_buffer request_queue =
     let parser t request_queue =
       response <* commit >>= fun response ->
       assert (not (Queue.is_empty request_queue));
@@ -302,7 +302,7 @@ module Reader = struct
            client could DOS easily. *)
         let response_body =
           Body.Reader.create
-            (Bigstringaf.create body_buffer_size)
+            body_buffer
             ~when_ready_to_read:
               (Optional_thunk.some (fun () -> wakeup (Lazy.force t)))
         in

@@ -62,11 +62,9 @@ let wakeup_writer t = Writer.wakeup t.writer
 
 let create ?(config = Config.default) () =
   let request_queue = Queue.create () in
+  let response_body_buffer = Bigstringaf.create config.response_body_buffer_size in
   { config
-  ; reader =
-      Reader.response
-        ~body_buffer_size:config.response_body_buffer_size
-        request_queue
+  ; reader = Reader.response ~body_buffer:response_body_buffer request_queue
   ; writer = Writer.create ()
   ; request_queue
   }

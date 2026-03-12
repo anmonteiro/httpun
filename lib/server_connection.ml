@@ -113,8 +113,9 @@ let create
   in
   let writer = Writer.create ~buffer_size:response_buffer_size () in
   let request_queue = Queue.create () in
+  let request_body_buffer = Bigstringaf.create request_body_buffer_size in
   let response_body_buffer = Bigstringaf.create response_body_buffer_size in
-  let rec reader = lazy (Reader.request ~body_buffer_size:request_body_buffer_size handler)
+  let rec reader = lazy (Reader.request ~body_buffer:request_body_buffer handler)
   and handler request request_body =
     let reqd =
       Reqd.create
