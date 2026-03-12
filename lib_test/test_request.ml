@@ -35,7 +35,7 @@ let test_parse_invalid_errors () =
   check "doesn't end" ~expect:(Error ": not enough input") "GET / HTTP/1.1\r\n";
   check
     "invalid version"
-    ~expect:(Error "eol: string")
+    ~expect:(Error ": unsupported http version")
     "GET / HTTP/1.22\r\n\r\n";
   check
     "malformed header"
