@@ -1628,6 +1628,21 @@ let test_invalid_header_name_characters () =
      X-Invalid[]: test\r\n\
      \r\n"
 
+let test_multiple_host_headers () =
+  let request =
+    Request.create
+      `GET
+      "/"
+      ~headers:
+        (Headers.of_list [ "Host", "example.com"; "Host", "example.org" ])
+  in
+  assert_raw_request_bad_request
+    ~request:(Some request)
+    "GET / HTTP/1.1\r\n\
+     Host: example.com\r\n\
+     Host: example.org\r\n\
+     \r\n"
+
 let test_shutdown_hangs_request_body_read () =
   let got_eof = ref false in
   let request_handler reqd =
@@ -2630,6 +2645,7 @@ let tests =
   ; "failed request parse", `Quick, test_failed_request_parse
   ; "bad request", `Quick, test_bad_request
   ; "invalid header name characters", `Quick, test_invalid_header_name_characters
+  ; "multiple Host headers", `Quick, test_multiple_host_headers
   ; ( "shutdown delivers eof to request bodies"
     , `Quick
     , test_shutdown_hangs_request_body_read )
