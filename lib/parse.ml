@@ -127,12 +127,17 @@ let headers =
 
 let request =
   let meth = take_till P.is_space >>| Method.of_string in
+  let request_version =
+    peek_char_fail >>= function
+    | 'H' -> version
+    | _ -> fail "missing http version"
+  in
   lift4
     (fun meth target version headers ->
        Request.create ~version ~headers meth target)
     (meth <* char ' ')
-    (take_till P.is_space <* char ' ')
-    (version <* eol <* commit)
+    (take_till P.is_space <* char ' ' <* commit)
+    (request_version <* eol <* commit)
     (headers <* eol)
 
 let response =
