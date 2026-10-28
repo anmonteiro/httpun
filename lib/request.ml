@@ -56,8 +56,15 @@ module Body_length = struct
 end
 
 let body_length { headers; _ } : Body_length.t =
-  (* The last entry in transfer-encoding is the correct entry. We only accept
-     chunked transfer-encodings. *)
+  (* From RFC 9112, Section 6.3 recommends handling a request that contains
+     both Content-Length and Transfer-Encoding as an error *)
+  if
+    Headers.get headers "content-length" <> None
+    && Headers.get headers "transfer-encoding" <> None
+  then bad_request
+  else
+    (* The last entry in transfer-encoding is the correct entry. We only accept
+       chunked transfer-encodings. *)
   match List.rev (Headers.get_multi headers "transfer-encoding") with
   | value :: _ when Headers.ci_equal value "chunked" -> `Chunked
   | _ :: _ -> bad_request
