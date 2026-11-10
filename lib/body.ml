@@ -115,15 +115,16 @@ module Writer = struct
     ; encoding : encoding
     ; writer : Serialize.Writer.t
     ; mutable buffered_bytes : int
+    ; discard : bool
     }
 
-  let of_faraday faraday ~encoding ~writer =
+  let of_faraday ?(discard = false) faraday ~encoding ~writer =
     let encoding =
       match encoding with
       | `Fixed _ | `Close_delimited -> Identity
       | `Chunked -> Chunked { written_final_chunk = false }
     in
-    { faraday; encoding; writer; buffered_bytes = 0 }
+    { faraday; encoding; writer; buffered_bytes = 0; discard }
 
   let create buffer ~encoding =
     of_faraday (Faraday.of_bigstring buffer) ~encoding
@@ -133,19 +134,27 @@ module Writer = struct
     Faraday.close t.faraday;
     t
 
+  let create_discard ~writer =
+    of_faraday
+      ~discard:true
+      (Faraday.of_bigstring Bigstringaf.empty)
+      ~encoding:(`Fixed 0)
+      ~writer
+
   let write_char t c =
-    if not (Faraday.is_closed t.faraday) then Faraday.write_char t.faraday c
+    if not t.discard && not (Faraday.is_closed t.faraday)
+    then Faraday.write_char t.faraday c
 
   let write_string t ?off ?len s =
-    if not (Faraday.is_closed t.faraday)
+    if not t.discard && not (Faraday.is_closed t.faraday)
     then Faraday.write_string ?off ?len t.faraday s
 
   let write_bigstring t ?off ?len b =
-    if not (Faraday.is_closed t.faraday)
+    if not t.discard && not (Faraday.is_closed t.faraday)
     then Faraday.write_bigstring ?off ?len t.faraday b
 
   let schedule_bigstring t ?off ?len (b : Bigstringaf.t) =
-    if not (Faraday.is_closed t.faraday)
+    if not t.discard && not (Faraday.is_closed t.faraday)
     then Faraday.schedule_bigstring ?off ?len t.faraday b
 
   let ready_to_write t = Serialize.Writer.wakeup t.writer
@@ -153,6 +162,8 @@ module Writer = struct
   let flush t kontinue =
     if Serialize.Writer.is_closed t.writer
     then kontinue `Closed
+    else if t.discard
+    then kontinue `Written
     else (
       Faraday.flush_with_reason t.faraday (function
         | Drain -> kontinue `Closed
@@ -193,7 +204,9 @@ module Writer = struct
 
   let transfer_to_writer t =
     let faraday = t.faraday in
-    if Serialize.Writer.is_closed t.writer
+    if t.discard
+    then ()
+    else if Serialize.Writer.is_closed t.writer
     then close_and_drain t
     else
       match Faraday.operation faraday with

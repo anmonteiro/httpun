@@ -121,7 +121,9 @@ let respond_with_string t response str =
   | Waiting ->
     (* XXX(seliopou): check response body length *)
     Writer.write_response t.writer response;
-    Writer.write_string t.writer str;
+    (match t.request.meth with
+    | `HEAD -> ()
+    | _ -> Writer.write_string t.writer str);
     if t.persistent then t.persistent <- Response.persistent_connection response;
     t.response_state <- Fixed response;
     Writer.wakeup t.writer
@@ -140,7 +142,9 @@ let respond_with_bigstring t response (bstr : Bigstringaf.t) =
   | Waiting ->
     (* XXX(seliopou): check response body length *)
     Writer.write_response t.writer response;
-    Writer.schedule_bigstring t.writer bstr;
+    (match t.request.meth with
+    | `HEAD -> ()
+    | _ -> Writer.schedule_bigstring t.writer bstr);
     if t.persistent then t.persistent <- Response.persistent_connection response;
     t.response_state <- Fixed response;
     Writer.wakeup t.writer
@@ -165,7 +169,9 @@ let unsafe_respond_with_streaming ~flush_headers_immediately t response =
           "httpun.Reqd.respond_with_streaming: invalid response body length"
     in
     let response_body =
-      Body.Writer.create t.response_body_buffer ~encoding ~writer:t.writer
+      match t.request.meth with
+      | `HEAD -> Body.Writer.create_discard ~writer:t.writer
+      | _ -> Body.Writer.create t.response_body_buffer ~encoding ~writer:t.writer
     in
     Writer.write_response t.writer response;
     if t.persistent then t.persistent <- Response.persistent_connection response;
